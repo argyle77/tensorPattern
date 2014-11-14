@@ -1,6 +1,6 @@
-Tensor pattern generation - Version 3.6.0
-Functionally similar to v3.4.0, v3.5.0, but added rotozoom, moved some keys 
-around, separated multiply and the output limiter.
+Tensor pattern generation - Version 3.7.0
+Added color planes, sidebar, stagger.  More efficient display update,
+fps counter, portrait/landscape, moment save
   
 "Be the light you wish to see in the world."
 

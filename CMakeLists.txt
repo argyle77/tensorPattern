@@ -8,7 +8,7 @@ project(tensorPattern)
 # Let's set a version number.
 # This file must be manually changed to effect version change.
 set (VERSION_MAJOR 3)
-set (VERSION_MINOR 6)
+set (VERSION_MINOR 7)
 set (VERSION_PATCH 0)
 set (VERSION_PRERELEASE)
 
