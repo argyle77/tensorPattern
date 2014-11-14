@@ -30,6 +30,9 @@
 #define INITIAL_RAND_MOD 4
 #define INITIAL_RAINBOW_INC 8
 
+#define THISKEY_OFFSET 48
+#define INITIAL_RANDOM_FRAME_COUNT 10
+
 
 // Includes
 #include <stdio.h>
@@ -88,11 +91,16 @@ typedef struct {
   int randDots;
   int cycleForeground;
   int cycleBackground;
+  int random;
 } modes_t;
 
 typedef enum {
   RGB, CMY, RYGCBM, RAINBOW, RANDOM
 } colorCycles_e;
+
+typedef enum {
+  FADE_TO_ZERO, FADE_MODULAR
+} fade_mode_e;
 
 // Various parameters
 typedef struct {
@@ -103,8 +111,22 @@ typedef struct {
   unsigned int randMod;
   colorCycles_e colorCycleMode;
   int rainbowInc;
+  fade_mode_e fade_mode;
 } mode_parms_t;
 
+
+typedef struct {
+  char textBuffer[TEXT_BUFFER_SIZE];
+  int tindex;
+} text_info_t;
+
+  
+typedef struct {
+  modes_t mode;
+  mode_parms_t coefs;
+  text_info_t text;
+  unsigned char fb[TENSOR_BYTES_EFF];  // Tensor frame buffer
+} moment_t;
 
 // Globals
 const color_t white = {.r = 255, .g = 255, .b = 255, .a = 0};
@@ -122,15 +144,47 @@ unsigned char fb[TENSOR_BYTES_EFF];  // Tensor frame buffer
 double color_multiplier;
 volatile int do_an_update = NO;
 SDL_Surface *screen;
-
-
+moment_t moments[10];
+modes_t mode = {
+    .textScroller = YES,
+    .cellAutoFun = NO,
+    .bouncer = NO,
+    .fadeout = YES,
+    .diffuse = NO,
+    .roller = NO,
+    .scroller = YES,
+    .horizontalBars = NO,
+    .verticalBars = NO,
+    .colorAll = NO,
+    .clearAll = NO,
+    .randDots = NO,
+    .cycleForeground = YES,
+    .cycleBackground = NO,
+    .random = NO
+  };
+  
+  mode_parms_t parms = {
+    .fadeout_dec = INITIAL_FADEOUT_DEC,
+    .diffusion_coef = INITIAL_DIFF_COEF,
+    .diffusion_increment = INITIAL_DIFF_INC,
+    .scrollerDir = LEFT,
+    .randMod = INITIAL_RAND_MOD,
+    .colorCycleMode = RAINBOW,
+    .rainbowInc = INITIAL_RAINBOW_INC,
+    .fade_mode = FADE_TO_ZERO
+  };
+  
+text_info_t text = { .textBuffer = "Fuck your day! ",
+                       .tindex = sizeof("Fuck your day! ") };
+int randomCount = 0;
+int randomLimit = INITIAL_RANDOM_FRAME_COUNT;
 
 // Protos
 void SetPixel(int x, int y, color_t color);
 color_t GetPixel(int x, int y);
 void ColorAll(color_t color);
 void Update(void);
-void FadeAll(int dec);
+void FadeAll(int dec, fade_mode_e fademode);
 void Scroll (dir_t direction, int rollovermode);
 void ScrollErase(dir_t direction, color_t eraseColor);
 void WriteSlice(char *buffer, colors_t font_colors, dir_t direction, int column);
@@ -144,46 +198,19 @@ modes_t ModeAlter(int thiskey, modes_t mode);
 mode_parms_t ParmAlter(int thiskey, mode_parms_t parms);
 void RandomDots(color_t color, unsigned int rFreq);
 color_t ColorCycle(color_t originalColor, colorCycles_e cycleMode, int rainbowInc, int *cycleSaver);
-
+moment_t SaveAside(modes_t mode, mode_parms_t coefs, text_info_t text, unsigned char *fb);
 // Functions
 
 // Main
 int main(int argc, char *argv[]) {
-  char textBuffer[TEXT_BUFFER_SIZE] = "beep ";
-  // int textBufferRand[TEXT_BUFFER_SIZE];
-  int tindex = strlen(textBuffer);
+  
   SDL_Event key_event;
   color_t pixelColor, oldColor;
   int x,y;
   dir_t scrDir = UP;
   int saveCycleF = 0;
   int saveCycleB = 0;
-  modes_t mode = {
-    .textScroller = NO,
-    .cellAutoFun = NO,
-    .bouncer = NO,
-    .fadeout = NO,
-    .diffuse = NO,
-    .roller = NO,
-    .scroller = NO,
-    .horizontalBars = NO,
-    .verticalBars = NO,
-    .colorAll = NO,
-    .clearAll = NO,
-    .randDots = NO,
-    .cycleForeground = NO,
-    .cycleBackground = NO
-  };
-  
-  mode_parms_t parms = {
-    .fadeout_dec = INITIAL_FADEOUT_DEC,
-    .diffusion_coef = INITIAL_DIFF_COEF,
-    .diffusion_increment = INITIAL_DIFF_INC,
-    .scrollerDir = LEFT,
-    .randMod = INITIAL_RAND_MOD,
-    .colorCycleMode = RGB,
-    .rainbowInc = INITIAL_RAINBOW_INC
-  };
+  int currentMoment = 0;
   
   colors_t colors = {
     .foreground = red, 
@@ -193,7 +220,7 @@ int main(int argc, char *argv[]) {
   int count = 0;
   
 //  for (i = 0; i < TEXT_BUFFER_SIZE; i++) {
-//    textBufferRand[i] = rand() % 2;
+//    text.textBufferRand[i] = rand() % 2;
 //  }
 
   // Unbuffer stdout...
@@ -233,7 +260,7 @@ int main(int argc, char *argv[]) {
 
 
   // Pattern
-  ColorAll(white);
+  ColorAll(blue);
   Update();
  
   // Program loop...
@@ -260,44 +287,55 @@ int main(int argc, char *argv[]) {
           if (key_event.key.keysym.unicode < 0x80 && key_event.key.keysym.unicode > 0) {
             switch(key_event.key.keysym.sym) {
               case SDLK_BACKSPACE:
-                tindex--;
-                if (tindex < 0) {
-                  tindex = 0;
+                text.tindex--;
+                if (text.tindex < 0) {
+                  text.tindex = 0;
                 }
-                textBuffer[tindex] = 0x00;
+                text.textBuffer[text.tindex] = 0x00;
                 break;
                 
               case SDLK_RETURN:
-                textBuffer[tindex] = '\n';
-                textBuffer[tindex + 1] = 0x00;
-                tindex++;
-                if (tindex >= (sizeof(textBuffer) - 2)) {
-                  tindex--;
+                text.textBuffer[text.tindex] = '\n';
+                text.textBuffer[text.tindex + 1] = 0x00;
+                text.tindex++;
+                if (text.tindex >= (sizeof(text.textBuffer) - 2)) {
+                  text.tindex--;
                 }
                 break;
 
               case SDLK_ESCAPE:
-                tindex = 0;
-                textBuffer[0] = 0x00;
+                text.tindex = 0;
+                text.textBuffer[0] = 0x00;
                 printf("Text buffer erased.\n");
                 break;
                 
               default:
-                textBuffer[tindex] = (char)key_event.key.keysym.unicode;
-                textBuffer[tindex + 1] = 0x00;
+                text.textBuffer[text.tindex] = (char)key_event.key.keysym.unicode;
+                text.textBuffer[text.tindex + 1] = 0x00;
                 
-                tindex++;
-                if (tindex >= (sizeof(textBuffer) - 2)) {
-                  tindex--;
+                text.tindex++;
+                if (text.tindex >= (sizeof(text.textBuffer) - 2)) {
+                  text.tindex--;
                 }
                 break;
             }                    
             
-            printf("Text buffer (%04i): \"%s\"\n", tindex, textBuffer);
+            printf("Text buffer (%04i): \"%s\"\n", text.tindex, text.textBuffer);
           }  // End normal keys.
         }  // End elses between modifier keys.
       }  // End key event occurred.
     } // End event poll.
+
+    if (mode.random == YES) {
+      randomCount++;
+      if (randomCount >= randomLimit) {
+        randomCount = 0;
+        currentMoment = (currentMoment + 1)%10;
+        memcpy(&mode, &moments[currentMoment].mode, sizeof(modes_t));
+        memcpy(&parms, &moments[currentMoment].coefs, sizeof(mode_parms_t));
+        memcpy(&text, &moments[currentMoment].text, sizeof(text_info_t));
+      }
+    }
 
     if (mode.cycleForeground == YES) {
       colors.foreground = ColorCycle(colors.foreground, parms.colorCycleMode, parms.rainbowInc, &saveCycleF);
@@ -321,7 +359,7 @@ int main(int argc, char *argv[]) {
     // Pixel manips by mode.    
     if (mode.textScroller == YES) {
       // Scroll provided by scroller if its on.
-      WriteSlice(textBuffer, colors, parms.scrollerDir, (parms.scrollerDir == RIGHT) ? 0 : TENSOR_WIDTH_EFF - 1);
+      WriteSlice(text.textBuffer, colors, parms.scrollerDir, (parms.scrollerDir == RIGHT) ? 0 : TENSOR_WIDTH_EFF - 1);
     }
     
     if (mode.cellAutoFun == YES) {
@@ -360,7 +398,7 @@ int main(int argc, char *argv[]) {
     }
     
     if (mode.fadeout == YES) {
-      FadeAll(parms.fadeout_dec);
+      FadeAll(parms.fadeout_dec, parms.fade_mode);
     }
     
     if (mode.diffuse == YES) {
@@ -441,26 +479,26 @@ void ColorAll(color_t color) {
 
 
 // Darken all the pixels by a certain value.
-void FadeAll(int dec) {
+void FadeAll(int dec, fade_mode_e fade_mode) {
   int x,y;
   color_t oldColor;
     
   for (x = 0; x < TENSOR_WIDTH_EFF; x++) {
     for (y = 0; y < TENSOR_HEIGHT_EFF; y++) {
       oldColor = GetPixel(x,y);
-      if (oldColor.r < dec) {
+      if ((oldColor.r < dec) && (fade_mode == FADE_TO_ZERO)) {
         oldColor.r = 0;
       } else {
         oldColor.r -= dec;
       }
       
-      if (oldColor.g < dec) {
+      if ((oldColor.g < dec) && (fade_mode == FADE_TO_ZERO)) {
         oldColor.g = 0;
       } else {
         oldColor.g -= dec;
       }
       
-      if (oldColor.b < dec) {
+      if ((oldColor.b < dec) && (fade_mode == FADE_TO_ZERO)) {
         oldColor.b = 0;
       } else {
         oldColor.b -= dec;
@@ -928,7 +966,18 @@ colors_t ColorAlter(int thiskey, colors_t colors) {
       printf("Background alpha set to %i\n", alphaB);
       break;  
 
-    case SDLK_1:
+    case SDLK_0: case SDLK_1: case SDLK_2: case SDLK_3: case SDLK_4: case SDLK_5:
+    case SDLK_6: case SDLK_7: case SDLK_8: case SDLK_9:
+printf("thiskey: %i\n", thiskey);
+printf("1\n");      
+memcpy(&mode, &moments[thiskey - THISKEY_OFFSET].mode, sizeof(modes_t));
+printf("1\n");      
+      memcpy(&parms, &moments[thiskey - THISKEY_OFFSET].coefs, sizeof(mode_parms_t));
+printf("1\n");      
+      memcpy(&text, &moments[thiskey - THISKEY_OFFSET].text, sizeof(text_info_t));
+      break;
+
+    case SDLK_m:
       printf("<ctrl> <alt> q - foreground red\n");
       printf("<ctrl> <alt> w - foreground orange\n");
       printf("<ctrl> <alt> e - foreground yellow\n");
@@ -950,7 +999,8 @@ colors_t ColorAlter(int thiskey, colors_t colors) {
       printf("<ctrl> <alt> l - background grey\n");
       printf("<ctrl> <alt> ; - background black\n");
       printf("<ctrl> <alt> z - foreground alpha toggle (currently %i)\n", alphaF);
-      printf("<ctrl> <alt> x - backfround alpha toggle (currently %i)\n", alphaB);      
+      printf("<ctrl> <alt> x - backfround alpha toggle (currently %i)\n", alphaB);
+      printf("<ctrl> <alt> m - Color set help\n"); 
       break;
       
     default:
@@ -966,6 +1016,7 @@ colors_t ColorAlter(int thiskey, colors_t colors) {
 
 
 modes_t ModeAlter(int thiskey, modes_t mode) {
+  moment_t aMoment;
   switch(thiskey) {
     case SDLK_c:
       printf("CTRL-c pushed. Exiting\n");
@@ -1042,7 +1093,7 @@ modes_t ModeAlter(int thiskey, modes_t mode) {
       printf ("<ctrl> f - Cycle background color set to %s\n", (mode.cycleBackground == YES) ? "ON" : "OFF");
       break;
 
-    case SDLK_0:
+    case SDLK_BACKSPACE:
       mode.bouncer = NO;
       mode.cellAutoFun = NO;
       mode.diffuse = NO;
@@ -1057,9 +1108,10 @@ modes_t ModeAlter(int thiskey, modes_t mode) {
       mode.clearAll = NO;
       mode.cycleForeground = NO;
       mode.cycleBackground = NO;
+      mode.random = NO;
       // No break.  Allow passthrough...
       
-    case SDLK_1:
+    case SDLK_m:
       printf("\n\n");
       printf("<ctrl> t - Text set to %s\n", (mode.textScroller == YES) ? "ON" : "OFF");
       printf("<ctrl> q - CellAutoFun set to %s\n", (mode.cellAutoFun == YES) ? "ON" : "OFF");
@@ -1075,7 +1127,20 @@ modes_t ModeAlter(int thiskey, modes_t mode) {
       printf("<ctrl> s - Random dots set to %s\n", (mode.randDots == YES) ? "ON" : "OFF");
       printf("<ctrl> d - Cycle foreground color set to %s\n", (mode.cycleForeground == YES) ? "ON" : "OFF");
       printf("<ctrl> f - Cycle background color set to %s\n", (mode.cycleBackground == YES) ? "ON" : "OFF");
-      printf("<ctrl> 0 - All off.\n");
+      printf("<ctrl> BACKSPACE - All off.\n");
+      printf("<ctrl> m - Mode help.\n");
+      break;
+
+    case SDLK_0: case SDLK_1: case SDLK_2: case SDLK_3: case SDLK_4: case SDLK_5:
+    case SDLK_6: case SDLK_7: case SDLK_8: case SDLK_9:
+      printf("Moment #: %i\n", thiskey);
+      aMoment = SaveAside(mode, parms, text, fb);
+      memcpy(&moments[thiskey - THISKEY_OFFSET], &aMoment, sizeof(moment_t) );
+      break;
+
+    case SDLK_g:
+      mode.random = (mode.random + 1) % 2;
+      printf("Random mode set to %i\n", mode.random);
       break;
       
     default:
@@ -1134,12 +1199,27 @@ mode_parms_t ParmAlter(int thiskey, mode_parms_t parms) {
       printf("<alt> d - Diffusion coef increment set to %f\n", parms.diffusion_increment);
       break;
       
-    case SDLK_2:
+    case SDLK_p:
       parms.colorCycleMode = (parms.colorCycleMode + 1) % 5;
-      printf("<alt> 2 - Color cycle mode set to %s\n", (parms.colorCycleMode == RGB) ? "RGB" : (parms.colorCycleMode == CMY) ? "CMY" : (parms.colorCycleMode == RYGCBM) ? "RYGCBM" : (parms.colorCycleMode == RAINBOW) ? "RAINBOW" : "RANDOM");
+      printf("<alt> p - Color cycle mode set to %s\n", (parms.colorCycleMode == RGB) ? "RGB" : (parms.colorCycleMode == CMY) ? "CMY" : (parms.colorCycleMode == RYGCBM) ? "RYGCBM" : (parms.colorCycleMode == RAINBOW) ? "RAINBOW" : "RANDOM");
       break;
-      
-    case SDLK_1:
+
+    case SDLK_v:
+      randomLimit -= 10;
+      printf("<alt> v - Random frame count set to %i\n", randomLimit);
+      break;
+
+    case SDLK_b:
+      randomLimit = INITIAL_RANDOM_FRAME_COUNT;
+      printf("<alt> v - Random frame count set to %i\n", randomLimit);
+      break;
+
+    case SDLK_n:
+      randomLimit += 10;
+      printf("<alt> v - Random frame count set to %i\n", randomLimit);
+      break;
+
+    case SDLK_m:
       printf("\n\n");
       printf("<alt> zxc - Fadeout decrement set to %i\n", parms.fadeout_dec);
       printf("<alt> qwe - Diffusion coef set to %f\n", parms.diffusion_coef);
@@ -1147,9 +1227,20 @@ mode_parms_t ParmAlter(int thiskey, mode_parms_t parms) {
       printf("<alt> <arrows> - Scroll direction set to %s\n", (parms.scrollerDir == UP) ? "UP" : (parms.scrollerDir == DOWN) ? "DOWN" : (parms.scrollerDir == LEFT) ? "LEFT" : "RIGHT");
       printf("<alt> rty - Frequency of random dots set to %i\n", parms.randMod);
       printf("<alt> fgh - Rainbow increment set to %i\n", parms.rainbowInc);
-      printf("<alt> 2 - Color cycle mode set to %s\n", (parms.colorCycleMode == RGB) ? "RGB" : (parms.colorCycleMode == CMY) ? "CMY" : (parms.colorCycleMode == RYGCBM) ? "RYGCBM" : (parms.colorCycleMode == RAINBOW) ? "RAINBOW" : "RANDOM");
+      printf("<alt> p - Color cycle mode set to %s\n", (parms.colorCycleMode == RGB) ? "RGB" : (parms.colorCycleMode == CMY) ? "CMY" : (parms.colorCycleMode == RYGCBM) ? "RYGCBM" : (parms.colorCycleMode == RAINBOW) ? "RAINBOW" : "RANDOM");
+      printf("<alt> vbn - Random mode counter set to %i\n", randomLimit);
+      printf("<alt> m - Parms info\n");
+
       break;
-      
+
+    case SDLK_0: case SDLK_1: case SDLK_2: case SDLK_3: case SDLK_4: case SDLK_5:
+    case SDLK_6: case SDLK_7: case SDLK_8: case SDLK_9:
+      memcpy(&mode, &moments[thiskey - THISKEY_OFFSET].mode, sizeof(modes_t));
+      memcpy(&parms, &moments[thiskey - THISKEY_OFFSET].coefs,sizeof(mode_parms_t));
+      memcpy(&text, &moments[thiskey - THISKEY_OFFSET].text,sizeof(text_info_t));
+      memcpy(&fb, &moments[thiskey - THISKEY_OFFSET].fb,TENSOR_BYTES_EFF);
+      break;
+
     case SDLK_f:
       parms.rainbowInc--;
       printf("<alt> f - Rainbow increment set to %i\n", parms.rainbowInc); 
@@ -1379,3 +1470,21 @@ color_t ColorCycle(color_t originalColor, colorCycles_e cycleMode, int rainbowIn
   
   return(colorTemp);
 }
+
+
+
+moment_t SaveAside(modes_t mode, mode_parms_t coefs, text_info_t text, unsigned char *fb) {
+  moment_t thisMoment;
+  thisMoment.mode = mode;
+  thisMoment.coefs = coefs;
+  thisMoment.text = text;
+  strncpy(thisMoment.text.textBuffer, text.textBuffer, TEXT_BUFFER_SIZE);
+  thisMoment.text.tindex = text.tindex;
+  memcpy(&thisMoment.fb, &fb, TENSOR_BYTES_EFF);
+
+  return(thisMoment);
+}
+
+
+
+
