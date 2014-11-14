@@ -1,0 +1,54 @@
+tensor-pattern versions
+
+Version 0:
+  Really old test pattern binaries.  Missing code.
+
+Version 1:
+  Brief tensor / SDL demo - red / mod
+
+Version 2:
+  Red text scroller with SDL preview.
+
+Version 3.1:
+  SDL Mixer
+  "Beep "
+  No printing of controls to console.
+
+Version 3.2:
+  SDL Mixer
+  "Beep "
+  Controls are printed to the console with <ctrl / alt> 1.
+
+Version 3.3:
+  Original SDL mixer with save/recall (broken).
+  "Fuck Your Day!"
+  SDL window shows only preview
+  Controls are printed to the console with <ctrl / alt> m.
+
+Version 3.4:
+  SDL 2 with lib-ttf and font requirement.
+  "Be the light you wish to see in the world."
+  SDL window shows preview and list of controls.
+  Moment save / recall is broken.
+
+Version 3.5:
+  Functionally similar to Version 3.4
+
+Version 3.6:
+  Same as 3.4, 3.5, but added rotozoom, moved alot of the keys around,
+  separated multiply and output limiter.
+
+Version 3.7:
+  Added color planes, sidebar, stagger.  More efficient display update,
+  fps counter, portrait/landscape, moment save
+
+Version 3.8:
+  Added to info display, added image load, fps control, bi-planes.
+  Released to pdf and decom 2010 lists.
+
+Version 4.0:
+  ?
+
+Version 4.1:
+  ?
+
