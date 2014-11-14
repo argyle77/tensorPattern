@@ -8,7 +8,7 @@ project(tensorPattern)
 # Let's set a version number.
 # This file must be manually changed to effect version change.
 set (VERSION_MAJOR 3)
-set (VERSION_MINOR 3)
+set (VERSION_MINOR 4)
 set (VERSION_PATCH 0)
 set (VERSION_PRERELEASE)
 
@@ -28,9 +28,18 @@ if ( NOT SDL_FOUND )
   message(FATAL_ERROR "SDL not found! Please install libsdl1.2-dev!")
 endif ( NOT SDL_FOUND )
 
+find_package(SDL_ttf)
+if ( NOT SDL_TTF_FOUND )
+  message(FATAL_ERROR "SDL TTF not found! Please install libsdl-ttf2.0-dev!")
+endif ( NOT SDL_TTF_FOUND )
+
 # Verbose output (or use: make VERBOSE=1)
 #set ( CMAKE_VERBOSE_MAKEFILE on )
 
 # Subdirectories
 add_subdirectory (src bin)
+
+# Font support.
+file(COPY fonts/DroidSansMono.ttf DESTINATION ${PROJECT_BINARY_DIR}/bin)
+file(RENAME ${PROJECT_BINARY_DIR}/bin/DroidSansMono.ttf ${PROJECT_BINARY_DIR}/bin/font.ttf)
 

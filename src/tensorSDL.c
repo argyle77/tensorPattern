@@ -24,29 +24,28 @@
 #define USE_TENSOR
 //#undef USE_TENSOR
 
-#define INITIAL_DIFF_COEF 0.016
+#define INITIAL_DIFF_COEF 0.002
 #define INITIAL_DIFF_INC 0.001
-#define INITIAL_FADEOUT_DEC 4
+#define INITIAL_FADEOUT_DEC 1
 #define INITIAL_RAND_MOD 4
 #define INITIAL_RAINBOW_INC 8
 
 #define THISKEY_OFFSET 48
 #define INITIAL_RANDOM_FRAME_COUNT 10
 
+#define FONT_SIZE 14
 
 // Includes
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <math.h>
+#include <math.h> 
 #include "drv-tensor.h"
 #include "my_font.h"
-#include "SDL.h"
+#include "SDL.h"  
+#include "SDL_ttf.h" 
 
 
-
-// Use 1/3 of tensor.  Since we are in landscape, we switch the height and
-// width.
 #define TENSOR_WIDTH_EFF (TENSOR_HEIGHT)
 #define TENSOR_HEIGHT_EFF (TENSOR_WIDTH / 3)
 #define TENSOR_BYTES_EFF (TENSOR_WIDTH_EFF * TENSOR_HEIGHT_EFF * 3)
@@ -73,7 +72,10 @@ typedef struct {
 // Scroller directions
 typedef enum {
   UP, LEFT, DOWN, RIGHT
-} dir_t;
+} dir_e;
+typedef enum {
+  FADE_TO_ZERO, FADE_MODULAR
+} fade_mode_e;
 
 // Pattern modes
 typedef struct {
@@ -92,26 +94,23 @@ typedef struct {
   int cycleForeground;
   int cycleBackground;
   int random;
+  fade_mode_e fade_mode;
 } modes_t;
 
 typedef enum {
   RGB, CMY, RYGCBM, RAINBOW, RANDOM
 } colorCycles_e;
 
-typedef enum {
-  FADE_TO_ZERO, FADE_MODULAR
-} fade_mode_e;
 
 // Various parameters
 typedef struct {
   int fadeout_dec;
   float diffusion_coef;
   float diffusion_increment;
-  dir_t scrollerDir;
+  dir_e scrollerDir;
   unsigned int randMod;
   colorCycles_e colorCycleMode;
   int rainbowInc;
-  fade_mode_e fade_mode;
 } mode_parms_t;
 
 
@@ -129,6 +128,7 @@ typedef struct {
 } moment_t;
 
 // Globals
+const color_t border_c = {.r = 255, .g = 255, .b = 255, .a = 0};
 const color_t white = {.r = 255, .g = 255, .b = 255, .a = 0};
 const color_t black = {.r = 0, .g = 0, .b = 0, .a = 0};
 const color_t red = {.r = 255, .g = 0, .b = 0, .a = 0};
@@ -142,15 +142,22 @@ const color_t grey = {.r = 127, .g = 127, .b = 127, .a = 0};
 const unsigned char masks[] = { 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80 };
 unsigned char fb[TENSOR_BYTES_EFF];  // Tensor frame buffer
 double color_multiplier;
+double color_increment = .1;
+double color_mod_save;
 volatile int do_an_update = NO;
+TTF_Font *font;
+SDL_Color font_color = {255,255,255};
+SDL_Color font_back = {0,0,0};
 SDL_Surface *screen;
+int imaginaryBufferIndex = -1;
+
 moment_t moments[10];
 modes_t mode = {
     .textScroller = YES,
     .cellAutoFun = NO,
     .bouncer = NO,
-    .fadeout = YES,
-    .diffuse = NO,
+    .fadeout = NO,
+    .diffuse = YES,
     .roller = NO,
     .scroller = YES,
     .horizontalBars = NO,
@@ -160,6 +167,7 @@ modes_t mode = {
     .randDots = NO,
     .cycleForeground = YES,
     .cycleBackground = NO,
+    .fade_mode = FADE_TO_ZERO,
     .random = NO
   };
   
@@ -170,24 +178,27 @@ modes_t mode = {
     .scrollerDir = LEFT,
     .randMod = INITIAL_RAND_MOD,
     .colorCycleMode = RAINBOW,
-    .rainbowInc = INITIAL_RAINBOW_INC,
-    .fade_mode = FADE_TO_ZERO
+    .rainbowInc = INITIAL_RAINBOW_INC
   };
   
-text_info_t text = { .textBuffer = "Fuck your day! ",
-                       .tindex = sizeof("Fuck your day! ") };
+text_info_t text = { .textBuffer = "Be the light you wish to see in the world. ",
+                       .tindex = sizeof("Be the light you wish to see in the world. ") - 1 };
 int randomCount = 0;
 int randomLimit = INITIAL_RANDOM_FRAME_COUNT;
 
+colors_t colors = {.foreground = {.r = 255, .g = 0, .b = 0, .a = 0}, .background = {.r = 0, .g = 0, .b = 0, .a = 0}};
+
+
+  
 // Protos
 void SetPixel(int x, int y, color_t color);
 color_t GetPixel(int x, int y);
 void ColorAll(color_t color);
 void Update(void);
 void FadeAll(int dec, fade_mode_e fademode);
-void Scroll (dir_t direction, int rollovermode);
-void ScrollErase(dir_t direction, color_t eraseColor);
-void WriteSlice(char *buffer, colors_t font_colors, dir_t direction, int column);
+void Scroll (dir_e direction, int rollovermode);
+void ScrollErase(dir_e direction, color_t eraseColor);
+void WriteSlice(char *buffer, colors_t font_colors, dir_e direction, int column);
 void UpdateTensor(void);
 void UpdatePreview(void);
 void Diffuse(float diffusion_coeff);
@@ -199,23 +210,30 @@ mode_parms_t ParmAlter(int thiskey, mode_parms_t parms);
 void RandomDots(color_t color, unsigned int rFreq);
 color_t ColorCycle(color_t originalColor, colorCycles_e cycleMode, int rainbowInc, int *cycleSaver);
 moment_t SaveAside(modes_t mode, mode_parms_t coefs, text_info_t text, unsigned char *fb);
-// Functions
+void UpdateInfoDisplay(void);
+void PreviewBorder(int width, int height);
+void WriteLine(int line, int col, char * thistext);
+void UpdateAll(void);
+void ClearAll(void);
+
+
 
 // Main
 int main(int argc, char *argv[]) {
   
   SDL_Event key_event;
   color_t pixelColor, oldColor;
+
+
   int x,y;
-  dir_t scrDir = UP;
+  dir_e scrDir = UP;
   int saveCycleF = 0;
   int saveCycleB = 0;
   int currentMoment = 0;
   
-  colors_t colors = {
-    .foreground = red, 
-    .background = black
-  };
+  int frameCount = 0;
+  int updateNeeded = YES;
+
   
   int count = 0;
   
@@ -233,6 +251,8 @@ int main(int argc, char *argv[]) {
   } else {
     color_multiplier = 1.0;
   }
+
+  color_mod_save = color_multiplier;
   
   // Init the display window.
   if ( SDL_Init(SDL_INIT_AUDIO|SDL_INIT_VIDEO) < 0 ) {
@@ -242,16 +262,33 @@ int main(int argc, char *argv[]) {
     atexit(SDL_Quit);
   }
   
-  screen = SDL_SetVideoMode(TENSOR_PREVIEW_WIDTH + (BORDER * 2), TENSOR_PREVIEW_HEIGHT + (BORDER * 2), 32, SDL_SWSURFACE);
+  // screen = SDL_SetVideoMode(TENSOR_PREVIEW_WIDTH + (BORDER * 2), TENSOR_PREVIEW_HEIGHT + (BORDER * 2), 32, SDL_SWSURFACE);
+    screen = SDL_SetVideoMode(900, 768, 32, SDL_SWSURFACE);
   if (screen == NULL) {
     fprintf(stderr, "Unable to set video size: %s\n", SDL_GetError());
     exit(EXIT_FAILURE);
   }
   
+  // Draw a border around the preview
+  PreviewBorder(TENSOR_PREVIEW_WIDTH + (BORDER * 2), TENSOR_PREVIEW_HEIGHT + (BORDER * 2));
+  sleep(1);
   SDL_EnableUNICODE(1);
   SDL_EnableKeyRepeat(SDL_DEFAULT_REPEAT_DELAY, SDL_DEFAULT_REPEAT_INTERVAL);
+  SDL_WM_SetCaption("Tensor Control", "Click here bitch!");
+  // True type...
+  if(TTF_Init()==-1) {
+    printf("TTF_Init: %s\n", TTF_GetError());
+    exit(EXIT_FAILURE);
+  }
+
+  // load font.ttf at size 16 into font
   
-  
+  font=TTF_OpenFont("font.ttf", FONT_SIZE);
+  if(!font) {
+    printf("TTF_OpenFont: %s\n", TTF_GetError());
+    // handle error
+  }
+
   // Init tensor.
   #ifdef USE_TENSOR
     tensor_init();
@@ -260,7 +297,7 @@ int main(int argc, char *argv[]) {
 
 
   // Pattern
-  ColorAll(blue);
+  ColorAll(white);
   Update();
  
   // Program loop...
@@ -269,7 +306,7 @@ int main(int argc, char *argv[]) {
     // Read all the key events queued up.
     while (SDL_PollEvent(&key_event)) {
       if (key_event.type == SDL_KEYDOWN) {
-        
+        updateNeeded = YES;
         // <ctrl> <alt>
         if ((key_event.key.keysym.mod & KMOD_ALT) && (key_event.key.keysym.mod & KMOD_CTRL)) {
           colors = ColorAlter(key_event.key.keysym.sym, colors);
@@ -306,13 +343,11 @@ int main(int argc, char *argv[]) {
               case SDLK_ESCAPE:
                 text.tindex = 0;
                 text.textBuffer[0] = 0x00;
-                printf("Text buffer erased.\n");
                 break;
                 
               default:
                 text.textBuffer[text.tindex] = (char)key_event.key.keysym.unicode;
                 text.textBuffer[text.tindex + 1] = 0x00;
-                
                 text.tindex++;
                 if (text.tindex >= (sizeof(text.textBuffer) - 2)) {
                   text.tindex--;
@@ -320,9 +355,10 @@ int main(int argc, char *argv[]) {
                 break;
             }                    
             
-            printf("Text buffer (%04i): \"%s\"\n", text.tindex, text.textBuffer);
           }  // End normal keys.
         }  // End elses between modifier keys.
+        
+     
       }  // End key event occurred.
     } // End event poll.
 
@@ -398,7 +434,7 @@ int main(int argc, char *argv[]) {
     }
     
     if (mode.fadeout == YES) {
-      FadeAll(parms.fadeout_dec, parms.fade_mode);
+      FadeAll(parms.fadeout_dec, mode.fade_mode);
     }
     
     if (mode.diffuse == YES) {
@@ -411,9 +447,26 @@ int main(int argc, char *argv[]) {
     }
 
     Update();
+    
+    if (updateNeeded == YES) {
+      // Should put update screen here.  That way, update everytime something changes
+      // (key press-wise).
+      if (frameCount > 5) {
+        UpdateInfoDisplay();
+        updateNeeded = NO;
+        frameCount = 0;
+      }
+    }
+    
+    frameCount++;
   }  // End program loop
               
-        
+
+  TTF_CloseFont(font);
+  font=NULL; // to be safe...
+
+  TTF_Quit();
+  
   exit(EXIT_SUCCESS);
 }
 
@@ -584,13 +637,14 @@ void UpdatePreview(void) {
     SDL_UnlockSurface(screen);
   }
   
-  SDL_Flip(screen);
+//  SDL_Flip(screen);
+  SDL_UpdateRect(screen, 0, 0, TENSOR_PREVIEW_WIDTH + (BORDER * 2), TENSOR_PREVIEW_HEIGHT + (BORDER * 2));
 }
 
 
 
 // Scroller buffer manipulation
-void Scroll (dir_t direction, int rollovermode) { 
+void Scroll (dir_e direction, int rollovermode) { 
   int x, y, i;
   color_t rollSave[TENSOR_WIDTH_EFF + TENSOR_HEIGHT_EFF];
   
@@ -700,7 +754,7 @@ void Scroll (dir_t direction, int rollovermode) {
 
 
 // Erase while backfilling with a color.
-void ScrollErase(dir_t direction, color_t eraseColor) {
+void ScrollErase(dir_e direction, color_t eraseColor) {
   int i;
   
   Scroll(direction, NO);
@@ -752,10 +806,9 @@ void UpdateTensor(void) {
 
 
 //void WriteSlice(char *buffer, color_t font_color, color_t bg_color, dir_t direction, int column) {
-void WriteSlice(char *buffer, colors_t font_colors, dir_t direction, int column) {
+void WriteSlice(char *buffer, colors_t font_colors, dir_e direction, int column) {
   static char textBufferRand[TEXT_BUFFER_SIZE] = "a";
-  static int imaginaryBufferIndex = -1;
-  static dir_t lastDirection = RIGHT;  // Could be.  Who knows?
+  static dir_e lastDirection = LEFT;  // Could be.  Who knows?
   unsigned char character;
   int imaginaryBufferSize;
   int fontPixelIndex;
@@ -785,7 +838,6 @@ void WriteSlice(char *buffer, colors_t font_colors, dir_t direction, int column)
   if (lastDirection != direction) {
     // Looks like we changed direction.
     lastDirection = direction;
-    printf("Scroll %s\n", direction == LEFT ? "LEFT" : "RIGHT");
     if (direction == LEFT) {
       imaginaryBufferIndex = (imaginaryBufferIndex + TENSOR_WIDTH_EFF) % imaginaryBufferSize;
     } else {
@@ -843,127 +895,103 @@ void WriteSlice(char *buffer, colors_t font_colors, dir_t direction, int column)
 
 
 // Alter foreground and background colors according to key press.
-colors_t ColorAlter(int thiskey, colors_t colors) {
-  int alphaF = colors.foreground.a;
-  int alphaB = colors.background.a;
+colors_t ColorAlter(int thiskey, colors_t incolor) {
   
   switch (thiskey) {
     case SDLK_q:
-      colors.foreground = red;
-      printf("Foreground red.\n");
+      incolor.foreground = red;
       break;
       
     case SDLK_w:
-      colors.foreground = orange;
-      printf("Foreground orange.\n");
+      incolor.foreground = orange;
       break;
       
     case SDLK_e:
-      colors.foreground = yellow;
-      printf("Foreground yellow.\n");
+      incolor.foreground = yellow;
       break;
       
     case SDLK_r:
-      colors.foreground = green;
-      printf("Foreground green.\n");
+      incolor.foreground = green;
       break;
       
     case SDLK_t:
-      colors.foreground = cyan;
-      printf("Foreground cyan.\n");
+      incolor.foreground = cyan;
       break;
       
     case SDLK_y:
-      colors.foreground = blue;
-      printf("Foreground blue.\n");
+      incolor.foreground = blue;
       break;
     
     case SDLK_u:
-      colors.foreground = magenta;
-      printf("Foreground magenta.\n");
+      incolor.foreground = magenta;
       break;
       
     case SDLK_i:
-      colors.foreground = white;
-      printf("Foreground white.\n");
+      incolor.foreground = white;
       break;
       
     case SDLK_o: 
-      colors.foreground = grey;
-      printf("Foreground grey.\n");
+      incolor.foreground = grey;
       break;
 
     case SDLK_p:
-      colors.foreground = black;
-      printf("Foreground black.\n");
+      incolor.foreground = black;
       break;
       
     case SDLK_a:
-      colors.background = red;
-      printf("Background red.\n");
+      incolor.background = red;
       break;
       
     case SDLK_s:
-      colors.background = orange;
-      printf("Background orange.\n");
+      incolor.background = orange;
       break;
       
     case SDLK_d:
-      colors.background = yellow;
-      printf("Background yellow.\n");
+      incolor.background = yellow;
       break;
       
     case SDLK_f:
-      colors.background = green;
-      printf("Background green.\n");
+      incolor.background = green;
       break;
       
     case SDLK_g:
-      colors.background = cyan;
-      printf("Background cyan.\n");
+      incolor.background = cyan;
       break;
       
     case SDLK_h:
-      colors.background = blue;
-      printf("Background blue.\n");
+      incolor.background = blue;
       break;
     
     case SDLK_j:
-      colors.background = magenta;
-      printf("Background magenta.\n");
+      incolor.background = magenta;
       break;
       
     case SDLK_k:
-      colors.background = white;
-      printf("Background white.\n");
+      incolor.background = white;
       break;
       
     case SDLK_l: 
-      colors.background = grey;
-      printf("Background grey.\n");
+      incolor.background = grey;
       break;
 
     case SDLK_SEMICOLON:
-      colors.background = black;
-      printf("Background black.\n");
+      incolor.background = black;
       break;
       
     case SDLK_z:
-      if (alphaF == 0) {
-        alphaF = 255;
+      if (incolor.foreground.a == 0) {
+        incolor.foreground.a = 255;
       } else {
-        alphaF = 0;
+        incolor.foreground.a = 0;
       }
-      printf("Foreground alpha set to %i\n", alphaF);
       break;
       
     case SDLK_x:
-      if (alphaB == 0) {
-        alphaB = 255;
+      if (incolor.background.a == 0) {
+        incolor.background.a = 255;
       } else {
-        alphaB = 0;
+        incolor.background.a = 0;
       }
-      printf("Background alpha set to %i\n", alphaB);
       break;  
 
     case SDLK_0: case SDLK_1: case SDLK_2: case SDLK_3: case SDLK_4: case SDLK_5:
@@ -976,41 +1004,12 @@ printf("1\n");
 printf("1\n");      
       memcpy(&text, &moments[thiskey - THISKEY_OFFSET].text, sizeof(text_info_t));
       break;
-
-    case SDLK_m:
-      printf("<ctrl> <alt> q - foreground red\n");
-      printf("<ctrl> <alt> w - foreground orange\n");
-      printf("<ctrl> <alt> e - foreground yellow\n");
-      printf("<ctrl> <alt> r - foreground green\n");
-      printf("<ctrl> <alt> t - foreground cyan\n");
-      printf("<ctrl> <alt> y - foreground blue\n");
-      printf("<ctrl> <alt> u - foreground magenta\n");
-      printf("<ctrl> <alt> i - foreground white\n");
-      printf("<ctrl> <alt> o - foreground grey\n");
-      printf("<ctrl> <alt> p - foreground black\n");
-      printf("<ctrl> <alt> a - background red\n");
-      printf("<ctrl> <alt> s - background orange\n");
-      printf("<ctrl> <alt> d - background yellow\n");
-      printf("<ctrl> <alt> f - background green\n");
-      printf("<ctrl> <alt> g - background cyan\n");
-      printf("<ctrl> <alt> h - background blue\n");
-      printf("<ctrl> <alt> j - background magenta\n");
-      printf("<ctrl> <alt> k - background white\n");
-      printf("<ctrl> <alt> l - background grey\n");
-      printf("<ctrl> <alt> ; - background black\n");
-      printf("<ctrl> <alt> z - foreground alpha toggle (currently %i)\n", alphaF);
-      printf("<ctrl> <alt> x - backfround alpha toggle (currently %i)\n", alphaB);
-      printf("<ctrl> <alt> m - Color set help\n"); 
-      break;
       
     default:
       break;
   }
   
-  colors.foreground.a = alphaF;
-  colors.background.a = alphaB;
-  
-  return(colors);
+  return(incolor);
 }
 
 
@@ -1020,80 +1019,70 @@ modes_t ModeAlter(int thiskey, modes_t mode) {
   switch(thiskey) {
     case SDLK_c:
       printf("CTRL-c pushed. Exiting\n");
+      TTF_CloseFont(font);
+      font=NULL; // to be safe...
+      
+      TTF_Quit();
       exit(EXIT_SUCCESS);
       break;
       
     case SDLK_t:
       mode.textScroller = (mode.textScroller + 1) % 2;
-      printf("<ctrl> t - Text set to %s\n", (mode.textScroller == YES) ? "ON" : "OFF");
       break;
                 
     case SDLK_q:
       mode.cellAutoFun = (mode.cellAutoFun + 1) % 2;
-      printf("<ctrl> q - CellAutoFun set to %s\n", (mode.cellAutoFun == YES) ? "ON" : "OFF");
       break;
       
     case SDLK_w:
       mode.bouncer = (mode.bouncer + 1) % 2;
-      printf("<ctrl> w - Bouncer set to %s\n", (mode.bouncer == YES) ? "ON" : "OFF");
       break;
       
     case SDLK_e:
       mode.fadeout = (mode.fadeout + 1) % 2;
-      printf("<ctrl> e - Fader set to %s\n", (mode.fadeout == YES) ? "ON" : "OFF");
       break;
       
     case SDLK_r:
       mode.diffuse = (mode.diffuse + 1) % 2;
-      printf("<ctrl> r - Diffuse set to %s\n", (mode.diffuse == YES) ? "ON" : "OFF");
       break;
       
     case SDLK_y:
       mode.roller = (mode.roller + 1) % 2;
-      printf("<ctrl> y - Roller set to %s\n", (mode.roller == YES) ? "ON" : "OFF");
       break;
       
     case SDLK_u:
       mode.scroller = (mode.scroller + 1) %2;
-      printf("<ctrl> u - Scroller set to %s\n", (mode.scroller == YES) ? "ON" : "OFF");
       break;
       
     case SDLK_i:
       mode.horizontalBars = YES;
-      printf("<ctrl> i - Horizontal bars!\n");
       break;
       
     case SDLK_o:
       mode.verticalBars = YES;
-      printf("<ctrl> o - Vertical bars!\n");
       break;
       
     case SDLK_p:
       mode.colorAll = YES;
-      printf("<crtl> p - Foreground color all!\n");
       break;
       
     case SDLK_a:
       mode.clearAll = YES;
-      printf("<crtl> a - Background color all!\n");
       break;
       
     case SDLK_s:
       mode.randDots = (mode.randDots + 1) % 2;
-      printf("<ctrl> s - Random dots set to %s\n", (mode.randDots == YES) ? "ON" : "OFF");
       break;
       
     case SDLK_d:
       mode.cycleForeground = (mode.cycleForeground + 1) % 2;
-      printf ("<ctrl> d - Cycle foreground color set to %s\n", (mode.cycleForeground == YES) ? "ON" : "OFF");
       break;
       
     case SDLK_f:
       mode.cycleBackground = (mode.cycleBackground + 1) % 2;
-      printf ("<ctrl> f - Cycle background color set to %s\n", (mode.cycleBackground == YES) ? "ON" : "OFF");
       break;
 
-    case SDLK_BACKSPACE:
+    case SDLK_l:
       mode.bouncer = NO;
       mode.cellAutoFun = NO;
       mode.diffuse = NO;
@@ -1108,29 +1097,10 @@ modes_t ModeAlter(int thiskey, modes_t mode) {
       mode.clearAll = NO;
       mode.cycleForeground = NO;
       mode.cycleBackground = NO;
+      mode.fade_mode = FADE_TO_ZERO;
       mode.random = NO;
       // No break.  Allow passthrough...
       
-    case SDLK_m:
-      printf("\n\n");
-      printf("<ctrl> t - Text set to %s\n", (mode.textScroller == YES) ? "ON" : "OFF");
-      printf("<ctrl> q - CellAutoFun set to %s\n", (mode.cellAutoFun == YES) ? "ON" : "OFF");
-      printf("<ctrl> w - Bouncer set to %s\n", (mode.bouncer == YES) ? "ON" : "OFF");
-      printf("<ctrl> e - Fader set to %s\n", (mode.fadeout == YES) ? "ON" : "OFF");
-      printf("<ctrl> r - Diffuse set to %s\n", (mode.diffuse == YES) ? "ON" : "OFF");
-      printf("<ctrl> y - Roller set to %s\n", (mode.roller == YES) ? "ON" : "OFF");
-      printf("<ctrl> u - Scroller set to %s\n", (mode.scroller == YES) ? "ON" : "OFF");
-      printf("<ctrl> i - Horizontal bars!\n");
-      printf("<ctrl> o - Vertical bars!\n");
-      printf("<crtl> p - Foreground color all!\n");      
-      printf("<crtl> a - Background color all!\n");
-      printf("<ctrl> s - Random dots set to %s\n", (mode.randDots == YES) ? "ON" : "OFF");
-      printf("<ctrl> d - Cycle foreground color set to %s\n", (mode.cycleForeground == YES) ? "ON" : "OFF");
-      printf("<ctrl> f - Cycle background color set to %s\n", (mode.cycleBackground == YES) ? "ON" : "OFF");
-      printf("<ctrl> BACKSPACE - All off.\n");
-      printf("<ctrl> m - Mode help.\n");
-      break;
-
     case SDLK_0: case SDLK_1: case SDLK_2: case SDLK_3: case SDLK_4: case SDLK_5:
     case SDLK_6: case SDLK_7: case SDLK_8: case SDLK_9:
       printf("Moment #: %i\n", thiskey);
@@ -1139,8 +1109,15 @@ modes_t ModeAlter(int thiskey, modes_t mode) {
       break;
 
     case SDLK_g:
-      mode.random = (mode.random + 1) % 2;
-      printf("Random mode set to %i\n", mode.random);
+      //mode.random = (mode.random + 1) % 2;
+      break;
+      
+    case SDLK_h:
+      mode.fade_mode = (mode.fade_mode + 1) % 2;
+      break;
+      
+    case SDLK_j:
+      imaginaryBufferIndex = -1;
       break;
       
     default:
@@ -1155,82 +1132,55 @@ modes_t ModeAlter(int thiskey, modes_t mode) {
 mode_parms_t ParmAlter(int thiskey, mode_parms_t parms) {
   switch(thiskey) {
     case SDLK_z:
-      parms.fadeout_dec++;
-      printf("<alt> z - Fadeout decrement set to %i\n", parms.fadeout_dec);
+      parms.fadeout_dec--;
       break;
       
     case SDLK_c:
-      parms.fadeout_dec--;
-      printf("<alt> c - Fadeout decrement set to %i\n", parms.fadeout_dec);
+      parms.fadeout_dec++;
       break;
       
     case SDLK_x:
       parms.fadeout_dec = 0;
-      printf("<alt> x - Fadeout decrement set to %i\n", parms.fadeout_dec);
       break;
       
     case SDLK_q:
       parms.diffusion_coef = parms.diffusion_coef - parms.diffusion_increment;
-      printf("<alt> q - Diffusion coef set to %f\n", parms.diffusion_coef);
       break;
       
     case SDLK_w:
       parms.diffusion_coef = INITIAL_DIFF_COEF;
-      printf("<alt> w - Diffusion coef set to %f\n", parms.diffusion_coef);
       break;
       
     case SDLK_e:
       parms.diffusion_coef = parms.diffusion_coef + parms.diffusion_increment;
-      printf("<alt> e - Diffusion coef set to %f\n", parms.diffusion_coef);
       break;
       
     case SDLK_a:
-      parms.diffusion_increment = parms.diffusion_increment / 10;
-      printf("<alt> a - Diffusion coef increment set to %f\n", parms.diffusion_increment);
+      parms.diffusion_increment = parms.diffusion_increment * 10;
       break;
       
     case SDLK_s:
       parms.diffusion_increment = INITIAL_DIFF_INC;
-      printf("<alt> s - Diffusion coef increment set to %f\n", parms.diffusion_increment);
       break;
       
     case SDLK_d:
-      parms.diffusion_increment = parms.diffusion_increment * 10;
-      printf("<alt> d - Diffusion coef increment set to %f\n", parms.diffusion_increment);
+      parms.diffusion_increment = parms.diffusion_increment / 10;
       break;
       
     case SDLK_p:
       parms.colorCycleMode = (parms.colorCycleMode + 1) % 5;
-      printf("<alt> p - Color cycle mode set to %s\n", (parms.colorCycleMode == RGB) ? "RGB" : (parms.colorCycleMode == CMY) ? "CMY" : (parms.colorCycleMode == RYGCBM) ? "RYGCBM" : (parms.colorCycleMode == RAINBOW) ? "RAINBOW" : "RANDOM");
       break;
 
     case SDLK_v:
       randomLimit -= 10;
-      printf("<alt> v - Random frame count set to %i\n", randomLimit);
       break;
 
     case SDLK_b:
       randomLimit = INITIAL_RANDOM_FRAME_COUNT;
-      printf("<alt> v - Random frame count set to %i\n", randomLimit);
       break;
 
     case SDLK_n:
       randomLimit += 10;
-      printf("<alt> v - Random frame count set to %i\n", randomLimit);
-      break;
-
-    case SDLK_m:
-      printf("\n\n");
-      printf("<alt> zxc - Fadeout decrement set to %i\n", parms.fadeout_dec);
-      printf("<alt> qwe - Diffusion coef set to %f\n", parms.diffusion_coef);
-      printf("<alt> asd - Diffusion coef increment set to %f\n", parms.diffusion_increment);
-      printf("<alt> <arrows> - Scroll direction set to %s\n", (parms.scrollerDir == UP) ? "UP" : (parms.scrollerDir == DOWN) ? "DOWN" : (parms.scrollerDir == LEFT) ? "LEFT" : "RIGHT");
-      printf("<alt> rty - Frequency of random dots set to %i\n", parms.randMod);
-      printf("<alt> fgh - Rainbow increment set to %i\n", parms.rainbowInc);
-      printf("<alt> p - Color cycle mode set to %s\n", (parms.colorCycleMode == RGB) ? "RGB" : (parms.colorCycleMode == CMY) ? "CMY" : (parms.colorCycleMode == RYGCBM) ? "RYGCBM" : (parms.colorCycleMode == RAINBOW) ? "RAINBOW" : "RANDOM");
-      printf("<alt> vbn - Random mode counter set to %i\n", randomLimit);
-      printf("<alt> m - Parms info\n");
-
       break;
 
     case SDLK_0: case SDLK_1: case SDLK_2: case SDLK_3: case SDLK_4: case SDLK_5:
@@ -1243,53 +1193,67 @@ mode_parms_t ParmAlter(int thiskey, mode_parms_t parms) {
 
     case SDLK_f:
       parms.rainbowInc--;
-      printf("<alt> f - Rainbow increment set to %i\n", parms.rainbowInc); 
       break;
       
     case SDLK_g:
       parms.rainbowInc = INITIAL_RAINBOW_INC;
-      printf("<alt> g - Rainbow increment set to %i\n", parms.rainbowInc); 
       break;
 
     case SDLK_h:
       parms.rainbowInc++;
-      printf("<alt> h - Rainbow increment set to %i\n", parms.rainbowInc); 
       break;
             
     case SDLK_r:
       parms.randMod--;
-      printf("<alt> r - Frequency of random dots set to %i\n", parms.randMod);
       break;
       
     case SDLK_t:
       parms.randMod = INITIAL_RAND_MOD;
-      printf("<alt> t - Frequency of random dots set to %i\n", parms.randMod);
       break;
       
     case SDLK_y:
       parms.randMod++;
-      printf("<alt> y - Frequency of random dots set to %i\n", parms.randMod);
       break;
       
     case SDLK_UP:
       parms.scrollerDir = UP;
-      printf("<alt> <up> - Scroller direction set to up.\n");
       break;
       
     case SDLK_DOWN:
       parms.scrollerDir = DOWN;
-      printf("<alt> <down> - Scroller direction set to down.\n");
       break;
       
     case SDLK_LEFT:
       parms.scrollerDir = LEFT;
-      printf("<alt> <right> - Scroller direction set to left.\n");
       break;
       
     case SDLK_RIGHT:
       parms.scrollerDir = RIGHT;
-      printf("<alt> <left> - Scroller direction set to right.\n");
       break;
+      
+    case SDLK_u:
+      color_multiplier = color_multiplier - color_increment;
+      break;
+      
+    case SDLK_i:
+      color_multiplier = color_mod_save;
+      break;
+      
+    case SDLK_o:
+      color_multiplier = color_multiplier + color_increment;
+      break;
+      
+    case SDLK_j:
+      color_increment = color_increment * 10;
+      break;
+      
+    case SDLK_k:
+      color_increment = .1;
+      break;
+      
+    case SDLK_l:
+      color_increment = color_increment / 10;
+      break; 
       
     default:
       break;
@@ -1340,6 +1304,9 @@ color_t ColorCycle(color_t originalColor, colorCycles_e cycleMode, int rainbowIn
   color_t colorTemp = black;
   int inpos;
   int inposo;
+  
+  //color_t ct2;
+  //ct2 = originalColor;
   
   switch(cycleMode) {
     case RGB:
@@ -1468,6 +1435,8 @@ color_t ColorCycle(color_t originalColor, colorCycles_e cycleMode, int rainbowIn
       break;
   }
   
+  colorTemp.a = originalColor.a;
+
   return(colorTemp);
 }
 
@@ -1486,5 +1455,356 @@ moment_t SaveAside(modes_t mode, mode_parms_t coefs, text_info_t text, unsigned 
 }
 
 
+void UpdateInfoDisplay(void) {
+  ClearAll();
+  
+  char thisline[1024];
+  char thisparm[1024];
+  
+  int length;
+  int line;
+  
+  line = 8;
+  
+  snprintf(thisline, sizeof(thisline), "Modes: ");
+  WriteLine(line++, 0, thisline);
+  
+  line++;
+  
+  snprintf(thisline, sizeof(thisline), "<ctrl> t - Text");
+  snprintf(thisparm, sizeof(thisparm), "%s", mode.textScroller == YES ? "YES" : "NO");
+  WriteLine(line, 0, thisline);
+  WriteLine(line++, 1, thisparm);
+  
+  snprintf(thisline, sizeof(thisline), "<ctrl> q - CellAutoFun");
+  snprintf(thisparm, sizeof(thisparm), "%s", mode.cellAutoFun == YES ? "YES" : "NO");
+  WriteLine(line, 0, thisline);
+  WriteLine(line++, 1, thisparm);
+  
+  snprintf(thisline, sizeof(thisline), "<ctrl> w - Bouncer");
+  snprintf(thisparm, sizeof(thisparm), "%s", mode.bouncer == YES ? "YES" : "NO");
+  WriteLine(line, 0, thisline);
+  WriteLine(line++, 1, thisparm);
+
+  snprintf(thisline, sizeof(thisline), "<ctrl> e - Fader");
+  snprintf(thisparm, sizeof(thisparm), "%s", mode.fadeout == YES ? "YES" : "NO");
+  WriteLine(line, 0, thisline);
+  WriteLine(line++, 1, thisparm);
+
+  snprintf(thisline, sizeof(thisline), "<ctrl> r - Diffuse");
+  snprintf(thisparm, sizeof(thisparm), "%s", mode.diffuse == YES ? "YES" : "NO");
+  WriteLine(line, 0, thisline);
+  WriteLine(line++, 1, thisparm);
+
+  snprintf(thisline, sizeof(thisline), "<ctrl> y - Roller");
+  snprintf(thisparm, sizeof(thisparm), "%s", mode.roller == YES ? "YES" : "NO");
+  WriteLine(line, 0, thisline);
+  WriteLine(line++, 1, thisparm);
+
+  snprintf(thisline, sizeof(thisline), "<ctrl> u - Scroller");
+  snprintf(thisparm, sizeof(thisparm), "%s", mode.scroller == YES ? "YES" : "NO");
+  WriteLine(line, 0, thisline);
+  WriteLine(line++, 1, thisparm);
+
+  snprintf(thisline, sizeof(thisline), "<ctrl> i - Horizontal bars!");
+  WriteLine(line++, 0, thisline);
+
+  snprintf(thisline, sizeof(thisline), "<ctrl> o - Vertical bars!");
+  WriteLine(line++, 0, thisline);
+
+  snprintf(thisline, sizeof(thisline), "<crtl> p - Foreground color all!");
+  WriteLine(line++, 0, thisline);
+
+  snprintf(thisline, sizeof(thisline), "<crtl> a - Background color all!");
+  WriteLine(line++, 0, thisline);
+
+  snprintf(thisline, sizeof(thisline), "<ctrl> s - Random dots");
+  snprintf(thisparm, sizeof(thisparm), "%s", mode.randDots == YES ? "YES" : "NO");
+  WriteLine(line, 0, thisline);
+  WriteLine(line++, 1, thisparm);
+
+  snprintf(thisline, sizeof(thisline), "<ctrl> d - FG cycle");
+  snprintf(thisparm, sizeof(thisparm), "%s", mode.cycleForeground == YES ? "YES" : "NO");
+  WriteLine(line, 0, thisline);
+  WriteLine(line++, 1, thisparm);
+
+  snprintf(thisline, sizeof(thisline), "<ctrl> f - BG cycle");
+  snprintf(thisparm, sizeof(thisparm), "%s", mode.cycleBackground == YES ? "YES" : "NO");
+  WriteLine(line, 0, thisline);
+  WriteLine(line++, 1, thisparm);
+  
+//  snprintf(thisline, sizeof(thisline), "<ctrl> g - Random mode");
+//  snprintf(thisparm, sizeof(thisparm), "%s", mode.random == YES ? "YES" : "NO");
+//  WriteLine(line, 0, thisline);
+//  WriteLine(line++, 1, thisparm);  
+
+  snprintf(thisline, sizeof(thisline), "<ctrl> h - Fader mode");
+  snprintf(thisparm, sizeof(thisparm), "%s", mode.fade_mode == FADE_MODULAR ? "MODULAR" : "ZERO");
+  WriteLine(line, 0, thisline);
+  WriteLine(line++, 1, thisparm);  
+  
+  snprintf(thisline, sizeof(thisline), "<ctrl> j - Reset text to start.");
+  WriteLine(line++, 0, thisline);
+
+  snprintf(thisline, sizeof(thisline), "<ctrl> l - All modes off.");
+  WriteLine(line++, 0, thisline);
+ 
+  
+  line++;
+  line++;
+   
+  snprintf(thisline, sizeof(thisline), "Other keys:");
+  WriteLine(line++, 0, thisline);
+  
+  line++;
+  
+  snprintf(thisline, sizeof(thisline), "<Unmodified keys> - Add text.");
+  WriteLine(line++, 0, thisline);          
+  
+  snprintf(thisline, sizeof(thisline), "<backspace> - Delete last letter.");
+  WriteLine(line++, 0, thisline);  
+  
+  snprintf(thisline, sizeof(thisline), "<esc> - Erase all text.");
+  WriteLine(line++, 0, thisline);
+  
+
+  
 
 
+  line++;
+  
+  snprintf(thisline, sizeof(thisline), "<ctrl> c - Quit.");
+  WriteLine(line++, 0, thisline);  
+
+  // Alt
+  line = 1;
+  snprintf(thisline, sizeof(thisline), "Coeffs (3 keys means inc, rst, dec):");
+  WriteLine(line++, 2, thisline);
+  line++;
+  
+  snprintf(thisline, sizeof(thisline), "<alt> z, x, c - fader decrementer");
+  snprintf(thisparm, sizeof(thisparm), "%i", parms.fadeout_dec);
+  WriteLine(line, 2, thisline);
+  WriteLine(line++, 3, thisparm);
+
+  snprintf(thisline, sizeof(thisline), "<alt> q, w, e - Diffusion");
+  snprintf(thisparm, sizeof(thisparm), "%f", parms.diffusion_coef);
+  WriteLine(line, 2, thisline);
+  WriteLine(line++, 3, thisparm);
+
+  snprintf(thisline, sizeof(thisline), "<alt> a, s, d - Diffusion inc");
+  snprintf(thisparm, sizeof(thisparm), "%f", parms.diffusion_increment);
+  WriteLine(line, 2, thisline);
+  WriteLine(line++, 3, thisparm);
+  
+  snprintf(thisline, sizeof(thisline), "<alt> <arrows> - Scroller direction");
+  snprintf(thisparm, sizeof(thisparm), "%s", parms.scrollerDir == UP ? "UP" :
+                                             parms.scrollerDir == DOWN ? "DOWN" :
+                                             parms.scrollerDir == LEFT ? "LEFT" :
+                                             parms.scrollerDir == RIGHT ? "RIGHT" : "UNKNOWN");
+  WriteLine(line, 2, thisline);
+  WriteLine(line++, 3, thisparm);  
+
+  snprintf(thisline, sizeof(thisline), "<alt> r, t, y - Random dot modulus");
+  snprintf(thisparm, sizeof(thisparm), "%i", parms.randMod);
+  WriteLine(line, 2, thisline);
+  WriteLine(line++, 3, thisparm);
+
+  snprintf(thisline, sizeof(thisline), "<alt> f, g, h - Rainbow increment");
+  snprintf(thisparm, sizeof(thisparm), "%i", parms.rainbowInc);
+  WriteLine(line, 2, thisline);
+  WriteLine(line++, 3, thisparm);
+
+  snprintf(thisline, sizeof(thisline), "<alt> p - Color cycle type");
+  snprintf(thisparm, sizeof(thisparm), "%s", parms.colorCycleMode == RGB ? "R-G-B" :
+                                             parms.colorCycleMode == CMY ? "C-M-Y" :
+                                             parms.colorCycleMode == RYGCBM ? "R-Y-G-C-B-M" :
+                                             parms.colorCycleMode == RAINBOW ? "RAINBOW" :
+                                             parms.colorCycleMode == RANDOM ? "RANDOM" : "UNKNOWN");
+  WriteLine(line, 2, thisline);
+  WriteLine(line++, 3, thisparm);
+
+  snprintf(thisline, sizeof(thisline), "<alt> v, b, n - Random mode counter");
+  snprintf(thisparm, sizeof(thisparm), "%i", randomLimit);
+  WriteLine(line, 2, thisline);
+  WriteLine(line++, 3, thisparm);
+  
+  snprintf(thisline, sizeof(thisline), "<alt> u, i, o - Multiplier");
+  snprintf(thisparm, sizeof(thisparm), "%f", color_multiplier);
+  WriteLine(line, 2, thisline);
+  WriteLine(line++, 3, thisparm);
+
+  snprintf(thisline, sizeof(thisline), "<alt> j, k, l - Multiplier inc");
+  snprintf(thisparm, sizeof(thisparm), "%f", color_increment);
+  WriteLine(line, 2, thisline);
+  WriteLine(line++, 3, thisparm);
+
+  line++;
+  line++;
+
+  snprintf(thisline, sizeof(thisline), "Colors:");
+  WriteLine(line++, 2, thisline);
+  
+  line++;
+  
+  snprintf(thisline, sizeof(thisline), "<ctrl> <alt> q - foreground red");
+  WriteLine(line++, 2, thisline);
+  
+  snprintf(thisline, sizeof(thisline), "<ctrl> <alt> w - foreground orange");
+  WriteLine(line++, 2, thisline);
+  
+  snprintf(thisline, sizeof(thisline), "<ctrl> <alt> e - foreground yellow");
+  WriteLine(line++, 2, thisline);
+
+  snprintf(thisline, sizeof(thisline), "<ctrl> <alt> r - foreground green");
+  WriteLine(line++, 2, thisline);  
+  
+  snprintf(thisline, sizeof(thisline), "<ctrl> <alt> t - foreground cyan");
+  WriteLine(line++, 2, thisline);  
+  
+  snprintf(thisline, sizeof(thisline), "<ctrl> <alt> y - foreground blue");
+  WriteLine(line++, 2, thisline);
+  
+  snprintf(thisline, sizeof(thisline), "<ctrl> <alt> u - foreground magenta");
+  WriteLine(line++, 2, thisline);
+  
+  snprintf(thisline, sizeof(thisline), "<ctrl> <alt> i - foreground white");
+  WriteLine(line++, 2, thisline);
+  
+  snprintf(thisline, sizeof(thisline), "<ctrl> <alt> o - foreground grey");
+  WriteLine(line++, 2, thisline);
+  
+  snprintf(thisline, sizeof(thisline), "<ctrl> <alt> p - foreground black");
+  WriteLine(line++, 2, thisline);
+  line++;
+  snprintf(thisline, sizeof(thisline), "<ctrl> <alt> a - background red");
+  WriteLine(line++, 2, thisline);
+  
+  snprintf(thisline, sizeof(thisline), "<ctrl> <alt> s - background orange");
+  WriteLine(line++, 2, thisline);
+  
+  snprintf(thisline, sizeof(thisline), "<ctrl> <alt> d - background yellow");
+  WriteLine(line++, 2, thisline);
+  
+  snprintf(thisline, sizeof(thisline), "<ctrl> <alt> f - background green");
+  WriteLine(line++, 2, thisline);
+  
+  snprintf(thisline, sizeof(thisline), "<ctrl> <alt> g - background cyan");
+  WriteLine(line++, 2, thisline);
+  
+  snprintf(thisline, sizeof(thisline), "<ctrl> <alt> h - background blue");
+  WriteLine(line++, 2, thisline);
+  
+  snprintf(thisline, sizeof(thisline), "<ctrl> <alt> j - background magenta");
+  WriteLine(line++, 2, thisline);
+  
+  snprintf(thisline, sizeof(thisline), "<ctrl> <alt> k - background white");
+  WriteLine(line++, 2, thisline);
+  
+  snprintf(thisline, sizeof(thisline), "<ctrl> <alt> l - background grey");
+  WriteLine(line++, 2, thisline);
+  
+  snprintf(thisline, sizeof(thisline), "<ctrl> <alt> ; - background black");
+  WriteLine(line++, 2, thisline);
+  
+  snprintf(thisline, sizeof(thisline), "<ctrl> <alt> z - foreground alpha");
+  snprintf(thisparm, sizeof(thisparm), "%i", colors.foreground.a);
+  WriteLine(line, 2, thisline);
+  WriteLine(line++, 3, thisparm);
+  
+  snprintf(thisline, sizeof(thisline), "<ctrl> <alt> x - backfround alpha");
+  snprintf(thisparm, sizeof(thisparm), "%i", colors.background.a);
+  WriteLine(line, 2, thisline);
+  WriteLine(line++, 3, thisparm);
+
+  length=strlen(text.textBuffer);
+  line++;
+  snprintf(thisline, sizeof(thisline), "Text Buffer:");
+  snprintf(thisparm, sizeof(thisparm), "Length: %i", length);
+  WriteLine(line, 0, thisline);
+  WriteLine(line++, 1, thisparm);
+  
+  char mybuff[1024];
+
+  strncpy(mybuff, text.textBuffer + (length > 100 ? length - 100 : 0), 101);
+  snprintf(thisline, sizeof(thisline), "%s", mybuff );
+  WriteLine(line++, 0, thisline);  
+
+  UpdateAll();
+  
+}
+
+
+void PreviewBorder(int width, int height) {
+  
+  int i;
+  Uint32 color_sdl;
+  Uint32 *bufp;
+  
+  if (SDL_MUSTLOCK(screen)) {
+    if (SDL_LockSurface(screen) < 0) {
+      return;
+    }
+  }
+  
+  color_sdl = SDL_MapRGB(screen->format, (Uint8) border_c.r, (Uint8) border_c.g, (Uint8) border_c.b);
+  
+  // Vert
+  for(i = 0; i <= height; i++) { 
+    bufp= (Uint32 *) screen->pixels + (i * screen->pitch / 4) + width;
+    *bufp = color_sdl;
+  }
+  
+  // Horz
+  for(i = 0; i <= width; i++) { 
+    bufp= (Uint32 *) screen->pixels + (height * screen->pitch / 4) + i;
+    *bufp = color_sdl;
+  }  
+  
+  if (SDL_MUSTLOCK(screen)) {
+    SDL_UnlockSurface(screen);
+  }
+  
+  SDL_UpdateRect(screen, 0, 0, width + 1, height + 1);
+}
+
+
+
+void WriteLine(int line, int col, char * thistext) {
+  SDL_Surface *text_surface;
+  SDL_Rect rect;
+  const int colstart[4] = {0, 275, 375, 675};
+
+  rect.x = colstart[col];
+  rect.y = line * (FONT_SIZE);
+  rect.w = 0;
+  rect.h = 0;
+  
+  text_surface = TTF_RenderText_Solid(font, thistext, font_color);
+  if (text_surface != NULL) {
+   SDL_BlitSurface(text_surface, NULL, screen, &rect);
+   SDL_FreeSurface(text_surface);
+  }
+}
+
+
+
+void UpdateAll(void) {
+  SDL_UpdateRect(screen, 0, 0, 900, 768);
+}
+
+
+void ClearAll(void) {
+  SDL_Rect rect1={0,
+                 FONT_SIZE * 8,
+                 TENSOR_PREVIEW_WIDTH + (BORDER * 2) + 1,
+                 768 - (FONT_SIZE * 8)};
+                
+  SDL_Rect rect2={TENSOR_PREVIEW_WIDTH + (BORDER * 2) + 1,
+                  0,
+                  900 - TENSOR_PREVIEW_WIDTH + (BORDER * 2),
+                  768};
+                 
+  SDL_FillRect(screen, &rect1, 0);
+  SDL_FillRect(screen, &rect2, 0);
+}

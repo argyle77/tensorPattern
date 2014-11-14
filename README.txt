@@ -1,11 +1,12 @@
-Tensor pattern generation - Version 3.3.0 - SDL mixer with save/recall (broken).
-
-"Fuck Your Day!"
+Tensor pattern generation - Version 3.4.0 - SDL mixer with save/recall (broken).
+SDL window shows preview and list of controls.
+  
+"Be the light you wish to see in the world."
 
 This pattern outputs as UDP to the tensor wall.  There is a preview window
 using SDL.
 
-Controls keys are printed to the console with <ctrl> m, <alt> m, <ctrl> <alt> m.
+Controls keys are listed next to the preview.
 Unmodified keys, backspace, esc, return alter the text buffer.
 
 Build instructions:
@@ -15,5 +16,8 @@ Build instructions:
   cmake ..
   make
 
-Binaries can be found in build/bin.
+Binary must be run from the bin directory, or the font won't be found.
+
+  cd bin
+  ./tensorSDL
 
