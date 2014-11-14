@@ -1,5 +1,6 @@
-Tensor pattern generation - Version 3.5.0 - Functionally similar to v3.4.0.
-SDL window shows preview and list of controls.
+Tensor pattern generation - Version 3.6.0
+Functionally similar to v3.4.0, v3.5.0, but added rotozoom, moved some keys 
+around, separated multiply and the output limiter.
   
 "Be the light you wish to see in the world."
 
