@@ -84,7 +84,7 @@ static int tensor_init_ips()
     case 2:
       ssrc = Tensor_Section2;
       break;
-   
+      
     default:
     case 3:
       ssrc = Tensor_Section3;
