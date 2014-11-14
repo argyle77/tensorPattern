@@ -44,7 +44,8 @@
 #include "my_font.h"
 #include "SDL.h"  
 #include "SDL_ttf.h" 
-
+// #include "SDL_rotozoom.h"
+#include "SDL_gfxPrimitives.h"
 
 #define TENSOR_WIDTH_EFF (TENSOR_HEIGHT)
 #define TENSOR_HEIGHT_EFF (TENSOR_WIDTH / 3)
@@ -141,6 +142,7 @@ const color_t orange = {.r = 255, .g = 127, .b = 0, .a = 0};
 const color_t grey = {.r = 127, .g = 127, .b = 127, .a = 0};
 const unsigned char masks[] = { 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80 };
 unsigned char fb[TENSOR_BYTES_EFF];  // Tensor frame buffer
+unsigned char fb_back[TENSOR_BYTES_EFF];  // Tensor frame buffer backup
 double color_multiplier;
 double color_increment = .1;
 double color_mod_save;
@@ -149,7 +151,10 @@ TTF_Font *font;
 SDL_Color font_color = {255,255,255};
 SDL_Color font_back = {0,0,0};
 SDL_Surface *screen;
+SDL_Surface *ttemp;
 int imaginaryBufferIndex = -1;
+float rotationAngle = 0;
+float rotationDelta = .1;
 
 moment_t moments[10];
 modes_t mode = {
@@ -192,15 +197,18 @@ colors_t colors = {.foreground = {.r = 255, .g = 0, .b = 0, .a = 0}, .background
   
 // Protos
 void SetPixel(int x, int y, color_t color);
+void SetPixelBack(int x, int y, color_t color);
 color_t GetPixel(int x, int y);
+color_t GetPixelFrom(unsigned char *buffer, int x, int y);
+color_t GetPixelBack(int x, int y);
 void ColorAll(color_t color);
 void Update(void);
 void FadeAll(int dec, fade_mode_e fademode);
 void Scroll (dir_e direction, int rollovermode);
 void ScrollErase(dir_e direction, color_t eraseColor);
 void WriteSlice(char *buffer, colors_t font_colors, dir_e direction, int column);
-void UpdateTensor(void);
-void UpdatePreview(void);
+void UpdateTensor(unsigned char *buffer);
+void UpdatePreview(unsigned char *buffer);
 void Diffuse(float diffusion_coeff);
 void HorizontalBars(colors_t colors);
 void VerticalBars(colors_t colors);
@@ -262,10 +270,16 @@ int main(int argc, char *argv[]) {
     atexit(SDL_Quit);
   }
   
-  // screen = SDL_SetVideoMode(TENSOR_PREVIEW_WIDTH + (BORDER * 2), TENSOR_PREVIEW_HEIGHT + (BORDER * 2), 32, SDL_SWSURFACE);
-    screen = SDL_SetVideoMode(900, 768, 32, SDL_SWSURFACE);
+  // Initialize the SDL surfaces.
+  screen = SDL_SetVideoMode(900, 768, 32, SDL_SWSURFACE);
   if (screen == NULL) {
     fprintf(stderr, "Unable to set video size: %s\n", SDL_GetError());
+    exit(EXIT_FAILURE);
+  }
+
+  ttemp = SDL_CreateRGBSurface(SDL_SWSURFACE, TENSOR_WIDTH_EFF, TENSOR_HEIGHT_EFF, 32, 0,0,0,0);
+  if (ttemp == NULL) {
+    fprintf(stderr, "Unable to allocate a temp buffer: %s\n", SDL_GetError());
     exit(EXIT_FAILURE);
   }
   
@@ -274,7 +288,7 @@ int main(int argc, char *argv[]) {
   sleep(1);
   SDL_EnableUNICODE(1);
   SDL_EnableKeyRepeat(SDL_DEFAULT_REPEAT_DELAY, SDL_DEFAULT_REPEAT_INTERVAL);
-  SDL_WM_SetCaption("Tensor Control", "Click here bitch!");
+  SDL_WM_SetCaption("Tensor Control", "Tensor Control");
   // True type...
   if(TTF_Init()==-1) {
     printf("TTF_Init: %s\n", TTF_GetError());
@@ -297,7 +311,7 @@ int main(int argc, char *argv[]) {
 
 
   // Pattern
-  ColorAll(white);
+  ColorAll(orange);
   Update();
  
   // Program loop...
@@ -566,11 +580,20 @@ void FadeAll(int dec, fade_mode_e fade_mode) {
 
 
 
+
 // Set a single pixel a particular color.
 void SetPixel(int x, int y, color_t color) {
   fb[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 0] = color.r;
   fb[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 1] = color.g;
   fb[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 2] = color.b;
+}
+
+
+// Set a single pixel a particular color.
+void SetPixelBack(int x, int y, color_t color) {
+  fb_back[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 0] = color.r;
+  fb_back[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 1] = color.g;
+  fb_back[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 2] = color.b;
 }
 
 
@@ -586,14 +609,43 @@ color_t GetPixel(int x, int y) {
   return colorTemp;
 }
 
+color_t GetPixelFrom(unsigned char *buffer, int x, int y) {
+  color_t colorTemp;
+  colorTemp.r = buffer[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 0];
+  colorTemp.g = buffer[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 1];
+  colorTemp.b = buffer[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 2];
+  colorTemp.a = 0; // We don't return an alpha for a written pixel.
+  return colorTemp;
+}
+
+// Get the color of a particular pixel.
+color_t GetPixelBack(int x, int y) {
+  color_t colorTemp;
+
+  colorTemp.r = fb_back[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 0];
+  colorTemp.g = fb_back[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 1];
+  colorTemp.b = fb_back[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 2];
+  colorTemp.a = 0; // We don't return an alpha for a written pixel.
+  return colorTemp;
+}
+
+
 
 
 // Send out the frame buffer to tensor and/or the display window.
 void Update(void) {
-  UpdatePreview();
+  unsigned char fba[TENSOR_BYTES_EFF];
+  int i;
+
+  // Output diminish.
+  for (i = 0; i < TENSOR_BYTES_EFF; i++) {
+    fba[i] = (unsigned char)((float) fb[i] * color_multiplier);
+  }
+
+  UpdatePreview(fba);
   
   #ifdef USE_TENSOR
-    UpdateTensor();
+    UpdateTensor(fba);
   #endif
   
   usleep(50000);
@@ -602,42 +654,65 @@ void Update(void) {
 
 
 
-// Send frame buffer to display window
-void UpdatePreview(void) {
-  Uint32 color_sdl;
-  Uint32 *bufp;
-  color_t thisColor;
-  int x,y;
-  int i,j;
+// Rotate
+void Rotate(float angle) {
+  int x, y;
+  rotationAngle = rotationAngle + rotationDelta;
+
+  // Rotation is acheived using SDL_gfx primitive rotozoom.
+  // First, ceate a new SDL surface to work with.
+  // Next, copy the frame buffer to it.
+  // Rotate / scale it.
+  // Copy the result back to the frame buffer.
+  // Destroy the surface.
+
   
-  if (SDL_MUSTLOCK(screen)) {
-    if (SDL_LockSurface(screen) < 0) {
-      return;
-    }
-  }
-  
+
   for (x = 0; x < TENSOR_WIDTH_EFF; x++) {
     for (y = 0; y < TENSOR_HEIGHT_EFF; y++) {
-      thisColor = GetPixel(x,y);
-      thisColor.r = (unsigned char)((float) thisColor.r * color_multiplier);
-      thisColor.g = (unsigned char)((float) thisColor.g * color_multiplier);
-      thisColor.b = (unsigned char)((float) thisColor.b * color_multiplier);
-      
-      color_sdl = SDL_MapRGB(screen->format, (Uint8) thisColor.r, (Uint8) thisColor.g, (Uint8) thisColor.b);
-      for (i = 0; i < PSIZE_X; i++) {
-        for (j = 0; j < PSIZE_Y; j++) {
-          bufp = (Uint32 *) screen->pixels + ( (((y * PSIZE_Y) + j + BORDER) * screen->pitch / 4) + ((x * PSIZE_X) + i + BORDER));
-          *bufp = color_sdl;
-        }
-      }
+    // rotozoomSurface
+    }
+  }
+}
+
+
+// Frame buffer to surface
+//SDL_Surface * FBToSurface(SDL_Surface *surface, unsigned char *FB) {
+  
+//}
+
+// Surface to frame buffer
+//unsigned char * SurfaceToFB(unsigned char *FB, SDL_Surface *surface) {
+
+//}
+
+
+// Send frame buffer to display window
+void UpdatePreview(unsigned char *buffer) {
+  color_t pixel;
+  int x,y;
+  int x1, y1, x2, y2;
+
+  for (x = 0; x < TENSOR_WIDTH_EFF; x++) {
+    for (y = 0; y < TENSOR_HEIGHT_EFF; y++) {
+
+      // Get pixel color.
+      pixel = GetPixelFrom(buffer, x, y);
+
+      // Write it to the output surface as a 10x10 square. (PSIZE_X x PSIZE_Y).
+      x1 = (x * PSIZE_X) + BORDER;
+      y1 = (y * PSIZE_Y) + BORDER;
+      x2 = x1 + PSIZE_X - 1;
+      y2 = y1 + PSIZE_Y - 1;
+
+      boxRGBA(screen, x1, y1, x2, y2,
+             (Uint8) pixel.r,
+             (Uint8) pixel.g,
+             (Uint8) pixel.b,
+             (Uint8) 255);
     }
   }
   
-  if (SDL_MUSTLOCK(screen)) {
-    SDL_UnlockSurface(screen);
-  }
-  
-//  SDL_Flip(screen);
   SDL_UpdateRect(screen, 0, 0, TENSOR_PREVIEW_WIDTH + (BORDER * 2), TENSOR_PREVIEW_HEIGHT + (BORDER * 2));
 }
 
@@ -791,16 +866,8 @@ void ScrollErase(dir_e direction, color_t eraseColor) {
 
 
 
-void UpdateTensor(void) {
-  int i;
-  unsigned char fba[TENSOR_BYTES_EFF];
-  
-  for (i = 0; i < TENSOR_BYTES_EFF; i++) {
-    fba[i] = (unsigned char)((double) fb[i] * color_multiplier);
-  }
-  
-  tensor_send(fba);
-  return;
+void UpdateTensor(unsigned char *buffer) {
+  tensor_send(buffer);
 }
 
 

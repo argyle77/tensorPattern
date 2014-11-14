@@ -1,4 +1,4 @@
-Tensor pattern generation - Version 3.4.0 - SDL mixer with save/recall (broken).
+Tensor pattern generation - Version 3.5.0 - Functionally similar to v3.4.0.
 SDL window shows preview and list of controls.
   
 "Be the light you wish to see in the world."
@@ -8,6 +8,9 @@ using SDL.
 
 Controls keys are listed next to the preview.
 Unmodified keys, backspace, esc, return alter the text buffer.
+
+NOTE: SDL GFX is required for this version.  There is no cmake module for
+ensuring that this is on the system, so be sure to install libsdl-gfx1.2-dev
 
 Build instructions:
 

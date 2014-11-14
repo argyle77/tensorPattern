@@ -12,7 +12,7 @@ add_library(drv-tensor drv-tensor.c)
 include_directories(${PROJECT_BINARY_DIR}/bin ${SDL_INCLUDE_DIR} ${SDL_TTF_INCLUDE_DIRS})
 
 # Linked Libraries
-target_link_libraries(tensorSDL drv-tensor ${SDL_LIBRARY} ${SDL_TTF_LIBRARIES})
+target_link_libraries(tensorSDL drv-tensor ${SDL_LIBRARY} ${SDL_TTF_LIBRARIES} SDL_gfx)
 
 
 

@@ -8,7 +8,7 @@ project(tensorPattern)
 # Let's set a version number.
 # This file must be manually changed to effect version change.
 set (VERSION_MAJOR 3)
-set (VERSION_MINOR 4)
+set (VERSION_MINOR 5)
 set (VERSION_PATCH 0)
 set (VERSION_PRERELEASE)
 
@@ -22,7 +22,6 @@ endif()
 add_compile_options(-Wall -g)
 
 # Libraries 
-# find_package(SDL COMPONENTS TTF IMAGE GFX REQUIRED) - Later versions.
 find_package(SDL)
 if ( NOT SDL_FOUND )
   message(FATAL_ERROR "SDL not found! Please install libsdl1.2-dev!")
