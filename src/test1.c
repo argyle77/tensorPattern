@@ -8,6 +8,8 @@
 
 #define YES 0
 #define NO 1
+#define OFF 0
+#define ON 1
 #define PASS 0
 #define FAIL -1
 #define AUTO 0
@@ -60,13 +62,16 @@ typedef struct {
 
 // Scroller directions
 typedef enum {
-  UP, DOWN, LEFT, RIGHT
+  UP, LEFT, DOWN, RIGHT
 } dir_t;
 
 // Pattern modes
-//typedef enum {
-//  TEXT
-//} mode_t;
+typedef struct {
+  int textScroller;
+  int cellAutoFun;
+  int bouncer;
+  int fadeout;
+} modes_t;
 
 
 
@@ -111,10 +116,19 @@ void UpdateTensor(void);
 
 // Main
 int main(int argc, char *argv[]) {
-  char textBuffer[1024] = "beep ";
+  char textBuffer[4096] = "beep ";
   int tindex = strlen(textBuffer);
   SDL_Event key_event;
-  
+  color_t pixelColor, oldColor;
+  int x,y;
+  int fadeout_dec = 4;
+  dir_t scrDir = UP;
+  modes_t mode = {
+    .textScroller = NO,
+    .cellAutoFun = NO,
+    .bouncer = NO,
+    .fadeout = YES
+  };
   
   // Unbuffer stdout...
   setvbuf(stdout, (char *)NULL, _IONBF, 0);
@@ -158,10 +172,66 @@ int main(int argc, char *argv[]) {
   // Program loop...
   FOREVER {
     
-    // Read all the key event queued up and update the buffer.
+    // Read all the key events queued up.
     while (SDL_PollEvent(&key_event)) {
-      switch(key_event.type) {
-        case SDL_KEYDOWN:
+      if (key_event.type == SDL_KEYDOWN) {
+
+        // First <ctrl> mode switches.
+        if (key_event.key.keysym.mod & KMOD_CTRL) {
+          switch(key_event.key.keysym.sym) {
+            case SDLK_c:
+              printf("CTRL-c pushed. Exiting\n");
+              exit(EXIT_SUCCESS);
+              break;
+              
+            case SDLK_t:
+              mode.textScroller = (mode.textScroller + 1) % 2;
+              printf("Text scroller set to %s\n", (mode.textScroller == YES) ? "ON" : "OFF");
+              break;
+                        
+            case SDLK_q:
+              mode.cellAutoFun = (mode.cellAutoFun + 1) % 2;
+              printf("CellAutoFun set to %s\n", (mode.cellAutoFun == YES) ? "ON" : "OFF");
+              break;
+              
+            case SDLK_w:
+              mode.bouncer = (mode.bouncer + 1) % 2;
+              printf("Bouncer set to %s\n", (mode.bouncer == YES) ? "ON" : "OFF");
+              break;
+              
+            case SDLK_e:
+              mode.fadeout = (mode.fadeout + 1) % 2;
+              printf("Fader set to %s\n", (mode.fadeout == YES) ? "ON" : "OFF");
+              break;
+  
+            default:
+              break;
+          }  // End <ctrl> mode switch
+        
+        } else if (key_event.key.keysym.mod & KMOD_ALT) {
+          switch(key_event.key.keysym.sym) {
+            case SDLK_UP:
+              fadeout_dec++;
+              printf("Fadeout decrement set to %i\n", fadeout_dec);
+              break;
+              
+            case SDLK_DOWN:
+              fadeout_dec--;
+              printf("Fadeout decrement set to %i\n", fadeout_dec);
+              break;
+              
+            case SDLK_0:
+              fadeout_dec = 0;
+              printf("Fadeout decrement set to %i\n", fadeout_dec);
+              break;
+              
+            default:
+              break;
+          }
+          
+        //} else if (key_event.key.keysym.mod & KMOD_SHIFT) {
+
+        } else {
           if (key_event.key.keysym.unicode < 0x80 && key_event.key.keysym.unicode > 0) {
             switch(key_event.key.keysym.sym) {
               case SDLK_BACKSPACE:
@@ -180,19 +250,13 @@ int main(int argc, char *argv[]) {
                   tindex--;
                 }
                 break;
-                
+
               case SDLK_ESCAPE:
                 tindex = 0;
                 textBuffer[0] = 0x00;
                 break;
                 
               default:
-                if (key_event.key.keysym.mod & KMOD_CTRL) {
-                  if (key_event.key.keysym.sym == SDLK_c) {
-                    printf("CTRL-c pushed.\n");
-                    exit(EXIT_SUCCESS);
-                  }
-                }
                 textBuffer[tindex] = (char)key_event.key.keysym.unicode;
                 textBuffer[tindex + 1] = 0x00;
                 
@@ -200,20 +264,46 @@ int main(int argc, char *argv[]) {
                 if (tindex >= (sizeof(textBuffer) - 2)) {
                   tindex--;
                 }
-                
-            }
+                break;
+            }                    
+            
             printf("Text buffer (%04i): \"%s\"\n\n", tindex, textBuffer);
-          }
-          break;
-        default:
-          break;
-      }  // End key event type switch / case statement.
-    }  // End key event polling loop.
+          }  // End normal keys.
+        }  // End elses between modifier keys.
+      }  // End key event occurred.
+    } // End event poll.
+
+    // Pixel manips by mode.    
+    if (mode.textScroller == YES) {
+      // Scroll what we got.
+      Scroll(LEFT);
+      WriteSlice(textBuffer, red, black, RIGHT);
+    }
     
-    // Scroll what we got.
-    Scroll(LEFT);
-    WriteSlice(textBuffer, red, black, RIGHT);
+    if (mode.cellAutoFun == YES) {       
+      // Give each pixel a color value.
+      for(x = 0 ; x < TENSOR_WIDTH_EFF ; x++) {
+        for(y = 0 ; y < TENSOR_HEIGHT_EFF ; y++) {
+          oldColor = GetPixel(x,y);
+            
+          pixelColor.r = (((x + 1) * (y + 1))) + (oldColor.r / 2);
+          pixelColor.g = oldColor.g + pixelColor.r;
+          pixelColor.b = oldColor.b - 1;
     
+          SetPixel(x, y, pixelColor);
+        }
+      }
+    }
+    
+    if (mode.bouncer == YES) {
+      scrDir = (scrDir + 1) % 4;
+      Scroll(scrDir);
+    }
+    
+    if (mode.fadeout == YES) {
+      FadeAll(fadeout_dec);
+    }
+        
     Update();
     usleep(30000);
    

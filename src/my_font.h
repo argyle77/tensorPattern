@@ -135,4 +135,3 @@ const unsigned char myfont[] = {
 };
 
 #endif /*MY_FONT_H_*/
-
