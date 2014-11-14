@@ -1,6 +1,7 @@
 // Tensor Pattern
 // For Kevin (FB) McCormick (w/o you, there may be nothing) <3
 // Blau
+// tensor@core9.org
 
 #define MAIN_C_
 
@@ -14,14 +15,15 @@
 #include <SDL/SDL_ttf.h>
 #include <SDL/SDL_rotozoom.h>
 #include <SDL/SDL_gfxPrimitives.h>
+#include <SDL/SDL_image.h>
 #include <time.h>
 #include "drv-tensor.h"
 #include "my_font.h"
 
 
 // Defines
-#define YES 0
-#define NO 1
+#define YES 0  // Oh for the love of god,
+#define NO 1   // this will never do.
 #define OFF 0
 #define ON 1
 #define PASS 0
@@ -36,6 +38,7 @@
 
 // Tensor output
 #define USE_TENSOR
+#define DEF_IMAGE "Fbyte-01.jpg"
 
 // Preview window definitions
 #define PREVIEW_PIXEL_WIDTH 10
@@ -80,12 +83,12 @@
 
 // Types
 
-// 32 bit Pixel Color
+// 32 bit Pixel Color, which is, as yet, sadly underused.
 typedef struct {
   unsigned char r;
   unsigned char g;
   unsigned char b;
-  unsigned char a;
+  unsigned char a;  // right
 } color_t;
 
 // Scroller directions
@@ -93,7 +96,13 @@ typedef enum {
   UP = 0, LEFT, DOWN, RIGHT
 } dir_e;
 
-// Color plane flags
+// Better scroller directions
+typedef enum {
+  SCR_HOLD, SCR_UL, SCR_U, SCR_UR, SCR_L, SCR_R, SCR_DL, SCR_D, SCR_DR, SCR_COUNT
+} scr_e;
+
+// Color plane flags - I'm unsatified with the way the cym color planes worked
+// out.  I should be using a different color space or something.
 #define PLANE_NONE    0x00
 #define PLANE_RED     0x01
 #define PLANE_GREEN   0x02
@@ -104,7 +113,7 @@ typedef enum {
 #define PLANE_ALL     (PLANE_RED | PLANE_BLUE | PLANE_GREEN)
 
 typedef enum {
-  FADE_TO_ZERO, FADE_MODULAR
+  FADE_TO_ZERO, FADE_MODULAR, FADE_HALF
 } fade_mode_e;
 
 // Pattern modes
@@ -136,6 +145,10 @@ typedef struct {
   int shiftred;
   int shiftgreen;
   int shiftblue;
+  int shiftcyan;
+  int shiftyellow;
+  int shiftmagenta;
+  int image;
 } modes_t;
 
 typedef enum {
@@ -167,12 +180,13 @@ typedef struct {
   color_t bg;
   int cellAutoCount;
   int textRow;
+  int delay;
 } parms_t;
 
 typedef struct {
   char textBuffer[TEXT_BUFFER_SIZE];
-  int tindex;
-  int imaginaryIndex;
+  int tindex;  // How many chars in.
+  int imaginaryIndex;  // How many pixel cols in?
   char textBufferRand[TEXT_BUFFER_SIZE];
   dir_e lastDirection;
 } text_info_t;
@@ -193,10 +207,12 @@ typedef enum {
   INFO_RSPEED, INFO_ANGLE1, INFO_MULT, INFO_ROT1SPEED, INFO_DOTF, INFO_CYCLE,
   INFO_DIR, INFO_FGC, INFO_BGC, INFO_NOW, INFO_TEXTROW, INFO_TEXTSTAG,
   INFO_SIDEBAR, INFO_CLEARRED, INFO_CLEARGREEN, INFO_CLEARBLUE,
-  INFO_SHIFTRED, INFO_SHIFTGREEN, INFO_SHIFTBLUE, INFO_FPS, INFO_DELAY, INFO_COUNT
+  INFO_SHIFTRED, INFO_SHIFTGREEN, INFO_SHIFTBLUE, INFO_FPS, INFO_DELAY,
+  INFO_SHIFTCYAN, INFO_SHIFTYELLOW, INFO_SHIFTMAGENTA, INFO_IMAGE, INFO_COUNT
 } infoList_e;
 
 // The location of those items on screen (row, col#)
+// What a mess.
 const int infoLoc[INFO_COUNT][2] = {
   /* INFO_CELL */      {23,1},
   /* INFO_BOUNCE */    {24,1},
@@ -214,8 +230,8 @@ const int infoLoc[INFO_COUNT][2] = {
   /* INFO_ROTOZOOM2 */ {42,1},
   /* INFO_ALIAS */     {43,1},
   /* INFO_MULTIPLY */  {44,1},
-  /* INFO_TEXTLEN */   {38,3},
-  /* INFO_TEXT */      {51,0},
+  /* INFO_TEXTLEN */   {39,3},
+  /* INFO_TEXT */      {52,0},
   /* INFO_INC */       {3,3},
   /* INFO_DIFF */      {5,3},
   /* INFO_EXP */       {6,3},
@@ -228,20 +244,24 @@ const int infoLoc[INFO_COUNT][2] = {
   /* INFO_DOTF */      {13,3},
   /* INFO_CYCLE */     {14,3},
   /* INFO_DIR */       {15,3},
-  /* INFO_FGC */       {20,3},
-  /* INFO_BGC */       {21,3},
-  /* INFO_NOW */       {26,3},
-  /* INFO_TEXTROW */   {36,3},
-  /* INFO_TEXTSTAG */  {37,3},
+  /* INFO_FGC */       {21,3},
+  /* INFO_BGC */       {22,3},
+  /* INFO_NOW */       {27,3},
+  /* INFO_TEXTROW */   {37,3},
+  /* INFO_TEXTSTAG */  {38,3},
   /* INFO_SIDEBAR */   {45,1},
   /* INFO_CLEARRED */  {46, 1},
   /* INFO_CLEARGREEN */ {47, 1},
   /* INFO_CLEARBLUE */ {48, 1},
-  /* INFO_SHIFTRED */ {49,1},
-  /* INFO_SHIFTGREEN */ {50,1},
-  /* INFO_SHIFTBLUE */ {51,1},
+  /* INFO_SHIFTRED */ {44,3},
+  /* INFO_SHIFTGREEN */ {45,3},
+  /* INFO_SHIFTBLUE */ {46,3},
   /* INFO_FPS */       {21,1},
-  /* INFO_DELAY */     {16, 3}
+  /* INFO_DELAY */     {16, 3},
+  /* INFO_SHIFTCYAN */ {47, 3},
+  /* INFO_SHIFTYELLOW */ {48, 3},
+  /* INFO_SHIFTMAGENTA */ {49,3},
+  /* INFO_IMAGE */  {49,1 }
 };
 
 
@@ -264,10 +284,11 @@ const color_t palette[PALETTE_COUNT] = {COLOR_RED, COLOR_ORANGE, COLOR_YELLOW, C
 const char *palette_char[] = {"red", "orange", "yellow", "green", "cyan", "blue", "magenta",
                              "white", "3/4", "1/2", "1/4", "black"};
 
-// Globals
+// Globals - We do love our globals.
 TTF_Font *font;
 SDL_Surface *screen = NULL;
 SDL_Surface *ttemp = NULL;
+SDL_Surface *image = NULL;
 int TENSOR_WIDTH_EFF, TENSOR_HEIGHT_EFF;
 int randomMode = NO;  // Random mode is a global (for now).
 moment_t moments[MOMENT_COUNT];
@@ -322,12 +343,15 @@ void SetPixelA(int x, int y, color_t color, unsigned char *buffer);
 void ClearRed(moment_t *currentMoment);
 void ClearGreen(moment_t *currentMoment);
 void ClearBlue(moment_t *currentMoment);
-void ShiftMode(moment_t *currentMoment);
 void HandleInput(SDL_Event *key_event);
 void ProcessModes(void);
 void MainLoop(void);
 Uint32 TriggerProcessing(Uint32 interval, void *param);
 Uint32 FrameCounter(Uint32 interval, void *param);
+int min(int a, int b);
+void SetPixelByPlane(int x, int y, color_t color, unsigned char plane, unsigned char *buffer);
+void DrawImage(moment_t *currentMoment);
+void DrawImage2(double angle, double expansion, int aliasmode, unsigned char *fb_dst);
 
 // Main
 int main(int argc, char *argv[]) {
@@ -382,7 +406,11 @@ int main(int argc, char *argv[]) {
     exit(EXIT_FAILURE);
   }
   
-
+  image = IMG_Load(DEF_IMAGE);
+  if (image == NULL) {
+    fprintf(stderr, "Unable to load image: %s\n", DEF_IMAGE);
+    exit(EXIT_FAILURE);
+  }
 
   // Set the widths / heights
   SetDims();
@@ -446,6 +474,10 @@ int main(int argc, char *argv[]) {
   currentMode->shiftred = 0;
   currentMode->shiftgreen = 0;
   currentMode->shiftblue = 0;
+  currentMode->shiftcyan = 0;
+  currentMode->shiftmagenta = 0;
+  currentMode->shiftyellow = 0;
+  currentMode->image = NO;
 
   currentParms->background = BLACK_E;
   currentParms->bg = palette[currentParms->background];
@@ -467,8 +499,9 @@ int main(int argc, char *argv[]) {
   currentParms->scrollerDir = LEFT;
   currentParms->cellAutoCount = 0;
   currentParms->textRow = TENSOR_HEIGHT_EFF / 3 - 1;
+  currentParms->delay = 60;
 
-  snprintf(currentText->textBuffer, TEXT_BUFFER_SIZE, "Be the light you wish to see in the world. ");
+  snprintf(currentText->textBuffer, TEXT_BUFFER_SIZE, "Frostbyte was an engineer. ");
   currentText->tindex = strlen(currentText->textBuffer);
   currentText->imaginaryIndex = -1;
   currentText->lastDirection = LEFT;
@@ -476,6 +509,8 @@ int main(int argc, char *argv[]) {
 
   ColorAll(black, currentFB);
 
+  // There is a secret hidden bug in the moment copying or changing or disk read / write
+  // that I haven't found yet...
   for (i = 1; i < MOMENT_COUNT; i++) {
     memcpy(&moments[i], currentMoment, sizeof(moment_t));
   }
@@ -491,11 +526,12 @@ int main(int argc, char *argv[]) {
   InitInfoDisplay();
 
   // Init the processing timer.
-  if (SDL_AddTimer(60, TriggerProcessing, NULL) == NULL) {
+  if (SDL_AddTimer(currentParms->delay, TriggerProcessing, NULL) == NULL) {
     printf("Process Timer problem!\n");
     exit(0);
   }
 
+  // FPS counter.
   if (SDL_AddTimer(1000, FrameCounter, NULL) == NULL) {
     printf("Frame Count Timer problem!\n");
     exit(0);
@@ -513,6 +549,7 @@ int main(int argc, char *argv[]) {
           HandleInput(&event);
           break;
 
+        // User events are either an fps counter update, or calculating and writing a new frame.
         case SDL_USEREVENT:
           switch (event.user.code) {
             case 0:
@@ -532,6 +569,7 @@ int main(int argc, char *argv[]) {
       }
     }
 
+    // Best not to do this in the interrupt.
     if (doprocess == YES) {
       doprocess = NO;
       frames++;
@@ -546,6 +584,7 @@ int main(int argc, char *argv[]) {
   exit(EXIT_SUCCESS);  // Is it?
 }
 
+// Event that triggers a frame to be drawn.
 Uint32 TriggerProcessing(Uint32 interval, void *param) {
   SDL_Event event;
   SDL_UserEvent userevent;
@@ -560,9 +599,10 @@ Uint32 TriggerProcessing(Uint32 interval, void *param) {
 
   SDL_PushEvent(&event);
 
-  return(interval);
+  return(currentParms->delay);
 }
 
+// Event that triggers the fps to be updated.
 Uint32 FrameCounter(Uint32 interval, void *param) {
   SDL_Event event;
   SDL_UserEvent userevent;
@@ -580,17 +620,9 @@ Uint32 FrameCounter(Uint32 interval, void *param) {
   return(interval);
 }
 
-
+// The thing that happens at every frame.
 void MainLoop(void) {
-  static int frames = 0;
-
-  frames++;
-  if (frames == 2000) {
-    printf("Finterval: %li\n", time(NULL) - mnow);
-    mnow = time(NULL);
-    frames = 0;
-  }
-
+  // Update the buffer. (I.E. make pattern)
   ProcessModes();
 
   // Update the preview and tensor.
@@ -600,10 +632,14 @@ void MainLoop(void) {
   UpdateInfoDisplay(currentMoment, now);
 }
 
+// Time to make a mess of the array.
 void ProcessModes(void) {
   static int randomCount = 0;    // Frame Count.
   static dir_e scrDir = UP;
 
+  // Random mode isn't random.  It cycles through the moments.  It allows you 
+  // to set up a bunch of pattern sets and switch between them one at a time at
+  // some interval.
   if (randomMode == YES) {
     randomCount++;
     if (randomCount >= RANDOM_LIMIT) {
@@ -619,16 +655,17 @@ void ProcessModes(void) {
     }
   }
 
-  // Manipulate the buffer based on the mode.
+  // Change foreground color.
   if (currentMode->cycleForeground == YES) {
     ColorCycle(currentParms, FOREGROUND);
   }
 
+  // Change background color.
   if (currentMode->cycleBackground == YES) {
     ColorCycle(currentParms, BACKGROUND);
   }
 
-  // Color all
+  // Seed the entire array with the foreground color.
   if (currentMode->colorAll == YES) {
     ColorAll(currentParms->fg, currentFB);
     currentMode->colorAll = NO;
@@ -639,30 +676,57 @@ void ProcessModes(void) {
     Scroll(currentParms->scrollerDir, currentMode->roller, currentFB, PLANE_ALL);
   }
 
+  // Scroll red.
   if ((currentMode->shiftred != 0)) {
     Scroll(currentMode->shiftred - 1, currentMode->roller, currentFB, PLANE_RED);
   }
 
+  // Scroll green.
   if ((currentMode->shiftgreen != 0)) {
     Scroll(currentMode->shiftgreen - 1, currentMode->roller, currentFB, PLANE_GREEN);
   }
 
+  // Scroll blue.
   if ((currentMode->shiftblue != 0)) {
     Scroll(currentMode->shiftblue - 1, currentMode->roller, currentFB, PLANE_BLUE);
   }
 
-  // Sidebar
+  // Scroll blue and green
+  if ((currentMode->shiftcyan != 0)) {
+      Scroll(currentMode->shiftcyan - 1, currentMode->roller, currentFB, PLANE_CYAN);
+  }
+
+  // Scroll red and blue.
+  if ((currentMode->shiftmagenta != 0)) {
+    Scroll(currentMode->shiftmagenta - 1, currentMode->roller, currentFB, PLANE_MAGENTA);
+  }
+
+  // Scroll green and red.
+  if ((currentMode->shiftyellow != 0)) {
+    Scroll(currentMode->shiftyellow - 1, currentMode->roller, currentFB, PLANE_YELLOW);
+  }
+
+  // Draw a solid bar up the side we are scrolling from.
   if (currentMode->sidebar == YES) {
     DrawSideBar(currentMoment);
   }
 
-  // Pixel manips by mode.
+  // First stab experimental image drawing.  Needs work.
+  if (currentMode->image == YES) {
+    //DrawImage2(currentParms->rotation, current);
+    DrawImage2(currentParms->rotation, currentParms->expand, currentMode->alias, currentFB);
+    currentParms->rotation = currentParms->rotation + currentParms->rotationDelta;
+
+    //DrawImage(currentMoment);
+  }
+
+  // I think this just writes a column of text on the right or left.
   if (currentMode->textScroller == YES) {
     // Scroll provided by scroller if its on.
     WriteSlice(currentMoment);
   }
 
-  // Cellular automata manips?  Fix these.
+  // Cellular automata manips?  Not actually cellular auto.  Never finished this.
   if (currentMode->cellAutoFun == YES) {
     // Give each pixel a color value.
     CellFun(currentMoment);
@@ -674,7 +738,7 @@ void ProcessModes(void) {
     Scroll(scrDir, currentMode->roller, currentFB, PLANE_ALL);
   }
 
-  // Bam!
+  // Bam!  Draw some horizontal bars.
   if (currentMode->horizontalBars == YES) {
     HorizontalBars(currentParms->fg, currentFB);
     currentMode->horizontalBars = NO;
@@ -686,7 +750,7 @@ void ProcessModes(void) {
     currentMode->verticalBars = NO;
   }
 
-  // Random dots.  Most useful mode ever.
+  // Random dots.  Most useful seed ever.
   if (currentMode->randDots == YES) {
     RandomDots(currentParms->fg, currentParms->randMod, currentFB);
   }
@@ -717,19 +781,23 @@ void ProcessModes(void) {
     Rotate(currentParms->rotation2, currentParms->expand, currentMode->alias, currentFB, currentFB);
   }
 
+  // Zero the red.
   if (currentMode->clearRed == YES) {
     ClearRed(currentMoment);
   }
 
+  // Zero the blue.
   if (currentMode->clearBlue == YES) {
     ClearBlue(currentMoment);
   }
 
+  // Zero the green.
   if (currentMode->clearGreen == YES) {
     ClearGreen(currentMoment);
   }
 }
 
+// Key press processing.
 void HandleInput(SDL_Event *key_event) {
 
   // <ctrl> <alt>
@@ -761,7 +829,7 @@ void HandleInput(SDL_Event *key_event) {
   } else if (key_event->key.keysym.mod & KMOD_ALT) {
     ParmAlter(key_event->key.keysym.sym, &moments[0], now);
 
-  // No extra keys.  Text buffer stuff.
+  // No modifier keys.  Text buffer stuff.
   } else {
     if (key_event->key.keysym.unicode < 0x80 && key_event->key.keysym.unicode > 0) {
       switch(key_event->key.keysym.sym) {
@@ -800,6 +868,7 @@ void HandleInput(SDL_Event *key_event) {
   }  // End elses between modifier keys.
 }
 
+// Weighted Averager.
 void Diffuse(float diffusion_coeff, unsigned char *buffer) {
   int x,y,i,j,k,l;
   color_t colorTemp, finalColor[TENSOR_WIDTH * TENSOR_HEIGHT];
@@ -857,7 +926,7 @@ void ColorAll(color_t color, unsigned char *fb) {
   }
 }
 
-// Multiplier
+// Multiply all pixels by a value.
 void Multiply(float multiplier, unsigned char *buffer) {
   int i;
 
@@ -867,7 +936,7 @@ void Multiply(float multiplier, unsigned char *buffer) {
 }
 
 
-// Darken all the pixels by a certain value.
+// Darken (or lighten) all the pixels by a certain value.
 void FadeAll(int dec, fade_mode_e fade_mode, unsigned char *buffer) {
   int x,y;
   color_t oldColor;
@@ -878,6 +947,7 @@ void FadeAll(int dec, fade_mode_e fade_mode, unsigned char *buffer) {
       if ((oldColor.r < dec) && (fade_mode == FADE_TO_ZERO)) {
         oldColor.r = 0;
       } else {
+        // 8 bit modular fade.
         oldColor.r -= dec;
       }
       
@@ -908,7 +978,51 @@ void SetPixel(int x, int y, color_t color, unsigned char *buffer) {
   buffer[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 2] = color.b;
 }
 
+// Set a single pixel a particular color by color plane.
+// Rediculous.
+void SetPixelByPlane(int x, int y, color_t color, unsigned char plane, unsigned char *buffer) {
+  switch(plane) {
+    case PLANE_ALL:
+      buffer[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 0] = color.r;
+      buffer[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 1] = color.g;
+      buffer[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 2] = color.b;
+      break;
+
+    case PLANE_RED:
+      buffer[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 0] = color.r;
+      break;
+
+    case PLANE_GREEN:
+      buffer[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 1] = color.g;
+      break;
+
+    case PLANE_BLUE:
+      buffer[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 2] = color.b;
+      break;
+
+    // More complicated.
+    case PLANE_CYAN:
+      buffer[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 1] = color.g;
+      buffer[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 2] = color.b;
+      break;
+
+    case PLANE_YELLOW:
+      buffer[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 0] = color.r;
+      buffer[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 1] = color.g;
+      break;
+
+    case PLANE_MAGENTA:
+      buffer[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 0] = color.r;
+      buffer[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 2] = color.b;
+      break;
+    default:
+      break;
+
+  }
+}
+
 // Set a single pixel a particular color with alpha blending.
+// Is this ever used?  Does it work?
 void SetPixelA(int x, int y, color_t color, unsigned char *buffer) {
   color_t colorTemp;
   float a, r1, g1, b1, r2, g2, b2;
@@ -944,7 +1058,7 @@ color_t GetPixel(int x, int y, unsigned char *buffer) {
   colorTemp.r = buffer[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 0];
   colorTemp.g = buffer[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 1];
   colorTemp.b = buffer[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 2];
-  colorTemp.a = 0; // We don't return an alpha for a written pixel.
+  colorTemp.a = 0; // We don't return an alpha for a written pixel?
   return colorTemp;
 }
 
@@ -962,14 +1076,14 @@ void Update(float intensity_limit, moment_t *moment) {
   unsigned char fba[TENSOR_BYTES];
   int i;
 
-  // Output rotate.
+  // Output rotate (doesn't effect array values, but does effect the final image).
   if (mode->rotozoom == YES) {
     parms->rotation = parms->rotation + parms->rotationDelta;
     Rotate(parms->rotation, parms->expand, mode->alias, &fba[0], &buffer[0]);
 
     UpdatePreview(fba);
 
-    // Output diminish - no reason to do this to the preview.
+    // Output diminish - no reason to do this to the preview (or is there?)
     for (i = 0; i < TENSOR_BYTES; i++) {
       fba[i] = (unsigned char)((float) fba[i] * intensity_limit);
     }
@@ -987,7 +1101,7 @@ void Update(float intensity_limit, moment_t *moment) {
     UpdateTensor(fba);
   #endif
   
-  usleep(50000);
+  usleep(50000);  // I can't remember if this is necessary.
   return;
 }
 
@@ -1025,7 +1139,7 @@ void Rotate(double angle, double expansion, int aliasmode, unsigned char *fb_dst
 }
 
 
-// Frame buffer to surface
+// Frame buffer to SDL surface
 SDL_Surface * FBToSurface(SDL_Surface *surface, unsigned char *FB) {
   color_t pixel;
   int x, y;
@@ -1044,7 +1158,7 @@ SDL_Surface * FBToSurface(SDL_Surface *surface, unsigned char *FB) {
   return surface;
 }
 
-// Surface to frame buffer
+// SDL Surface to frame buffer
 unsigned char * SurfaceToFB(unsigned char *FB, SDL_Surface *surface) {
   int bpp = 4;
   Uint32 *pixel;
@@ -1095,71 +1209,186 @@ void UpdatePreview(unsigned char *buffer) {
 }
 
 
-// Array shifter
-void ShiftMode(moment_t *currentMoment) {
-  int i;
-  color_t pixel0, pixel1;
-  modes_t *mode = &currentMoment->mode;
-  unsigned char *buffer = currentMoment->fb;
-  //unsigned char fba[TENSOR_BYTES];
 
-  // Save the shifted out pixel.
-  pixel0 = GetPixel(0, 0, buffer);
-  pixel1 = GetPixel(TENSOR_WIDTH_EFF, TENSOR_HEIGHT_EFF, buffer);
-
-  // Red Up
-  if (mode->shiftred == 1) {
-    for (i = 0; i < (TENSOR_BYTES - 3); i += 3) {
-      buffer[i + 0] = buffer[i + 3]; // r
-    }
-
-    buffer[TENSOR_BYTES - 3] = pixel0.r;
-  }
-
-  // Red Down
-  if (mode->shiftred == 2) {
-    for (i = (TENSOR_BYTES - 3); i > 3; i = i - 3) {
-          buffer[i + 3] = buffer[i + 0]; // r
-        }
-        buffer[0] = pixel1.r;
-  }
-
-  // Gren Up
-   if (mode->shiftgreen == 1) {
-     for (i = 0; i < (TENSOR_BYTES - 3); i += 3) {
-       buffer[i + 1] = buffer[i + 4]; // g
-     }
-
-     buffer[TENSOR_BYTES - 2] = pixel0.g;
-   }
-
-   // Gren Down
-   if (mode->shiftgreen == 2) {
-     for (i = (TENSOR_BYTES - 3); i > 3; i = i - 3) {
-       buffer[i + 4] = buffer[i + 1]; // g
-         }
-     buffer[1] = pixel1.g;
-   }
-
-   // blu Up
-     if (mode->shiftblue == 1) {
-       for (i = 0; i < (TENSOR_BYTES - 3); i += 3) {
-         buffer[i + 2] = buffer[i + 5]; // g
-       }
-
-       buffer[TENSOR_BYTES - 1] = pixel0.b;
-     }
-
-     // blu Down
-     if (mode->shiftblue == 2) {
-       for (i = (TENSOR_BYTES - 3); i > 3; i = i - 3) {
-         buffer[i + 5] = buffer[i + 2]; // b
-           }
-       buffer[2] = pixel1.b;
-     }
-
-}
-
+//// Scroller buffer manipulation
+//void Scroll (dir_e direction, int rollovermode, unsigned char *fb, unsigned char plane) {
+//  int x, y, i;
+//  color_t rollSave[TENSOR_WIDTH + TENSOR_HEIGHT];  // Size = Why?
+//
+//  // rollover mode?
+//  if (rollovermode == YES) {
+//    switch(direction) {
+//      case UP:
+//        for(i = 0; i < TENSOR_WIDTH_EFF; i++) {
+//          rollSave[i] = GetPixel(i, 0, fb);
+//        }
+//        break;
+//
+//      case DOWN:
+//        for (i = 0; i < TENSOR_WIDTH_EFF; i++) {
+//          rollSave[i] = GetPixel(i, TENSOR_HEIGHT_EFF - 1, fb);
+//        }
+//        break;
+//
+//      case RIGHT:
+//        for (i = 0; i < TENSOR_HEIGHT_EFF; i++) {
+//          rollSave[i] = GetPixel(TENSOR_WIDTH_EFF - 1, i, fb);
+//        }
+//      break;
+//
+//      case LEFT:
+//        for (i = 0; i < TENSOR_HEIGHT_EFF; i++) {
+//          rollSave[i] = GetPixel(0, i, fb);
+//        }
+//        break;
+//
+//      default:
+//        break;
+//    }
+//  }
+//
+//  //
+//  switch(direction) {
+//    case UP:
+//      for (y = 0; y < (TENSOR_HEIGHT_EFF - 1); y++) {
+//        for (x = 0; x < TENSOR_WIDTH_EFF; x++) {
+//          if (plane & PLANE_RED) {
+//            fb[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 0] = fb[((y + 1) * TENSOR_WIDTH_EFF * 3) + (x * 3) + 0];
+//          }
+//          if (plane & PLANE_GREEN) {
+//            fb[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 1] = fb[((y + 1) * TENSOR_WIDTH_EFF * 3) + (x * 3) + 1];
+//          }
+//          if (plane & PLANE_BLUE) {
+//            fb[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 2] = fb[((y + 1) * TENSOR_WIDTH_EFF * 3) + (x * 3) + 2];
+//          }
+//          // SetPixel(x, y, GetPixel(x, y+1, fb), fb);
+//        }
+//      }
+//      break;
+//
+//    case DOWN:
+//      for (y = (TENSOR_HEIGHT_EFF - 1); y > 0; y--) {
+//        for (x = 0; x < TENSOR_WIDTH_EFF; x++) {
+//          if (plane & PLANE_RED) {
+//            fb[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 0] = fb[((y - 1) * TENSOR_WIDTH_EFF * 3) + (x * 3) + 0];
+//          }
+//          if (plane & PLANE_GREEN) {
+//            fb[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 1] = fb[((y - 1) * TENSOR_WIDTH_EFF * 3) + (x * 3) + 1];
+//          }
+//          if (plane & PLANE_BLUE) {
+//            fb[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 2] = fb[((y - 1) * TENSOR_WIDTH_EFF * 3) + (x * 3) + 2];
+//          }
+//          // SetPixel(x, y, GetPixel(x, y - 1, fb),fb);
+//        }
+//      }
+//      break;
+//
+//    case LEFT:
+//      for (y = 0; y < TENSOR_HEIGHT_EFF; y++) {
+//        for (x = 0; x < (TENSOR_WIDTH_EFF - 1); x++) {
+//          if (plane & PLANE_RED) {
+//            fb[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 0] = fb[(y * TENSOR_WIDTH_EFF * 3) + ((x + 1) * 3) + 0];
+//          }
+//          if (plane & PLANE_GREEN) {
+//            fb[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 1] = fb[(y * TENSOR_WIDTH_EFF * 3) + ((x + 1) * 3) + 1];
+//          }
+//          if (plane & PLANE_BLUE) {
+//            fb[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 2] = fb[(y * TENSOR_WIDTH_EFF * 3) + ((x + 1) * 3) + 2];
+//          }
+//          //SetPixel(x, y, GetPixel(x + 1, y, fb),fb);
+//        }
+//      }
+//      break;
+//
+//    case RIGHT:
+//    default:
+//      for (y = 0; y < TENSOR_HEIGHT_EFF; y++) {
+//        for (x = (TENSOR_WIDTH_EFF - 1); x > 0; x--) {
+//          if (plane & PLANE_RED) {
+//            fb[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 0] = fb[(y * TENSOR_WIDTH_EFF * 3) + ((x - 1) * 3) + 0];
+//          }
+//          if (plane & PLANE_GREEN) {
+//            fb[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 1] = fb[(y * TENSOR_WIDTH_EFF * 3) + ((x - 1) * 3) + 1];
+//          }
+//          if (plane & PLANE_BLUE) {
+//            fb[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 2] = fb[(y * TENSOR_WIDTH_EFF * 3) + ((x - 1) * 3) + 2];
+//          }
+//          //SetPixel(x, y, GetPixel(x - 1, y, fb),fb);
+//        }
+//      }
+//      break;
+//  }
+//
+//  // rollover mode?
+//  if (rollovermode == YES) {
+//    switch(direction) {
+//      case UP:
+//        for(i = 0; i < TENSOR_WIDTH_EFF; i++) {
+//          if (plane & PLANE_RED) {
+//            fb[((TENSOR_HEIGHT_EFF - 1) * TENSOR_WIDTH_EFF * 3) + (i * 3) + 0] = rollSave[i].r;
+//          }
+//          if (plane & PLANE_GREEN) {
+//            fb[((TENSOR_HEIGHT_EFF - 1) * TENSOR_WIDTH_EFF * 3) + (i * 3) + 1] = rollSave[i].g;
+//          }
+//          if (plane & PLANE_BLUE) {
+//            fb[((TENSOR_HEIGHT_EFF - 1) * TENSOR_WIDTH_EFF * 3) + (i * 3) + 2] = rollSave[i].b;
+//          }
+//          //SetPixel(i, TENSOR_HEIGHT_EFF - 1, rollSave[i],fb);
+//        }
+//        break;
+//
+//      case DOWN:
+//        for (i = 0; i < TENSOR_WIDTH_EFF; i++) {
+//          if (plane & PLANE_RED) {
+//            fb[(i * 3) + 0] = rollSave[i].r;
+//          }
+//          if (plane & PLANE_GREEN) {
+//            fb[(i * 3) + 1] = rollSave[i].g;
+//          }
+//          if (plane & PLANE_BLUE) {
+//            fb[(i * 3) + 2] = rollSave[i].b;
+//          }
+//          //SetPixel(i, 0, rollSave[i],fb);
+//        }
+//        break;
+//
+//      case RIGHT:
+//        for (i = 0; i < TENSOR_HEIGHT_EFF; i++) {
+//          if (plane & PLANE_RED) {
+//            fb[(i * TENSOR_WIDTH_EFF * 3) + 0] = rollSave[i].r;
+//          }
+//          if (plane & PLANE_GREEN) {
+//            fb[(i * TENSOR_WIDTH_EFF * 3) + 1] = rollSave[i].g;
+//          }
+//          if (plane & PLANE_BLUE) {
+//            fb[(i * TENSOR_WIDTH_EFF * 3) + 2] = rollSave[i].b;
+//          }
+//          // SetPixel(0, i, rollSave[i],fb);
+//        }
+//      break;
+//
+//      case LEFT:
+//        for (i = 0; i < TENSOR_HEIGHT_EFF; i++) {
+//          if (plane & PLANE_RED) {
+//            fb[(i * TENSOR_WIDTH_EFF * 3) + ((TENSOR_WIDTH_EFF - 1) * 3) + 0] = rollSave[i].r;
+//          }
+//          if (plane & PLANE_GREEN) {
+//            fb[(i * TENSOR_WIDTH_EFF * 3) + ((TENSOR_WIDTH_EFF - 1) * 3) + 1] = rollSave[i].g;
+//          }
+//          if (plane & PLANE_BLUE) {
+//            fb[(i * TENSOR_WIDTH_EFF * 3) + ((TENSOR_WIDTH_EFF - 1) * 3) + 2] = rollSave[i].b;
+//          }
+//          //SetPixel(TENSOR_WIDTH_EFF - 1, i, rollSave[i],fb);
+//        }
+//        break;
+//
+//      default:
+//        break;
+//    }
+//  }
+//
+//  return;
+//}
 
 // Scroller buffer manipulation
 void Scroll (dir_e direction, int rollovermode, unsigned char *fb, unsigned char plane) {
@@ -1203,16 +1432,7 @@ void Scroll (dir_e direction, int rollovermode, unsigned char *fb, unsigned char
     case UP:
       for (y = 0; y < (TENSOR_HEIGHT_EFF - 1); y++) {
         for (x = 0; x < TENSOR_WIDTH_EFF; x++) {
-          if (plane & PLANE_RED) {
-            fb[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 0] = fb[((y + 1) * TENSOR_WIDTH_EFF * 3) + (x * 3) + 0];
-          }
-          if (plane & PLANE_GREEN) {
-            fb[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 1] = fb[((y + 1) * TENSOR_WIDTH_EFF * 3) + (x * 3) + 1];
-          }
-          if (plane & PLANE_BLUE) {
-            fb[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 2] = fb[((y + 1) * TENSOR_WIDTH_EFF * 3) + (x * 3) + 2];
-          }
-          // SetPixel(x, y, GetPixel(x, y+1, fb), fb);
+          SetPixelByPlane(x, y, GetPixel(x, y+1, fb), plane, fb);
         }
       }
       break;
@@ -1220,16 +1440,7 @@ void Scroll (dir_e direction, int rollovermode, unsigned char *fb, unsigned char
     case DOWN:
       for (y = (TENSOR_HEIGHT_EFF - 1); y > 0; y--) {
         for (x = 0; x < TENSOR_WIDTH_EFF; x++) {
-          if (plane & PLANE_RED) {
-            fb[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 0] = fb[((y - 1) * TENSOR_WIDTH_EFF * 3) + (x * 3) + 0];
-          }
-          if (plane & PLANE_GREEN) {
-            fb[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 1] = fb[((y - 1) * TENSOR_WIDTH_EFF * 3) + (x * 3) + 1];
-          }
-          if (plane & PLANE_BLUE) {
-            fb[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 2] = fb[((y - 1) * TENSOR_WIDTH_EFF * 3) + (x * 3) + 2];
-          }
-          // SetPixel(x, y, GetPixel(x, y - 1, fb),fb);
+          SetPixelByPlane(x, y, GetPixel(x, y - 1, fb), plane, fb);
         }
       }
       break;
@@ -1237,16 +1448,7 @@ void Scroll (dir_e direction, int rollovermode, unsigned char *fb, unsigned char
     case LEFT:
       for (y = 0; y < TENSOR_HEIGHT_EFF; y++) {
         for (x = 0; x < (TENSOR_WIDTH_EFF - 1); x++) {
-          if (plane & PLANE_RED) {
-            fb[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 0] = fb[(y * TENSOR_WIDTH_EFF * 3) + ((x + 1) * 3) + 0];
-          }
-          if (plane & PLANE_GREEN) {
-            fb[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 1] = fb[(y * TENSOR_WIDTH_EFF * 3) + ((x + 1) * 3) + 1];
-          }
-          if (plane & PLANE_BLUE) {
-            fb[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 2] = fb[(y * TENSOR_WIDTH_EFF * 3) + ((x + 1) * 3) + 2];
-          }
-          //SetPixel(x, y, GetPixel(x + 1, y, fb),fb);
+          SetPixelByPlane(x, y, GetPixel(x + 1, y, fb),plane, fb);
         }
       }
       break;
@@ -1255,16 +1457,7 @@ void Scroll (dir_e direction, int rollovermode, unsigned char *fb, unsigned char
     default:
       for (y = 0; y < TENSOR_HEIGHT_EFF; y++) {
         for (x = (TENSOR_WIDTH_EFF - 1); x > 0; x--) {
-          if (plane & PLANE_RED) {
-            fb[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 0] = fb[(y * TENSOR_WIDTH_EFF * 3) + ((x - 1) * 3) + 0];
-          }
-          if (plane & PLANE_GREEN) {
-            fb[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 1] = fb[(y * TENSOR_WIDTH_EFF * 3) + ((x - 1) * 3) + 1];
-          }
-          if (plane & PLANE_BLUE) {
-            fb[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 2] = fb[(y * TENSOR_WIDTH_EFF * 3) + ((x - 1) * 3) + 2];
-          }
-          //SetPixel(x, y, GetPixel(x - 1, y, fb),fb);
+          SetPixelByPlane(x, y, GetPixel(x - 1, y, fb),plane, fb);
         }
       }
       break;
@@ -1275,25 +1468,25 @@ void Scroll (dir_e direction, int rollovermode, unsigned char *fb, unsigned char
     switch(direction) {
       case UP:
         for(i = 0; i < TENSOR_WIDTH_EFF; i++) {
-          SetPixel(i, TENSOR_HEIGHT_EFF - 1, rollSave[i],fb);
+          SetPixelByPlane(i, TENSOR_HEIGHT_EFF - 1, rollSave[i], plane, fb);
         }
         break;
         
       case DOWN:
         for (i = 0; i < TENSOR_WIDTH_EFF; i++) {
-          SetPixel(i, 0, rollSave[i],fb);
+          SetPixelByPlane(i, 0, rollSave[i],plane, fb);
         }
         break;
       
       case RIGHT:
         for (i = 0; i < TENSOR_HEIGHT_EFF; i++) {
-          SetPixel(0, i, rollSave[i],fb);
+          SetPixelByPlane(0, i, rollSave[i],plane, fb);
         }
       break;
       
       case LEFT:
         for (i = 0; i < TENSOR_HEIGHT_EFF; i++) {
-          SetPixel(TENSOR_WIDTH_EFF - 1, i, rollSave[i],fb);
+          SetPixelByPlane(TENSOR_WIDTH_EFF - 1, i, rollSave[i],plane, fb);
         }
         break;
         
@@ -1352,7 +1545,7 @@ void WriteSlice(moment_t *moment) {
     return;
   }
   
-  // Prior to writing out a lines, we increment the imaginary buffer index to 
+  // Prior to writing out a line, we increment the imaginary buffer index to 
   // point to the next part of the line to be written.  This depends on a couple
   // of things, i.e. direction (for instance).
   if (moment->text.lastDirection != direction) {
@@ -1378,6 +1571,7 @@ void WriteSlice(moment_t *moment) {
   }
       
   // Now using the imaginary index, we find out where in the real buffer we are.
+  // Integer division.
   bufferIndex = *imaginaryBufferIndex / FONT_WIDTH;
   
   // And where in that character is the left over from above...
@@ -1438,9 +1632,11 @@ void WriteSlice(moment_t *moment) {
 
 
 // Alter foreground and background colors according to key press.
+// There's more here than just that, though.
 int ColorAlter(int thiskey, moment_t *moments, int now) {
   moment_t *moment = &moments[now];
   parms_t *parms = &moment->coefs;
+  modes_t *mode = &moment->mode;
   
   switch (thiskey) {
     case SDLK_q:
@@ -1493,6 +1689,37 @@ int ColorAlter(int thiskey, moment_t *moments, int now) {
       if (parms->textRow > TENSOR_HEIGHT_EFF) {
         parms->textRow = 0 - (FONT_HEIGHT + 1);
       }
+      break;
+
+    case SDLK_u:
+      parms->delay--;
+      if (parms->delay < 1) {
+        parms->delay = 1;
+      }
+      break;
+
+    case SDLK_i:
+      parms->delay = 60;
+      break;
+
+    case SDLK_o:
+      parms->delay++;
+      break;
+
+    case SDLK_LEFTBRACKET:
+      mode->shiftcyan = (mode->shiftcyan + 1) % 5;
+      break;
+
+    case SDLK_RIGHTBRACKET:
+      mode->shiftyellow = (mode->shiftyellow + 1) % 5;
+      break;
+
+    case SDLK_BACKSLASH:
+      mode->shiftmagenta = (mode->shiftmagenta + 1) % 5;
+      break;
+
+    case SDLK_p:
+      mode->image = (mode->image + 1) % 2;
       break;
 
     default:
@@ -1602,6 +1829,12 @@ int ModeAlter(int thiskey, moment_t *moments, int now) {
       mode->clearRed = NO;
       mode->clearBlue = NO;
       mode->clearGreen = NO;
+      mode->shiftblue = 0;  // Oh shit, I just realized that NO = 1.  
+      mode->shiftcyan = 0;
+      mode->shiftgreen = 0;
+      mode->shiftmagenta = 0;
+      mode->shiftyellow = 0;
+      mode->shiftred = 0;
       break;
       
     case SDLK_0: case SDLK_1: case SDLK_2: case SDLK_3: case SDLK_4: case SDLK_5:
@@ -1871,14 +2104,14 @@ void ColorCycle(parms_t *parms, int fb_mode) {
   int inposo;
   colorCycles_e cycleMode = parms->colorCycleMode;
   int *cycleSaver;
-  // color_t ct2;
+  //color_t ct2;
   int rainbowInc = parms->rainbowInc;
 
   if (fb_mode == FOREGROUND) {
-    // ct2 = parms->fg;
+    //ct2 = parms->fg;
     cycleSaver = &parms->cycleF;
   } else {
-    // ct2 = parms->bg;
+    //ct2 = parms->bg;
     cycleSaver = &parms->cycleB;
   }
   
@@ -2017,7 +2250,7 @@ void ColorCycle(parms_t *parms, int fb_mode) {
   }
 }
 
-
+// You can put your head in your hands here.
 void InitInfoDisplay(void) {
     //ClearAll();
 
@@ -2109,6 +2342,10 @@ void InitInfoDisplay(void) {
     snprintf(thisline, sizeof(thisline), "<ctrl> . - No Blue");
     WriteLine(line++, 0, thisline);
 
+    snprintf(thisline, sizeof(thisline), "<ctrl> <alt> p - Image Toggle");
+    WriteLine(line++, 0, thisline);
+
+
     line++;
     snprintf(thisline, sizeof(thisline), "Text Buffer:");
     WriteLine(line++, 0, thisline);
@@ -2155,6 +2392,9 @@ void InitInfoDisplay(void) {
     WriteLine(line++, 2, thisline);
 
     snprintf(thisline, sizeof(thisline), "<alt> <arrows> - Scroller direction");
+    WriteLine(line++, 2, thisline);
+
+    snprintf(thisline, sizeof(thisline), "<ctrl> <alt> u i o - Frame delay(ms)");
     WriteLine(line++, 2, thisline);
 
     line++;
@@ -2215,6 +2455,32 @@ void InitInfoDisplay(void) {
     WriteLine(line++, 2, thisline);
 
     line++;
+    line++;
+
+    snprintf(thisline, sizeof(thisline), "More Modes:");
+    WriteLine(line++, 2, thisline);
+
+    line++;
+
+    snprintf(thisline, sizeof(thisline), "<ctrl> [ - Red Plane:");
+    WriteLine(line++, 2, thisline);
+
+    snprintf(thisline, sizeof(thisline), "<ctrl> ] - Green Plane:");
+    WriteLine(line++, 2, thisline);
+
+    snprintf(thisline, sizeof(thisline), "<ctrl> \\ - Blue Plane:");
+    WriteLine(line++, 2, thisline);
+
+    snprintf(thisline, sizeof(thisline), "<ctrl> <alt> [ - Cyan Plane:");
+    WriteLine(line++, 2, thisline);
+
+    snprintf(thisline, sizeof(thisline), "<ctrl> <alt> ] - Yellow Plane:");
+    WriteLine(line++, 2, thisline);
+
+    snprintf(thisline, sizeof(thisline), "<ctrl> <alt> \\ - Magenta Plane:");
+    WriteLine(line++, 2, thisline);
+
+    line++;
 
     snprintf(thisline, sizeof(thisline), "<ctrl> <esc> - Quit.");
     WriteLine(line++, 2, thisline);
@@ -2222,6 +2488,7 @@ void InitInfoDisplay(void) {
     UpdateAll();
 }
 
+// And here.
 void UpdateInfoDisplay(moment_t *moment, int now) {
   char thisparm[1024], mybuff[102];
   int length;
@@ -2229,11 +2496,14 @@ void UpdateInfoDisplay(moment_t *moment, int now) {
   modes_t *mode = &moment->mode;
   text_info_t *text = &moment->text;
 
-  snprintf(thisparm, sizeof(thisparm), "%4i", fps);
+  snprintf(thisparm, sizeof(thisparm), "FPS: %4i", fps);
   WriteLineC(infoLoc[INFO_FPS][0], infoLoc[INFO_FPS][1], thisparm);
 
-  //snprintf(thisparm, sizeof(thisparm), "%6i", );
-  //WriteLineC(infoLoc[INFO_FPS][0], infoLoc[INFO_FPS][1], thisparm);
+  snprintf(thisparm, sizeof(thisparm), "%6i", parms->delay);
+  WriteLineC(infoLoc[INFO_DELAY][0], infoLoc[INFO_DELAY][1], thisparm);
+
+  snprintf(thisparm, sizeof(thisparm), "%3s", mode->image == YES ? "YES" : "NO");
+  WriteLineC(infoLoc[INFO_IMAGE][0], infoLoc[INFO_IMAGE][1], thisparm);
 
   snprintf(thisparm, sizeof(thisparm), "%3s", mode->cellAutoFun == YES ? "YES" : "NO");
   WriteLineC(infoLoc[INFO_CELL][0], infoLoc[INFO_CELL][1], thisparm);
@@ -2266,11 +2536,13 @@ void UpdateInfoDisplay(moment_t *moment, int now) {
   WriteLineC(infoLoc[INFO_BG][0], infoLoc[INFO_BG][1], thisparm);
   
   snprintf(thisparm, sizeof(thisparm), "%3s", mode->clearRed == YES ? "YES" : "NO");
-   WriteLineC(infoLoc[INFO_CLEARRED][0], infoLoc[INFO_CLEARRED][1], thisparm);
-   snprintf(thisparm, sizeof(thisparm), "%3s", mode->clearGreen == YES ? "YES" : "NO");
-      WriteLineC(infoLoc[INFO_CLEARGREEN][0], infoLoc[INFO_CLEARGREEN][1], thisparm);
-      snprintf(thisparm, sizeof(thisparm), "%3s", mode->clearBlue == YES ? "YES" : "NO");
-         WriteLineC(infoLoc[INFO_CLEARBLUE][0], infoLoc[INFO_CLEARBLUE][1], thisparm);
+  WriteLineC(infoLoc[INFO_CLEARRED][0], infoLoc[INFO_CLEARRED][1], thisparm);
+
+  snprintf(thisparm, sizeof(thisparm), "%3s", mode->clearGreen == YES ? "YES" : "NO");
+  WriteLineC(infoLoc[INFO_CLEARGREEN][0], infoLoc[INFO_CLEARGREEN][1], thisparm);
+
+  snprintf(thisparm, sizeof(thisparm), "%3s", mode->clearBlue == YES ? "YES" : "NO");
+  WriteLineC(infoLoc[INFO_CLEARBLUE][0], infoLoc[INFO_CLEARBLUE][1], thisparm);
 
   snprintf(thisparm, sizeof(thisparm), "%3s", randomMode == YES ? "YES" : "NO");
   WriteLineC(infoLoc[INFO_RANDOM][0], infoLoc[INFO_RANDOM][1], thisparm);
@@ -2305,12 +2577,53 @@ void UpdateInfoDisplay(moment_t *moment, int now) {
   snprintf(thisparm, sizeof(thisparm), "%14i", parms->fadeout_dec);
   WriteLineC(infoLoc[INFO_DEC][0], infoLoc[INFO_DEC][1], thisparm);
 
-  snprintf(thisparm, sizeof(thisparm), "%14i", mode->shiftred);
-    WriteLineC(infoLoc[INFO_SHIFTRED][0], infoLoc[INFO_SHIFTRED][1], thisparm);
-    snprintf(thisparm, sizeof(thisparm), "%14i", mode->shiftgreen);
-      WriteLineC(infoLoc[INFO_SHIFTGREEN][0], infoLoc[INFO_SHIFTGREEN][1], thisparm);
-      snprintf(thisparm, sizeof(thisparm), "%14i", mode->shiftblue);
-        WriteLineC(infoLoc[INFO_SHIFTBLUE][0], infoLoc[INFO_SHIFTBLUE][1], thisparm);
+  snprintf(thisparm, sizeof(thisparm), "%s", mode->shiftred == 0 ? " Hold" :
+                                             mode->shiftred == 1 ? "   Up" :
+                                             mode->shiftred == 2 ? " Left" :
+                                             mode->shiftred == 3 ? " Down" :
+                                             mode->shiftred == 4 ? "Right" :
+                                                                   "Unk!!" );
+  WriteLineC(infoLoc[INFO_SHIFTRED][0], infoLoc[INFO_SHIFTRED][1], thisparm);
+
+  snprintf(thisparm, sizeof(thisparm), "%s", mode->shiftgreen == 0 ? " Hold" :
+                                             mode->shiftgreen == 1 ? "   Up" :
+                                             mode->shiftgreen == 2 ? " Left" :
+                                             mode->shiftgreen == 3 ? " Down" :
+                                             mode->shiftgreen == 4 ? "Right" :
+                                                                     "Unk!!" );
+  WriteLineC(infoLoc[INFO_SHIFTGREEN][0], infoLoc[INFO_SHIFTGREEN][1], thisparm);
+
+  snprintf(thisparm, sizeof(thisparm), "%s", mode->shiftblue == 0 ? " Hold" :
+                                             mode->shiftblue == 1 ? "   Up" :
+                                             mode->shiftblue == 2 ? " Left" :
+                                             mode->shiftblue == 3 ? " Down" :
+                                             mode->shiftblue == 4 ? "Right" :
+                                                                    "Unk!!" );
+  WriteLineC(infoLoc[INFO_SHIFTBLUE][0], infoLoc[INFO_SHIFTBLUE][1], thisparm);
+
+  snprintf(thisparm, sizeof(thisparm), "%s", mode->shiftcyan == 0 ? " Hold" :
+                                             mode->shiftcyan == 1 ? "   Up" :
+                                             mode->shiftcyan == 2 ? " Left" :
+                                             mode->shiftcyan == 3 ? " Down" :
+                                             mode->shiftcyan == 4 ? "Right" :
+                                                                    "Unk!!" );
+  WriteLineC(infoLoc[INFO_SHIFTCYAN][0], infoLoc[INFO_SHIFTCYAN][1], thisparm);
+
+  snprintf(thisparm, sizeof(thisparm), "%s", mode->shiftyellow == 0 ? " Hold" :
+                                             mode->shiftyellow == 1 ? "   Up" :
+                                             mode->shiftyellow == 2 ? " Left" :
+                                             mode->shiftyellow == 3 ? " Down" :
+                                             mode->shiftyellow == 4 ? "Right" :
+                                                                    "Unk!!" );
+  WriteLineC(infoLoc[INFO_SHIFTYELLOW][0], infoLoc[INFO_SHIFTYELLOW][1], thisparm);
+
+  snprintf(thisparm, sizeof(thisparm), "%s", mode->shiftmagenta == 0 ? " Hold" :
+                                             mode->shiftmagenta == 1 ? "   Up" :
+                                             mode->shiftmagenta == 2 ? " Left" :
+                                             mode->shiftmagenta == 3 ? " Down" :
+                                             mode->shiftmagenta == 4 ? "Right" :
+                                                                    "Unk!!" );
+  WriteLineC(infoLoc[INFO_SHIFTMAGENTA][0], infoLoc[INFO_SHIFTMAGENTA][1], thisparm);
 
   snprintf(thisparm, sizeof(thisparm), "%14.6f", parms->rotation2);
   WriteLineC(infoLoc[INFO_ANGLE2][0], infoLoc[INFO_ANGLE2][1], thisparm);
@@ -2376,7 +2689,8 @@ void UpdateInfoDisplay(moment_t *moment, int now) {
   UpdateAll();
 }
 
-
+// Old way.  Slow.  No longer used.  My preview update gave me several more fps
+// after I dropped this.
 void QDrawRectangle(int x, int y, int width, int height, color_t color) {
   
   int i;
@@ -2507,6 +2821,49 @@ void DrawBox(int x, int y, int w, int h, color_t color) {
                 (Uint8) color.r, (Uint8) color.g, (Uint8) color.b, (Uint8) color.a);
 }
 
+void DrawImage(moment_t *currentMoment) {
+  SDL_Rect location;
+  SDL_Surface *ttemp;
+
+  location.x = 0;
+  location.y = 0;
+  ttemp = SDL_CreateRGBSurface(SDL_SWSURFACE, TENSOR_WIDTH_EFF, TENSOR_HEIGHT_EFF, 32, 0,0,0,0);
+  SDL_BlitSurface(image, NULL, ttemp, &location);
+  SurfaceToFB(currentMoment->fb, ttemp);
+  SDL_FreeSurface(ttemp);
+}
+
+//void DrawImage2(moment_t *currentMoment) {
+void DrawImage2(double angle, double expansion, int aliasmode, unsigned char *fb_dst) {
+  SDL_Surface *tttemp;
+  SDL_Rect offset;
+
+  // Rotation is acheived using SDL_gfx primitive rotozoom.
+  // Copy the frame buffer to the sdl surface.
+  // FBToSurface(ttemp, &fb_src[0]);
+  // Already have image.
+
+  // Rotate / scale it.
+  tttemp = rotozoomSurface (image, angle, expansion, (aliasmode == YES) ? 1 : 0);
+
+  offset.x = 0 - (tttemp->w - ttemp->w) / 2;
+  offset.y = 0 - (tttemp->h - ttemp->h) / 2;
+  //dst.x = UserCenterX - ((MposX - CposX) * BlockRectW) - (W / 2);
+
+  // dst.y = UserCenter_y
+  // - (Me.pos.y-CurBullet->pos.y)*Block_Rect.w-CurBullet->SurfacePointer[ PhaseOfBullet ]->h/2;
+
+  //SDL_BlitSurface(SDL_Surface *src, SDL_Rect *srcrect, SDL_Surface *dst, SDL_Rect *dstrect);
+  boxRGBA(ttemp, 0, 0, TENSOR_WIDTH_EFF, TENSOR_HEIGHT_EFF, 0, 0, 0, 255);
+  SDL_BlitSurface(tttemp, NULL, ttemp, &offset);
+
+  //SDL_BlitSurface()
+  //SDL_BlitSurface(temp2, NULL, visuals->Screen, &destinationRectangle);
+  // Copy the result back to the frame buffer.
+  SurfaceToFB(fb_dst, ttemp);
+  SDL_FreeSurface(tttemp);
+}
+
 void DrawPreviewBorder(void) {
   int w, h, w2, h2;
 
@@ -2547,11 +2904,11 @@ void DrawPreviewBorder(void) {
 }
 
 void DrawID(void) {
-
+  // I'm a function!
 }
 
 
-
+// Or not.
 void CellFun(moment_t *moment) {
   int x, y;
   color_t pixelColor, oldColor;
@@ -2679,3 +3036,12 @@ void ClearBlue(moment_t *currentMoment) {
     currentMoment->fb[(i * 3) + 2] = 0;
   }
 }
+
+int min(int a, int b) {
+  if (a < b) {
+    return a;
+  } else {
+    return b;
+  }
+}
+

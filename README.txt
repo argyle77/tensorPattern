@@ -1,8 +1,8 @@
-Tensor pattern generation - Version 3.7.0
-Added color planes, sidebar, stagger.  More efficient display update,
-fps counter, portrait/landscape, moment save
+Tensor pattern generation - Version 3.8.0
+Added to info display, added image load, fps control, bi-planes.
+Released to pdf and decom 2010 lists.
   
-"Be the light you wish to see in the world."
+"Frostbyte was an enigineer."
 
 This pattern outputs as UDP to the tensor wall.  There is a preview window
 using SDL.

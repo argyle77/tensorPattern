@@ -3,6 +3,9 @@
 #ifndef MY_FONT_H_
 #define MY_FONT_H_
 
+// Its been awhile, but this appears to be a 2 bit bitmap of 128 8x8 characters
+// next to each other in a row.  The bitmap has 128 * 8 columns and 8 rows.  I
+// think.  This was exported from the gimp at some point.
 const unsigned char myfont[] = {
   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
