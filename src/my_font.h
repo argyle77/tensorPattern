@@ -134,4 +134,8 @@ const unsigned char myfont[] = {
   0xc7, 0x3c, 0xfe, 0x06, 0x08, 0x60, 0x00, 0x7e
 };
 
+#define FONT_WIDTH 8
+#define FONT_HEIGHT 8
+#define FONT_CHARACTER_COUNT 128
+
 #endif /*MY_FONT_H_*/

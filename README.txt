@@ -1,24 +1,12 @@
-Tensor pattern generation - Version 3.1.0 - Pattern mixer with preview.
+Tensor pattern generation - Version 3.2.0 - Pattern mixer with preview.
 
 "beep "
 
 This pattern outputs as UDP to the tensor wall.  There is a preview window
-using SDL.  This is an abbreviated set of patterns that lays out the basic
-code function for later versions.
+using SDL.
 
-<ctrl> c - Exit
-<ctrl> t - Text scroller toggle.
-<ctrl> q - CellAutoFun toggle.
-<ctrl> w - Bouncer toggle.
-<ctrl> e - Fader toggle.
-
-<alt> up - Increase fader decrement.
-<alt> down - Decrease fader decrment.
-<alt> 0 - Set fader decrement to 0.
-
-Backspace, Return, Esc, most other keys - Alter the text buffer.
-
-
+Controls keys are printed to the console with <ctrl> 1, <alt> 1, <ctrl> <alt> 1.
+Unmodified keys, backspace, esc, return alter the text buffer.
 
 Build instructions:
 
