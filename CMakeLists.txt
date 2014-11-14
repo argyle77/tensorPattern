@@ -7,7 +7,7 @@ project(tensorPattern)
 
 # Let's set a version number.
 # This file must be manually changed to effect version change.
-set (VERSION_MAJOR 0)
+set (VERSION_MAJOR 1)
 set (VERSION_MINOR 0)
 set (VERSION_PATCH 0)
 set (VERSION_PRERELEASE)
@@ -23,6 +23,10 @@ add_compile_options(-Wall -g)
 
 # Libraries 
 # find_package(SDL COMPONENTS TTF IMAGE GFX REQUIRED) - Later versions.
+find_package(SDL)
+if ( NOT SDL_FOUND )
+  message(FATAL_ERROR "SDL not found! Please install libsdl1.2-dev!")
+endif ( NOT SDL_FOUND )
 
 # Verbose output (or use: make VERBOSE=1)
 #set ( CMAKE_VERBOSE_MAKEFILE on )

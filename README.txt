@@ -1,7 +1,7 @@
-Tensor pattern generation - Version 0.0.0 - Test patterns.
+Tensor pattern generation - Version 1.0.0 -  Brief tensor / SDL demo - red / mod
 
-These patterns output as UDP to the tensor wall.  There are no previews in this
-version.
+These patterns output as UDP to the tensor wall.  There is a preview window
+using SDL.
 
 Build instructions:
 
@@ -12,7 +12,6 @@ Build instructions:
 
 Binaries can be found in build/bin.
 
-The script in the scripts directory was meant to run a pattern for 20 seconds,
-kill it, then move on to the next.  If used, it should be customized for your
-environment.
+There are two orphaned binaries in the bin directory.  The code that produced
+them doesn't seem to exist anymore.
 
