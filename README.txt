@@ -1,4 +1,4 @@
-Tensor pattern generation - Version 3.8.0
+Tensor pattern generation - Version 3.8.1
 Added to info display, added image load, fps control, bi-planes.
 Released to pdf and decom 2010 lists.
   

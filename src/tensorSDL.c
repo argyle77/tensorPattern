@@ -44,7 +44,7 @@
 #define PREVIEW_PIXEL_WIDTH 10
 #define PREVIEW_PIXEL_HEIGHT 10
 #define PREVIEW_BORDER_THICKNESS 10
-#define PREVIEW_FONT_SIZE 14
+#define PREVIEW_FONT_SIZE 13
 #define PREVIEW_FONT_WIDTH 14
 #define PREVIEW_FONT_HEIGHT 14
 #define TENSOR_PREVIEW_WIDTH (TENSOR_WIDTH * PREVIEW_PIXEL_WIDTH)
@@ -358,6 +358,7 @@ int main(int argc, char *argv[]) {
 
   // Variable declarations
   int i;
+  unsigned char exitProgram = 0;
 
   char caption_temp[100];
 
@@ -564,6 +565,10 @@ int main(int argc, char *argv[]) {
           }
           break;
 
+        case SDL_QUIT:
+          exitProgram = 1;
+          break;
+
         default:
           break;
       }
@@ -575,9 +580,13 @@ int main(int argc, char *argv[]) {
       frames++;
       MainLoop();
     }
+
+    if (exitProgram) {
+      break;
+    }
   }  // End program loop
 
-  // Cleanup. Technically, we never get here.
+  // Cleanup.
   TTF_CloseFont(font);
   font=NULL; // to be safe...?
   TTF_Quit();
@@ -2739,7 +2748,7 @@ void WriteLine(int line, int col, char * thistext) {
   const int colstart[4] = {0, 275, 375, 675};
 
   rect.x = colstart[col];
-  rect.y = line * (PREVIEW_FONT_SIZE);
+  rect.y = line * (PREVIEW_FONT_HEIGHT);
   rect.w = 0;
   rect.h = 0;
   
@@ -2776,9 +2785,9 @@ void UpdateAll(void) {
 
 void ClearAll(void) {
   SDL_Rect rect1={0,
-      PREVIEW_FONT_SIZE * 8,
+      PREVIEW_FONT_HEIGHT * 8,
                  TENSOR_PREVIEW_WIDTH + (PREVIEW_BORDER_THICKNESS * 2) + 1,
-                 768 - (PREVIEW_FONT_SIZE * 8)};
+                 768 - (PREVIEW_FONT_HEIGHT * 8)};
                 
   SDL_Rect rect2={TENSOR_PREVIEW_WIDTH + (PREVIEW_BORDER_THICKNESS * 2) + 1,
                   0,
