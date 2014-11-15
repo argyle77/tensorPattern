@@ -58,7 +58,7 @@ const char *Tensor_Section_Crap[] = {
 const char *Tensor_IPs_1[9];
 const char *Tensor_IPs_2[9];
 
-int tensor_sections_order[3] = {1,2,3};
+int tensor_sections_order[3] = {1,3,2};
 
 int tensor_sock;
 

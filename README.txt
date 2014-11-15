@@ -1,14 +1,11 @@
-Tensor pattern generation - Version 3.8.0
-Added to info display, added image load, fps control, bi-planes.
-Released to pdf and decom 2010 lists.
+Tensor pattern generation - Version 4.0.0
+Controls are in the form of a gui.  The gui is incomplete.  This is a
+proof of concept.
   
-"Frostbyte was an enigineer."
+"Be the light you wish to see in the world. "
 
 This pattern outputs as UDP to the tensor wall.  There is a preview window
 using SDL.
-
-Controls keys are listed next to the preview.
-Unmodified keys, backspace, esc, return alter the text buffer.
 
 NOTE: SDL GFX is required for this version.  There is no cmake module for
 ensuring that this is on the system, so be sure to install libsdl-gfx1.2-dev

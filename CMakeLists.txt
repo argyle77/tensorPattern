@@ -7,8 +7,8 @@ project(tensorPattern)
 
 # Let's set a version number.
 # This file must be manually changed to effect version change.
-set (VERSION_MAJOR 3)
-set (VERSION_MINOR 8)
+set (VERSION_MAJOR 4)
+set (VERSION_MINOR 0)
 set (VERSION_PATCH 0)
 set (VERSION_PRERELEASE)
 
@@ -37,6 +37,11 @@ if ( NOT SDL_IMAGE_FOUND )
   message(FATAL_ERROR "SDL IMAGE not found! Please install libsdl-image1.2-dev!")
 endif ( NOT SDL_IMAGE_FOUND )
 
+find_package(GTK2 COMPONENTS gtk glade)
+if ( NOT GTK2_FOUND )
+  message(FATAL_ERROR "GTK Components not found! Please install libgtk2.0-dev and libglade2-dev")
+endif ( NOT GTK2_FOUND )
+
 # Verbose output (or use: make VERBOSE=1)
 #set ( CMAKE_VERBOSE_MAKEFILE on )
 
@@ -47,4 +52,5 @@ add_subdirectory (src bin)
 file(COPY fonts/DroidSansMono.ttf DESTINATION ${PROJECT_BINARY_DIR}/bin)
 file(RENAME ${PROJECT_BINARY_DIR}/bin/DroidSansMono.ttf ${PROJECT_BINARY_DIR}/bin/font.ttf)
 file(COPY images/Fbyte-01.jpg DESTINATION ${PROJECT_BINARY_DIR}/bin)
-
+file(COPY gui/tensor_gui.glade DESTINATION ${PROJECT_BINARY_DIR}/bin)
+file(RENAME ${PROJECT_BINARY_DIR}/bin/tensor_gui.glade ${PROJECT_BINARY_DIR}/bin/tensor_gui.xml)
