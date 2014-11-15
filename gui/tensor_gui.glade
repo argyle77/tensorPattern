@@ -3,7 +3,7 @@
   <!-- interface-requires gtk+ 2.6 -->
   <!-- interface-naming-policy toplevel-contextual -->
   <object class="GtkWindow" id="mainWindow">
-    <property name="title" translatable="yes">Tensor Control - In loving memory of Kevin "Frostbyte" McCormick (w/o you, there may be nothing)</property>
+    <property name="title" translatable="yes">Tensor</property>
     <property name="window_position">center</property>
     <property name="default_width">200</property>
     <property name="default_height">200</property>
@@ -126,18 +126,7 @@
                       </packing>
                     </child>
                     <child>
-                      <object class="GtkCheckButton" id="bounceMode">
-                        <property name="label" translatable="yes">Bounce</property>
-                        <property name="visible">True</property>
-                        <property name="can_focus">True</property>
-                        <property name="receives_default">False</property>
-                        <property name="draw_indicator">True</property>
-                        <signal name="toggled" handler="on_bounceMode_toggled"/>
-                      </object>
-                      <packing>
-                        <property name="expand">False</property>
-                        <property name="position">3</property>
-                      </packing>
+                      <placeholder/>
                     </child>
                     <child>
                       <object class="GtkCheckButton" id="scrollMode">

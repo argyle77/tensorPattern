@@ -1,6 +1,7 @@
-Tensor pattern generation - Version 4.0.0
+Tensor pattern generation - Version 4.1.0
 Controls are in the form of a gui.  The gui is incomplete.  This is a
-proof of concept.
+proof of concept, much like 4.0.0.  Apparently a refactor began to take
+place.
   
 "Be the light you wish to see in the world. "
 
