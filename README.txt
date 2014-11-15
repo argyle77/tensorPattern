@@ -25,3 +25,11 @@ Binary must be run from the bin directory, or the font won't be found.
   cd bin
   ./tensorSDL
 
+I know the code is ugly.  It was not written at a leisurely pace, and not
+edited when there wasn't a press.  There is little explanation as to what
+it does, and beyond that, the interface is, at best, a puzzle.  I found it
+worked best to show someone or two interested parties every so often the
+bare minimum of how it worked, and then to step back.  It was taken up by
+the puzzle solvers, the ones who'd never necessarily finished a Rubik's cube
+because they'd figured out how it worked and were satisfied at that.
+
