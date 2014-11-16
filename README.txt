@@ -23,8 +23,7 @@ Build instructions:
   cmake ..
   make
 
-The binary must be run from the bin directory, or the font won't be found.
-  cd bin
+The binary must be run from the build directory, or the font won't be found.
   ./tensorSDL
 
 I know the code is ugly.  It was not written at a leisurely pace, and not

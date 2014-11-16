@@ -9,7 +9,7 @@ project(tensorPattern)
 # This file must be manually changed to effect version change.
 set (VERSION_MAJOR 3)
 set (VERSION_MINOR 8)
-set (VERSION_PATCH 1)
+set (VERSION_PATCH 2)
 set (VERSION_PRERELEASE)
 
 if ("${VERSION_PRERELEASE}" STREQUAL "")
@@ -41,10 +41,10 @@ endif ( NOT SDL_IMAGE_FOUND )
 #set ( CMAKE_VERBOSE_MAKEFILE on )
 
 # Subdirectories
-add_subdirectory (src bin)
+add_subdirectory (src)
 
 # Font support.
-file(COPY fonts/DroidSansMono.ttf DESTINATION ${PROJECT_BINARY_DIR}/bin)
-file(RENAME ${PROJECT_BINARY_DIR}/bin/DroidSansMono.ttf ${PROJECT_BINARY_DIR}/bin/font.ttf)
-file(COPY images/Fbyte-01.jpg DESTINATION ${PROJECT_BINARY_DIR}/bin)
+file(COPY fonts/DroidSansMono.ttf DESTINATION ${PROJECT_BINARY_DIR})
+file(RENAME ${PROJECT_BINARY_DIR}/DroidSansMono.ttf ${PROJECT_BINARY_DIR}/font.ttf)
+file(COPY images/Fbyte-01.jpg DESTINATION ${PROJECT_BINARY_DIR})
 
