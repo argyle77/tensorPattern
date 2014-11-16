@@ -84,7 +84,7 @@ static int tensor_init_ips()
     case 2:
       ssrc = Tensor_Section2;
       break;
-      
+
     default:
     case 3:
       ssrc = Tensor_Section3;
@@ -124,7 +124,7 @@ int tensor_init(void) {
 /*--------------------------------------------------------------------------*/
 
 int tensor_build_one(unsigned char *buf,int bufmax,unsigned char *fb,int span,
-		      int xstart,int ystart,int width,int height) {
+          int xstart,int ystart,int width,int height) {
 
   int bufpos,x,y;
 
@@ -167,19 +167,19 @@ void tensor_send(unsigned char *fb) {
 
     for(x=0;x<TENSOR_HEIGHT;x++) {
       for(y=0;y<TENSOR_WIDTH;y++) {
-	      int r,g,b;
-	      int tx,ty;
+        int r,g,b;
+        int tx,ty;
 
-	      r = fb[y*TENSOR_HEIGHT*3 + x*3 + 0];
-	      g = fb[y*TENSOR_HEIGHT*3 + x*3 + 1];
-	      b = fb[y*TENSOR_HEIGHT*3 + x*3 + 2];
+        r = fb[y*TENSOR_HEIGHT*3 + x*3 + 0];
+        g = fb[y*TENSOR_HEIGHT*3 + x*3 + 1];
+        b = fb[y*TENSOR_HEIGHT*3 + x*3 + 2];
 
-	      tx = TENSOR_WIDTH - y - 1;
-	      ty = x;
+        tx = TENSOR_WIDTH - y - 1;
+        ty = x;
 
-	      landscape_fb[ty*TENSOR_WIDTH*3 + tx*3 + 0] = r;
-	      landscape_fb[ty*TENSOR_WIDTH*3 + tx*3 + 1] = g;
-	      landscape_fb[ty*TENSOR_WIDTH*3 + tx*3 + 2] = b;
+        landscape_fb[ty*TENSOR_WIDTH*3 + tx*3 + 0] = r;
+        landscape_fb[ty*TENSOR_WIDTH*3 + tx*3 + 1] = g;
+        landscape_fb[ty*TENSOR_WIDTH*3 + tx*3 + 2] = b;
       }
     }
 
@@ -201,18 +201,18 @@ void tensor_send(unsigned char *fb) {
   for (j=0;j<9;++j) {
 
     i=tensor_build_one(buf+sizeof(KiNET_DMXout),TENSOR_SEND_BUF_SIZE,
-		       fb,TENSOR_WIDTH*3,j*3*3,0,3*3,10);
+           fb,TENSOR_WIDTH*3,j*3*3,0,3*3,10);
     dest.sin_addr.s_addr=inet_addr(Tensor_IPs_1[j]);
     if (dest.sin_addr.s_addr) {
       sendto(tensor_sock,buf,sizeof(KiNET_DMXout)+i,0,
-		    (struct sockaddr *)&dest,sizeof(dest));
+        (struct sockaddr *)&dest,sizeof(dest));
     }
     i=tensor_build_one(buf+sizeof(KiNET_DMXout),TENSOR_SEND_BUF_SIZE,
-		       fb,TENSOR_WIDTH*3,j*3*3,10,3*3,10);
+           fb,TENSOR_WIDTH*3,j*3*3,10,3*3,10);
     dest.sin_addr.s_addr=inet_addr(Tensor_IPs_2[j]);
     if (dest.sin_addr.s_addr)
       sendto(tensor_sock,buf,sizeof(KiNET_DMXout)+i,0,
-	     (struct sockaddr *)&dest,sizeof(dest));
+       (struct sockaddr *)&dest,sizeof(dest));
 
   }
 

@@ -5,11 +5,11 @@
 // Note:   Configured during build.
 
 #ifndef VERSION_H
-#define	VERSION_H
+#define VERSION_H
 
 #define MAJOR_VERSION "@VERSION_MAJOR@"
 #define MINOR_VERSION "@VERSION_MINOR@"
 #define PATCH_VERSION "@VERSION_PATCH@"
 #define PRERELEASE_VERSION "@VERSION_PRERELEASE@"
 
-#endif	/* VERSION_H */
+#endif  /* VERSION_H */
