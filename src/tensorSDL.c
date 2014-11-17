@@ -13,8 +13,8 @@
 #include <math.h>
 #include <SDL.h>
 #include <SDL_ttf.h>
-#include <SDL_rotozoom.h>
-#include <SDL_gfxPrimitives.h>
+#include <SDL2_rotozoom.h>
+#include <SDL2_gfxPrimitives.h>
 #include <SDL_image.h>
 #include <time.h>
 #include "drv-tensor.h"
@@ -39,7 +39,7 @@
 #define PREVIEW_PIXEL_WIDTH 10
 #define PREVIEW_PIXEL_HEIGHT 10
 #define PREVIEW_BORDER_THICKNESS 10
-#define PREVIEW_FONT_SIZE 13
+#define PREVIEW_FONT_SIZE 14
 #define PREVIEW_FONT_WIDTH 14
 #define PREVIEW_FONT_HEIGHT 14
 #define TENSOR_PREVIEW_WIDTH (TENSOR_WIDTH * PREVIEW_PIXEL_WIDTH)
@@ -274,17 +274,20 @@ const color_t light_gray = COLOR_LIGHT_GRAY;
 const color_t gray = COLOR_GRAY;
 const color_t dark_gray = COLOR_DARK_GRAY;
 const color_t black = COLOR_BLACK;
-const color_t palette[PALETTE_COUNT] = {COLOR_RED, COLOR_ORANGE, COLOR_YELLOW, COLOR_GREEN,
-                                        COLOR_CYAN, COLOR_BLUE, COLOR_MAGENTA, COLOR_WHITE,
-                                        COLOR_LIGHT_GRAY, COLOR_GRAY, COLOR_DARK_GRAY, COLOR_BLACK };
-const char *palette_char[] = {"red", "orange", "yellow", "green", "cyan", "blue", "magenta",
-                             "white", "3/4", "1/2", "1/4", "black"};
+const color_t palette[PALETTE_COUNT] = {
+  COLOR_RED, COLOR_ORANGE, COLOR_YELLOW, COLOR_GREEN, COLOR_CYAN, COLOR_BLUE,
+  COLOR_MAGENTA, COLOR_WHITE, COLOR_LIGHT_GRAY, COLOR_GRAY, COLOR_DARK_GRAY,
+  COLOR_BLACK };
+const char *palette_char[] = {
+  "red", "orange", "yellow", "green", "cyan", "blue", "magenta", "white", "3/4",
+  "1/2", "1/4", "black" };
 
 // Globals - We do love our globals.
 TTF_Font *font;
-SDL_Surface *screen = NULL;
-SDL_Surface *ttemp = NULL;
-SDL_Surface *image = NULL;
+SDL_Window *mainWindow = NULL;
+SDL_Renderer *mwRenderer = NULL;
+SDL_Surface *previewSurface = NULL;
+SDL_Surface *imageSeed = NULL;
 int TENSOR_WIDTH_EFF, TENSOR_HEIGHT_EFF;
 int randomMode = NO;  // Random mode is a global (for now).
 moment_t moments[MOMENT_COUNT];
@@ -321,7 +324,7 @@ void ColorCycle(parms_t *parms, int fb_mode);
 void ColorAll(color_t color, unsigned char *fb);
 void UpdateInfoDisplay(moment_t *moment, int now);
 void qDrawRectangle(int x, int y, int width, int height, color_t color);
-void WriteLine(int line, int col, char * thistext);
+void WriteLine(char * thisText, int line, int col, color_t color);
 void Update(float intensity_limit, moment_t *moment);
 void UpdateAll(void);
 void ClearAll(void);
@@ -330,7 +333,6 @@ unsigned char * SurfaceToFB(unsigned char *FB, SDL_Surface *surface);
 void Rotate(double angle, double expansion, int aliasmode, unsigned char *fb_dst, unsigned char *fb_src);
 void Multiply(float multiplier, unsigned char *buffer);
 void InitInfoDisplay(void);
-void WriteLineC(int line, int col, char * thistext);
 void SetDims(void);
 void DrawPreviewBorder(void);
 void DrawRectangle(int x, int y, int w, int h, color_t color);
@@ -346,8 +348,9 @@ Uint32 TriggerProcessing(Uint32 interval, void *param);
 Uint32 FrameCounter(Uint32 interval, void *param);
 int min(int a, int b);
 void SetPixelByPlane(int x, int y, color_t color, unsigned char plane, unsigned char *buffer);
-void DrawImage(moment_t *currentMoment);
-void DrawImage2(double angle, double expansion, int aliasmode, unsigned char *fb_dst);
+void DrawImage(double angle, double expansion, int aliasmode, unsigned char *fb_dst);
+int max(int a, int b);
+int min(int a, int b);
 
 // Main
 int main(int argc, char *argv[]) {
@@ -387,22 +390,32 @@ int main(int argc, char *argv[]) {
   }
 
   // Init the display window.
-  if (SDL_Init(SDL_INIT_AUDIO|SDL_INIT_VIDEO|SDL_INIT_TIMER) < 0) {
+  if (SDL_Init(SDL_INIT_VIDEO|SDL_INIT_TIMER) != 0) {
     fprintf(stderr, "Unable to init SDL: %s\n", SDL_GetError());
     exit(EXIT_FAILURE);
-  } else {
-    atexit(SDL_Quit);
   }
+  atexit(SDL_Quit);
 
-  // Initialize the SDL surfaces.
-  screen = SDL_SetVideoMode(900, 768, 32, SDL_SWSURFACE);
-  if (screen == NULL) {
-    fprintf(stderr, "Unable to set video size: %s\n", SDL_GetError());
+  // Initialize the SDL window and renderer.
+  SDL_CreateWindowAndRenderer(900, 768, SDL_WINDOW_RESIZABLE, &mainWindow, &mwRenderer);
+  if (!mainWindow) {
+    fprintf(stderr, "Unable to create main window: %s\n", SDL_GetError());
     exit(EXIT_FAILURE);
   }
+  if (!mwRenderer) {
+    fprintf(stderr, "Unable to create renderer: %s\n", SDL_GetError());
+    exit(EXIT_FAILURE);
+  }
+  SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "best");
+  SDL_RenderSetLogicalSize(mwRenderer, 900, 768);
 
-  image = IMG_Load(DEF_IMAGE);
-  if (image == NULL) {
+  // Set the window title
+  snprintf(caption_temp, sizeof(caption_temp), "Tensor Control - Output: %i%%", (int) (global_intensity_limit * 100));
+  SDL_SetWindowTitle(mainWindow, caption_temp);
+
+  // Load the image.
+  imageSeed = IMG_Load(DEF_IMAGE);
+  if (!imageSeed) {
     fprintf(stderr, "Unable to load image: %s\n", DEF_IMAGE);
     exit(EXIT_FAILURE);
   }
@@ -413,18 +426,9 @@ int main(int argc, char *argv[]) {
   // Draw a border around the preview
   DrawPreviewBorder();
 
-  sleep(1);  // I don't remember.
-
-  // Set up the keyboard and window access.
-  SDL_EnableUNICODE(1);
-
-  SDL_EnableKeyRepeat(SDL_DEFAULT_REPEAT_DELAY, SDL_DEFAULT_REPEAT_INTERVAL);
-  snprintf(caption_temp, sizeof(caption_temp), "Tensor Control - Output: %i%%", (int) (global_intensity_limit * 100));
-  SDL_WM_SetCaption(caption_temp, "Tensor Control");
-
   // Load the font.
-  if(TTF_Init()==-1) {
-    printf("TTF_Init: %s\n", TTF_GetError());
+  if(TTF_Init() < 0) {
+    printf("Couldn't initialize TTF: %s\n", TTF_GetError());
     exit(EXIT_FAILURE);
   } else {
     font=TTF_OpenFont("font.ttf", PREVIEW_FONT_SIZE);
@@ -521,13 +525,13 @@ int main(int argc, char *argv[]) {
   InitInfoDisplay();
 
   // Init the processing timer.
-  if (SDL_AddTimer(currentParms->delay, TriggerProcessing, NULL) == NULL) {
+  if (SDL_AddTimer(currentParms->delay, TriggerProcessing, NULL) == 0) {
     printf("Process Timer problem!\n");
     exit(0);
   }
 
   // FPS counter.
-  if (SDL_AddTimer(1000, FrameCounter, NULL) == NULL) {
+  if (SDL_AddTimer(1000, FrameCounter, NULL) == 0) {
     printf("Frame Count Timer problem!\n");
     exit(0);
   }
@@ -562,6 +566,15 @@ int main(int argc, char *argv[]) {
         case SDL_QUIT:
           exitProgram = 1;
           break;
+
+       case SDL_WINDOWEVENT:
+         if (event.window.event == SDL_WINDOWEVENT_RESIZED) {
+           ClearAll();
+           DrawPreviewBorder();
+           InitInfoDisplay();
+         }
+         break;
+
 
         default:
           break;
@@ -716,11 +729,8 @@ void ProcessModes(void) {
 
   // First stab experimental image drawing.  Needs work.
   if (currentMode->image == YES) {
-    //DrawImage2(currentParms->rotation, current);
-    DrawImage2(currentParms->rotation, currentParms->expand, currentMode->alias, currentFB);
+    DrawImage(currentParms->rotation, currentParms->expand, currentMode->alias, currentFB);
     currentParms->rotation = currentParms->rotation + currentParms->rotationDelta;
-
-    //DrawImage(currentMoment);
   }
 
   // I think this just writes a column of text on the right or left.
@@ -834,7 +844,7 @@ void HandleInput(SDL_Event *key_event) {
 
   // No modifier keys.  Text buffer stuff.
   } else {
-    if (key_event->key.keysym.unicode < 0x80 && key_event->key.keysym.unicode > 0) {
+    if (key_event->key.keysym.sym < 0x80 && key_event->key.keysym.sym > 0) {
       switch(key_event->key.keysym.sym) {
         case SDLK_BACKSPACE:
           currentText->tindex--;
@@ -859,7 +869,7 @@ void HandleInput(SDL_Event *key_event) {
           break;
 
         default:
-          currentText->textBuffer[currentText->tindex] = (char)key_event->key.keysym.unicode;
+          currentText->textBuffer[currentText->tindex] = (char)key_event->key.keysym.sym;
           currentText->textBuffer[currentText->tindex + 1] = 0x00;
           currentText->tindex++;
           if (currentText->tindex >= (sizeof(currentText->textBuffer) - 2)) {
@@ -1100,77 +1110,72 @@ void Update(float intensity_limit, moment_t *moment) {
     }
   }
 
-  #ifdef USE_TENSOR
-    UpdateTensor(fba);
-  #endif
+#ifdef USE_TENSOR
+  UpdateTensor(fba);
+#endif
 
-  usleep(50000);  // I can't remember if this is necessary.
+  // I can't remember if this is necessary - it would be frame limiting, huh?
+  usleep(50000);
+
   return;
 }
 
 
-
-
 // Rotate
 void Rotate(double angle, double expansion, int aliasmode, unsigned char *fb_dst, unsigned char *fb_src) {
-  SDL_Surface *tttemp;
+  SDL_Surface *rotatedSurface;
   SDL_Rect offset;
 
-  // Rotation is acheived using SDL_gfx primitive rotozoom.
-  // Copy the frame buffer to the sdl surface.
-  FBToSurface(ttemp, &fb_src[0]);
+  FBToSurface(previewSurface, fb_src);
 
   // Rotate / scale it.
-  tttemp = rotozoomSurface (ttemp, angle, expansion, (aliasmode == YES) ? 1 : 0);
+  rotatedSurface = rotozoomSurface (previewSurface, angle, expansion, (aliasmode == YES) ? 1 : 0);
+  if (!rotatedSurface) {
+    fprintf(stderr, "Error rotating surface: %s\n", SDL_GetError());
+    return;
+  }
 
-  offset.x = 0 - (tttemp->w - ttemp->w) / 2;
-  offset.y = 0 - (tttemp->h - ttemp->h) / 2;
-  //dst.x = UserCenterX - ((MposX - CposX) * BlockRectW) - (W / 2);
+  // Recenter and copy it back to the previewSurface
+  offset.x = 0 - (rotatedSurface->w - previewSurface->w) / 2;
+  offset.y = 0 - (rotatedSurface->h - previewSurface->h) / 2;
+  SDL_FillRect(previewSurface, NULL, 0);
+  SDL_BlitSurface(rotatedSurface, NULL, previewSurface, &offset);
 
-   // dst.y = UserCenter_y
-     // - (Me.pos.y-CurBullet->pos.y)*Block_Rect.w-CurBullet->SurfacePointer[ PhaseOfBullet ]->h/2;
-
-  //SDL_BlitSurface(SDL_Surface *src, SDL_Rect *srcrect, SDL_Surface *dst, SDL_Rect *dstrect);
-  boxRGBA(ttemp, 0, 0, TENSOR_WIDTH_EFF, TENSOR_HEIGHT_EFF, 0, 0, 0, 255);
-  SDL_BlitSurface(tttemp, NULL, ttemp, &offset);
-
-  //SDL_BlitSurface()
-  //SDL_BlitSurface(temp2, NULL, visuals->Screen, &destinationRectangle);
   // Copy the result back to the frame buffer.
-  SurfaceToFB(fb_dst, ttemp);
-  SDL_FreeSurface(tttemp);
+  SurfaceToFB(fb_dst, previewSurface);
+  SDL_FreeSurface(rotatedSurface);
 }
 
 
 // Frame buffer to SDL surface
 SDL_Surface * FBToSurface(SDL_Surface *surface, unsigned char *FB) {
   color_t pixel;
+  unsigned char *surfacePixels;
   int x, y;
 
+  surfacePixels = surface->pixels;
   for (x = 0; x < TENSOR_WIDTH_EFF; x++) {
     for (y = 0; y < TENSOR_HEIGHT_EFF; y++) {
 
       // Get pixel color.
       pixel = GetPixel(x, y, FB);
-
-      // Write it to the output surface as a 10x10 square. (PSIZE_X x PSIZE_Y).
-      pixelRGBA(surface, x, y, pixel.r, pixel.g, pixel.b, 255);
+      surfacePixels[y * surface->pitch + x * (surface->pitch / surface->w) + 0] = pixel.b;
+      surfacePixels[y * surface->pitch + x * (surface->pitch / surface->w) + 1] = pixel.g;
+      surfacePixels[y * surface->pitch + x * (surface->pitch / surface->w) + 2] = pixel.r;
     }
   }
-
   return surface;
 }
 
 // SDL Surface to frame buffer
 unsigned char * SurfaceToFB(unsigned char *FB, SDL_Surface *surface) {
-  int bpp = 4;
   Uint32 *pixel;
   Uint8 r,g,b;
   int x,y;
 
   for(x = 0; x < TENSOR_WIDTH_EFF; x++) {
     for (y = 0; y < TENSOR_HEIGHT_EFF; y++) {
-      pixel = surface->pixels + y * surface->pitch + x * bpp;
+      pixel = surface->pixels + y * surface->pitch + x * (surface->pitch / surface->w);
       SDL_GetRGB(*pixel, surface->format, &r, &g, &b);
       FB[((y * TENSOR_WIDTH_EFF * 3) + (x * 3)) + 0] = r;
       FB[((y * TENSOR_WIDTH_EFF * 3) + (x * 3)) + 1] = g;
@@ -1200,198 +1205,16 @@ void UpdatePreview(unsigned char *buffer) {
       x2 = x1 + PREVIEW_PIXEL_WIDTH - 2;
       y2 = y1 + PREVIEW_PIXEL_HEIGHT - 2;
 
-      boxRGBA(screen, x1, y1, x2, y2,
+      boxRGBA(mwRenderer, x1, y1, x2, y2,
              (Uint8) pixel.r,
              (Uint8) pixel.g,
              (Uint8) pixel.b,
              (Uint8) 255);
     }
   }
-
-  SDL_UpdateRect(screen, 0, 0, TENSOR_PREVIEW_WIDTH + (PREVIEW_BORDER_THICKNESS * 2), TENSOR_PREVIEW_HEIGHT + (PREVIEW_BORDER_THICKNESS * 2));
+  SDL_RenderPresent(mwRenderer);
 }
 
-
-
-//// Scroller buffer manipulation
-//void Scroll (dir_e direction, int rollovermode, unsigned char *fb, unsigned char plane) {
-//  int x, y, i;
-//  color_t rollSave[TENSOR_WIDTH + TENSOR_HEIGHT];  // Size = Why?
-//
-//  // rollover mode?
-//  if (rollovermode == YES) {
-//    switch(direction) {
-//      case UP:
-//        for(i = 0; i < TENSOR_WIDTH_EFF; i++) {
-//          rollSave[i] = GetPixel(i, 0, fb);
-//        }
-//        break;
-//
-//      case DOWN:
-//        for (i = 0; i < TENSOR_WIDTH_EFF; i++) {
-//          rollSave[i] = GetPixel(i, TENSOR_HEIGHT_EFF - 1, fb);
-//        }
-//        break;
-//
-//      case RIGHT:
-//        for (i = 0; i < TENSOR_HEIGHT_EFF; i++) {
-//          rollSave[i] = GetPixel(TENSOR_WIDTH_EFF - 1, i, fb);
-//        }
-//      break;
-//
-//      case LEFT:
-//        for (i = 0; i < TENSOR_HEIGHT_EFF; i++) {
-//          rollSave[i] = GetPixel(0, i, fb);
-//        }
-//        break;
-//
-//      default:
-//        break;
-//    }
-//  }
-//
-//  //
-//  switch(direction) {
-//    case UP:
-//      for (y = 0; y < (TENSOR_HEIGHT_EFF - 1); y++) {
-//        for (x = 0; x < TENSOR_WIDTH_EFF; x++) {
-//          if (plane & PLANE_RED) {
-//            fb[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 0] = fb[((y + 1) * TENSOR_WIDTH_EFF * 3) + (x * 3) + 0];
-//          }
-//          if (plane & PLANE_GREEN) {
-//            fb[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 1] = fb[((y + 1) * TENSOR_WIDTH_EFF * 3) + (x * 3) + 1];
-//          }
-//          if (plane & PLANE_BLUE) {
-//            fb[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 2] = fb[((y + 1) * TENSOR_WIDTH_EFF * 3) + (x * 3) + 2];
-//          }
-//          // SetPixel(x, y, GetPixel(x, y+1, fb), fb);
-//        }
-//      }
-//      break;
-//
-//    case DOWN:
-//      for (y = (TENSOR_HEIGHT_EFF - 1); y > 0; y--) {
-//        for (x = 0; x < TENSOR_WIDTH_EFF; x++) {
-//          if (plane & PLANE_RED) {
-//            fb[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 0] = fb[((y - 1) * TENSOR_WIDTH_EFF * 3) + (x * 3) + 0];
-//          }
-//          if (plane & PLANE_GREEN) {
-//            fb[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 1] = fb[((y - 1) * TENSOR_WIDTH_EFF * 3) + (x * 3) + 1];
-//          }
-//          if (plane & PLANE_BLUE) {
-//            fb[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 2] = fb[((y - 1) * TENSOR_WIDTH_EFF * 3) + (x * 3) + 2];
-//          }
-//          // SetPixel(x, y, GetPixel(x, y - 1, fb),fb);
-//        }
-//      }
-//      break;
-//
-//    case LEFT:
-//      for (y = 0; y < TENSOR_HEIGHT_EFF; y++) {
-//        for (x = 0; x < (TENSOR_WIDTH_EFF - 1); x++) {
-//          if (plane & PLANE_RED) {
-//            fb[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 0] = fb[(y * TENSOR_WIDTH_EFF * 3) + ((x + 1) * 3) + 0];
-//          }
-//          if (plane & PLANE_GREEN) {
-//            fb[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 1] = fb[(y * TENSOR_WIDTH_EFF * 3) + ((x + 1) * 3) + 1];
-//          }
-//          if (plane & PLANE_BLUE) {
-//            fb[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 2] = fb[(y * TENSOR_WIDTH_EFF * 3) + ((x + 1) * 3) + 2];
-//          }
-//          //SetPixel(x, y, GetPixel(x + 1, y, fb),fb);
-//        }
-//      }
-//      break;
-//
-//    case RIGHT:
-//    default:
-//      for (y = 0; y < TENSOR_HEIGHT_EFF; y++) {
-//        for (x = (TENSOR_WIDTH_EFF - 1); x > 0; x--) {
-//          if (plane & PLANE_RED) {
-//            fb[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 0] = fb[(y * TENSOR_WIDTH_EFF * 3) + ((x - 1) * 3) + 0];
-//          }
-//          if (plane & PLANE_GREEN) {
-//            fb[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 1] = fb[(y * TENSOR_WIDTH_EFF * 3) + ((x - 1) * 3) + 1];
-//          }
-//          if (plane & PLANE_BLUE) {
-//            fb[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 2] = fb[(y * TENSOR_WIDTH_EFF * 3) + ((x - 1) * 3) + 2];
-//          }
-//          //SetPixel(x, y, GetPixel(x - 1, y, fb),fb);
-//        }
-//      }
-//      break;
-//  }
-//
-//  // rollover mode?
-//  if (rollovermode == YES) {
-//    switch(direction) {
-//      case UP:
-//        for(i = 0; i < TENSOR_WIDTH_EFF; i++) {
-//          if (plane & PLANE_RED) {
-//            fb[((TENSOR_HEIGHT_EFF - 1) * TENSOR_WIDTH_EFF * 3) + (i * 3) + 0] = rollSave[i].r;
-//          }
-//          if (plane & PLANE_GREEN) {
-//            fb[((TENSOR_HEIGHT_EFF - 1) * TENSOR_WIDTH_EFF * 3) + (i * 3) + 1] = rollSave[i].g;
-//          }
-//          if (plane & PLANE_BLUE) {
-//            fb[((TENSOR_HEIGHT_EFF - 1) * TENSOR_WIDTH_EFF * 3) + (i * 3) + 2] = rollSave[i].b;
-//          }
-//          //SetPixel(i, TENSOR_HEIGHT_EFF - 1, rollSave[i],fb);
-//        }
-//        break;
-//
-//      case DOWN:
-//        for (i = 0; i < TENSOR_WIDTH_EFF; i++) {
-//          if (plane & PLANE_RED) {
-//            fb[(i * 3) + 0] = rollSave[i].r;
-//          }
-//          if (plane & PLANE_GREEN) {
-//            fb[(i * 3) + 1] = rollSave[i].g;
-//          }
-//          if (plane & PLANE_BLUE) {
-//            fb[(i * 3) + 2] = rollSave[i].b;
-//          }
-//          //SetPixel(i, 0, rollSave[i],fb);
-//        }
-//        break;
-//
-//      case RIGHT:
-//        for (i = 0; i < TENSOR_HEIGHT_EFF; i++) {
-//          if (plane & PLANE_RED) {
-//            fb[(i * TENSOR_WIDTH_EFF * 3) + 0] = rollSave[i].r;
-//          }
-//          if (plane & PLANE_GREEN) {
-//            fb[(i * TENSOR_WIDTH_EFF * 3) + 1] = rollSave[i].g;
-//          }
-//          if (plane & PLANE_BLUE) {
-//            fb[(i * TENSOR_WIDTH_EFF * 3) + 2] = rollSave[i].b;
-//          }
-//          // SetPixel(0, i, rollSave[i],fb);
-//        }
-//      break;
-//
-//      case LEFT:
-//        for (i = 0; i < TENSOR_HEIGHT_EFF; i++) {
-//          if (plane & PLANE_RED) {
-//            fb[(i * TENSOR_WIDTH_EFF * 3) + ((TENSOR_WIDTH_EFF - 1) * 3) + 0] = rollSave[i].r;
-//          }
-//          if (plane & PLANE_GREEN) {
-//            fb[(i * TENSOR_WIDTH_EFF * 3) + ((TENSOR_WIDTH_EFF - 1) * 3) + 1] = rollSave[i].g;
-//          }
-//          if (plane & PLANE_BLUE) {
-//            fb[(i * TENSOR_WIDTH_EFF * 3) + ((TENSOR_WIDTH_EFF - 1) * 3) + 2] = rollSave[i].b;
-//          }
-//          //SetPixel(TENSOR_WIDTH_EFF - 1, i, rollSave[i],fb);
-//        }
-//        break;
-//
-//      default:
-//        break;
-//    }
-//  }
-//
-//  return;
-//}
 
 // Scroller buffer manipulation
 void Scroll (dir_e direction, int rollovermode, unsigned char *fb, unsigned char plane) {
@@ -2255,546 +2078,498 @@ void ColorCycle(parms_t *parms, int fb_mode) {
 
 // You can put your head in your hands here.
 void InitInfoDisplay(void) {
-    //ClearAll();
 
-    char thisline[1024];
+    char text[1024];
     int line;
 
     line = 21;
 
-    snprintf(thisline, sizeof(thisline), "Modes: ");
-    WriteLine(line++, 0, thisline);
+    snprintf(text, sizeof(text), "Modes: ");
+    WriteLine(text, line++, 0, white);
 
     line++;
 
-    snprintf(thisline, sizeof(thisline), "<ctrl> q - CellAutoFun");
-    WriteLine(line++, 0, thisline);
+    snprintf(text, sizeof(text), "<ctrl> q - CellAutoFun");
+    WriteLine(text, line++, 0, white);
 
-    snprintf(thisline, sizeof(thisline), "<ctrl> w - Bouncer");
-    WriteLine(line++, 0, thisline);
+    snprintf(text, sizeof(text), "<ctrl> w - Bouncer");
+    WriteLine(text, line++, 0, white);
 
-    snprintf(thisline, sizeof(thisline), "<ctrl> e - Fader");
-    WriteLine(line++, 0, thisline);
+    snprintf(text, sizeof(text), "<ctrl> e - Fader");
+    WriteLine(text, line++, 0, white);
 
-    snprintf(thisline, sizeof(thisline), "<ctrl> r - Diffuse");
-    WriteLine(line++, 0, thisline);
+    snprintf(text, sizeof(text), "<ctrl> r - Diffuse");
+    WriteLine(text, line++, 0, white);
 
-    snprintf(thisline, sizeof(thisline), "<ctrl> t - Text");
-    WriteLine(line++, 0, thisline);
+    snprintf(text, sizeof(text), "<ctrl> t - Text");
+    WriteLine(text, line++, 0, white);
 
-    snprintf(thisline, sizeof(thisline), "<ctrl> y - Roller");
-    WriteLine(line++, 0, thisline);
+    snprintf(text, sizeof(text), "<ctrl> y - Roller");
+    WriteLine(text, line++, 0, white);
 
-    snprintf(thisline, sizeof(thisline), "<ctrl> u - Scroller");
-    WriteLine(line++, 0, thisline);
+    snprintf(text, sizeof(text), "<ctrl> u - Scroller");
+    WriteLine(text, line++, 0, white);
 
-    snprintf(thisline, sizeof(thisline), "<ctrl> i - Horizontal bars!");
-    WriteLine(line++, 0, thisline);
+    snprintf(text, sizeof(text), "<ctrl> i - Horizontal bars!");
+    WriteLine(text, line++, 0, white);
 
-    snprintf(thisline, sizeof(thisline), "<ctrl> o - Vertical bars!");
-    WriteLine(line++, 0, thisline);
+    snprintf(text, sizeof(text), "<ctrl> o - Vertical bars!");
+    WriteLine(text, line++, 0, white);
 
-    snprintf(thisline, sizeof(thisline), "<crtl> p - Foreground color all!");
-    WriteLine(line++, 0, thisline);
+    snprintf(text, sizeof(text), "<crtl> p - Foreground color all!");
+    WriteLine(text, line++, 0, white);
 
-    snprintf(thisline, sizeof(thisline), "<crtl> a - Background color all!");
-    WriteLine(line++, 0, thisline);
+    snprintf(text, sizeof(text), "<crtl> a - Background color all!");
+    WriteLine(text, line++, 0, white);
 
-    snprintf(thisline, sizeof(thisline), "<ctrl> s - Random dots");
-    WriteLine(line++, 0, thisline);
+    snprintf(text, sizeof(text), "<ctrl> s - Random dots");
+    WriteLine(text, line++, 0, white);
 
-    snprintf(thisline, sizeof(thisline), "<ctrl> d - FG cycle");
-    WriteLine(line++, 0, thisline);
+    snprintf(text, sizeof(text), "<ctrl> d - FG cycle");
+    WriteLine(text, line++, 0, white);
 
-    snprintf(thisline, sizeof(thisline), "<ctrl> f - BG cycle");
-    WriteLine(line++, 0, thisline);
+    snprintf(text, sizeof(text), "<ctrl> f - BG cycle");
+    WriteLine(text, line++, 0, white);
 
-    snprintf(thisline, sizeof(thisline), "<ctrl> g - Random mode");
-    WriteLine(line++, 0, thisline);
+    snprintf(text, sizeof(text), "<ctrl> g - Random mode");
+    WriteLine(text, line++, 0, white);
 
-    snprintf(thisline, sizeof(thisline), "<ctrl> h - Fader mode");
-    WriteLine(line++, 0, thisline);
+    snprintf(text, sizeof(text), "<ctrl> h - Fader mode");
+    WriteLine(text, line++, 0, white);
 
-    snprintf(thisline, sizeof(thisline), "<ctrl> j - Reset text to start.");
-    WriteLine(line++, 0, thisline);
+    snprintf(text, sizeof(text), "<ctrl> j - Reset text to start.");
+    WriteLine(text, line++, 0, white);
 
-    snprintf(thisline, sizeof(thisline), "<ctrl> k - Roto1 mode");
-    WriteLine(line++, 0, thisline);
+    snprintf(text, sizeof(text), "<ctrl> k - Roto1 mode");
+    WriteLine(text, line++, 0, white);
 
-    snprintf(thisline, sizeof(thisline), "<ctrl> l - All modes off.");
-    WriteLine(line++, 0, thisline);
+    snprintf(text, sizeof(text), "<ctrl> l - All modes off.");
+    WriteLine(text, line++, 0, white);
 
-    snprintf(thisline, sizeof(thisline), "<ctrl> z - Roto2 mode");
-    WriteLine(line++, 0, thisline);
+    snprintf(text, sizeof(text), "<ctrl> z - Roto2 mode");
+    WriteLine(text, line++, 0, white);
 
-    snprintf(thisline, sizeof(thisline), "<ctrl> x - Roto anti-alias");
-    WriteLine(line++, 0, thisline);
+    snprintf(text, sizeof(text), "<ctrl> x - Roto anti-alias");
+    WriteLine(text, line++, 0, white);
 
-    snprintf(thisline, sizeof(thisline), "<ctrl> c - Multiplier");
-    WriteLine(line++, 0, thisline);
+    snprintf(text, sizeof(text), "<ctrl> c - Multiplier");
+    WriteLine(text, line++, 0, white);
 
-    snprintf(thisline, sizeof(thisline), "<ctrl> n - SideBar");
-    WriteLine(line++, 0, thisline);
+    snprintf(text, sizeof(text), "<ctrl> n - SideBar");
+    WriteLine(text, line++, 0, white);
 
-    snprintf(thisline, sizeof(thisline), "<ctrl> m - No Red");
-    WriteLine(line++, 0, thisline);
+    snprintf(text, sizeof(text), "<ctrl> m - No Red");
+    WriteLine(text, line++, 0, white);
 
-    snprintf(thisline, sizeof(thisline), "<ctrl> , - No Green");
-    WriteLine(line++, 0, thisline);
+    snprintf(text, sizeof(text), "<ctrl> , - No Green");
+    WriteLine(text, line++, 0, white);
 
-    snprintf(thisline, sizeof(thisline), "<ctrl> . - No Blue");
-    WriteLine(line++, 0, thisline);
+    snprintf(text, sizeof(text), "<ctrl> . - No Blue");
+    WriteLine(text, line++, 0, white);
 
-    snprintf(thisline, sizeof(thisline), "<ctrl> <alt> p - Image Toggle");
-    WriteLine(line++, 0, thisline);
+    snprintf(text, sizeof(text), "<ctrl> <alt> p - Image Toggle");
+    WriteLine(text, line++, 0, white);
 
 
     line++;
-    snprintf(thisline, sizeof(thisline), "Text Buffer:");
-    WriteLine(line++, 0, thisline);
+    snprintf(text, sizeof(text), "Text Buffer:");
+    WriteLine(text, line++, 0, white);
 
     // Alt
     line = 1;
-    snprintf(thisline, sizeof(thisline), "Coeffs: (3 Keys = Increment, Reset, Decrement)");
-    WriteLine(line++, 2, thisline);
+    snprintf(text, sizeof(text), "Coeffs: (3 Keys = Increment, Reset, Decrement)");
+    WriteLine(text, line++, 2, white);
 
     line++;
 
-    snprintf(thisline, sizeof(thisline), "<alt> m  ,  . - Float step size");
-    WriteLine(line++, 2, thisline);
+    snprintf(text, sizeof(text), "<alt> m  ,  . - Float step size");
+    WriteLine(text, line++, 2, white);
     line++;
 
-    snprintf(thisline, sizeof(thisline), "<alt> q  w  e - Diffusion");
-    WriteLine(line++, 2, thisline);
+    snprintf(text, sizeof(text), "<alt> q  w  e - Diffusion");
+    WriteLine(text, line++, 2, white);
 
-    snprintf(thisline, sizeof(thisline), "<alt> a  s  d - Expansion");
-    WriteLine(line++, 2, thisline);
+    snprintf(text, sizeof(text), "<alt> a  s  d - Expansion");
+    WriteLine(text, line++, 2, white);
 
-    snprintf(thisline, sizeof(thisline), "<alt> z  x  c - Fade Decrement");
-    WriteLine(line++, 2, thisline);
+    snprintf(text, sizeof(text), "<alt> z  x  c - Fade Decrement");
+    WriteLine(text, line++, 2, white);
 
-    snprintf(thisline, sizeof(thisline), "<alt> r  t  y - Roto2 Angle");
-    WriteLine(line++, 2, thisline);
+    snprintf(text, sizeof(text), "<alt> r  t  y - Roto2 Angle");
+    WriteLine(text, line++, 2, white);
 
-    snprintf(thisline, sizeof(thisline), "<alt> f  g  h - Rainbow Speed");
-    WriteLine(line++, 2, thisline);
+    snprintf(text, sizeof(text), "<alt> f  g  h - Rainbow Speed");
+    WriteLine(text, line++, 2, white);
 
-    snprintf(thisline, sizeof(thisline), "<alt> v  b  n - Roto1 Angle");
-    WriteLine(line++, 2, thisline);
+    snprintf(text, sizeof(text), "<alt> v  b  n - Roto1 Angle");
+    WriteLine(text, line++, 2, white);
 
-    snprintf(thisline, sizeof(thisline), "<alt> u  i  o - Multiplier");
-    WriteLine(line++, 2, thisline);
+    snprintf(text, sizeof(text), "<alt> u  i  o - Multiplier");
+    WriteLine(text, line++, 2, white);
 
-    snprintf(thisline, sizeof(thisline), "<alt> j  k  l - Roto1 Speed");
-    WriteLine(line++, 2, thisline);
+    snprintf(text, sizeof(text), "<alt> j  k  l - Roto1 Speed");
+    WriteLine(text, line++, 2, white);
 
-    snprintf(thisline, sizeof(thisline), "<alt> ; - Random dot period");
-    WriteLine(line++, 2, thisline);
+    snprintf(text, sizeof(text), "<alt> ; - Random dot period");
+    WriteLine(text, line++, 2, white);
 
-    snprintf(thisline, sizeof(thisline), "<alt> p - Color cycle type");
-    WriteLine(line++, 2, thisline);
+    snprintf(text, sizeof(text), "<alt> p - Color cycle type");
+    WriteLine(text, line++, 2, white);
 
-    snprintf(thisline, sizeof(thisline), "<alt> <arrows> - Scroller direction");
-    WriteLine(line++, 2, thisline);
+    snprintf(text, sizeof(text), "<alt> <arrows> - Scroller direction");
+    WriteLine(text, line++, 2, white);
 
-    snprintf(thisline, sizeof(thisline), "<ctrl> <alt> u i o - Frame delay(ms)");
-    WriteLine(line++, 2, thisline);
-
-    line++;
-    line++;
-
-    snprintf(thisline, sizeof(thisline), "Colors:");
-    WriteLine(line++, 2, thisline);
-
-    line++;
-
-    snprintf(thisline, sizeof(thisline), "<ctrl> <alt> q w - foreground:");
-    WriteLine(line++, 2, thisline);
-
-    snprintf(thisline, sizeof(thisline), "<ctrl> <alt> a s - background:");
-    WriteLine(line++, 2, thisline);
+    snprintf(text, sizeof(text), "<ctrl> <alt> u i o - Frame delay(ms)");
+    WriteLine(text, line++, 2, white);
 
     line++;
     line++;
 
-    snprintf(thisline, sizeof(thisline), "Moments:");
-    WriteLine(line++, 2, thisline);
+    snprintf(text, sizeof(text), "Colors:");
+    WriteLine(text, line++, 2, white);
 
     line++;
 
-    snprintf(thisline, sizeof(thisline), "<ctrl> 0-9 - Load Moment. Current:");
-    WriteLine(line++, 2, thisline);
+    snprintf(text, sizeof(text), "<ctrl> <alt> q w - foreground:");
+    WriteLine(text, line++, 2, white);
 
-    snprintf(thisline, sizeof(thisline), "<ctrl> <alt> 0-9 - Copy Moment.");
-    WriteLine(line++, 2, thisline);
-
-    snprintf(thisline, sizeof(thisline), "<alt> 0-9 - Load another moment's image buffer.");
-    WriteLine(line++, 2, thisline);
+    snprintf(text, sizeof(text), "<ctrl> <alt> a s - background:");
+    WriteLine(text, line++, 2, white);
 
     line++;
     line++;
 
-    snprintf(thisline, sizeof(thisline), "Text Entry:");
-    WriteLine(line++, 2, thisline);
+    snprintf(text, sizeof(text), "Moments:");
+    WriteLine(text, line++, 2, white);
 
     line++;
 
-    snprintf(thisline, sizeof(thisline), "<Unmodified keys> - Add text.");
-    WriteLine(line++, 2, thisline);
+    snprintf(text, sizeof(text), "<ctrl> 0-9 - Load Moment. Current:");
+    WriteLine(text, line++, 2, white);
 
-    snprintf(thisline, sizeof(thisline), "<backspace> - Delete last letter.");
-    WriteLine(line++, 2, thisline);
+    snprintf(text, sizeof(text), "<ctrl> <alt> 0-9 - Copy Moment.");
+    WriteLine(text, line++, 2, white);
 
-    snprintf(thisline, sizeof(thisline), "<esc> - Erase all text.");
-    WriteLine(line++, 2, thisline);
-
-    snprintf(thisline, sizeof(thisline), "<crtl> <alt> z x - text row:");
-    WriteLine(line++, 2, thisline);
-
-    snprintf(thisline, sizeof(thisline), "<ctrl> b - text mod:");
-    WriteLine(line++, 2, thisline);
-
-    snprintf(thisline, sizeof(thisline), "Text Buffer Size:");
-    WriteLine(line++, 2, thisline);
+    snprintf(text, sizeof(text), "<alt> 0-9 - Load another moment's image buffer.");
+    WriteLine(text, line++, 2, white);
 
     line++;
     line++;
 
-    snprintf(thisline, sizeof(thisline), "More Modes:");
-    WriteLine(line++, 2, thisline);
+    snprintf(text, sizeof(text), "Text Entry:");
+    WriteLine(text, line++, 2, white);
 
     line++;
 
-    snprintf(thisline, sizeof(thisline), "<ctrl> [ - Red Plane:");
-    WriteLine(line++, 2, thisline);
+    snprintf(text, sizeof(text), "<Unmodified keys> - Add text.");
+    WriteLine(text, line++, 2, white);
 
-    snprintf(thisline, sizeof(thisline), "<ctrl> ] - Green Plane:");
-    WriteLine(line++, 2, thisline);
+    snprintf(text, sizeof(text), "<backspace> - Delete last letter.");
+    WriteLine(text, line++, 2, white);
 
-    snprintf(thisline, sizeof(thisline), "<ctrl> \\ - Blue Plane:");
-    WriteLine(line++, 2, thisline);
+    snprintf(text, sizeof(text), "<esc> - Erase all text.");
+    WriteLine(text, line++, 2, white);
 
-    snprintf(thisline, sizeof(thisline), "<ctrl> <alt> [ - Cyan Plane:");
-    WriteLine(line++, 2, thisline);
+    snprintf(text, sizeof(text), "<crtl> <alt> z x - text row:");
+    WriteLine(text, line++, 2, white);
 
-    snprintf(thisline, sizeof(thisline), "<ctrl> <alt> ] - Yellow Plane:");
-    WriteLine(line++, 2, thisline);
+    snprintf(text, sizeof(text), "<ctrl> b - text mod:");
+    WriteLine(text, line++, 2, white);
 
-    snprintf(thisline, sizeof(thisline), "<ctrl> <alt> \\ - Magenta Plane:");
-    WriteLine(line++, 2, thisline);
+    snprintf(text, sizeof(text), "Text Buffer Size:");
+    WriteLine(text, line++, 2, white);
+
+    line++;
+    line++;
+
+    snprintf(text, sizeof(text), "More Modes:");
+    WriteLine(text, line++, 2, white);
 
     line++;
 
-    snprintf(thisline, sizeof(thisline), "<ctrl> <esc> - Quit.");
-    WriteLine(line++, 2, thisline);
+    snprintf(text, sizeof(text), "<ctrl> [ - Red Plane:");
+    WriteLine(text, line++, 2, white);
+
+    snprintf(text, sizeof(text), "<ctrl> ] - Green Plane:");
+    WriteLine(text, line++, 2, white);
+
+    snprintf(text, sizeof(text), "<ctrl> \\ - Blue Plane:");
+    WriteLine(text, line++, 2, white);
+
+    snprintf(text, sizeof(text), "<ctrl> <alt> [ - Cyan Plane:");
+    WriteLine(text, line++, 2, white);
+
+    snprintf(text, sizeof(text), "<ctrl> <alt> ] - Yellow Plane:");
+    WriteLine(text, line++, 2, white);
+
+    snprintf(text, sizeof(text), "<ctrl> <alt> \\ - Magenta Plane:");
+    WriteLine(text, line++, 2, white);
+
+    line++;
+
+    snprintf(text, sizeof(text), "<ctrl> <esc> - Quit.");
+    WriteLine(text, line++, 2, white);
 
     UpdateAll();
 }
 
 // And here.
 void UpdateInfoDisplay(moment_t *moment, int now) {
-  char thisparm[1024], mybuff[102];
+  char text[1024], mybuff[102];
   int length;
   parms_t *parms = &moment->coefs;
   modes_t *mode = &moment->mode;
-  text_info_t *text = &moment->text;
+  text_info_t *scrollText = &moment->text;
 
-  snprintf(thisparm, sizeof(thisparm), "FPS: %4i", fps);
-  WriteLineC(infoLoc[INFO_FPS][0], infoLoc[INFO_FPS][1], thisparm);
+  snprintf(text, sizeof(text), "FPS: %4i", fps);
+  WriteLine(text, infoLoc[INFO_FPS][0], infoLoc[INFO_FPS][1], yellow);
 
-  snprintf(thisparm, sizeof(thisparm), "%6i", parms->delay);
-  WriteLineC(infoLoc[INFO_DELAY][0], infoLoc[INFO_DELAY][1], thisparm);
+  snprintf(text, sizeof(text), "%6i", parms->delay);
+  WriteLine(text, infoLoc[INFO_DELAY][0], infoLoc[INFO_DELAY][1], yellow);
 
-  snprintf(thisparm, sizeof(thisparm), "%3s", mode->image == YES ? "YES" : "NO");
-  WriteLineC(infoLoc[INFO_IMAGE][0], infoLoc[INFO_IMAGE][1], thisparm);
+  snprintf(text, sizeof(text), "%3s", mode->image == YES ? "YES" : "NO");
+  WriteLine(text, infoLoc[INFO_IMAGE][0], infoLoc[INFO_IMAGE][1], yellow);
 
-  snprintf(thisparm, sizeof(thisparm), "%3s", mode->cellAutoFun == YES ? "YES" : "NO");
-  WriteLineC(infoLoc[INFO_CELL][0], infoLoc[INFO_CELL][1], thisparm);
+  snprintf(text, sizeof(text), "%3s", mode->cellAutoFun == YES ? "YES" : "NO");
+  WriteLine(text, infoLoc[INFO_CELL][0], infoLoc[INFO_CELL][1], yellow);
 
-  snprintf(thisparm, sizeof(thisparm), "%3s", mode->bouncer == YES ? "YES" : "NO");
-  WriteLineC(infoLoc[INFO_BOUNCE][0], infoLoc[INFO_BOUNCE][1], thisparm);
+  snprintf(text, sizeof(text), "%3s", mode->bouncer == YES ? "YES" : "NO");
+  WriteLine(text, infoLoc[INFO_BOUNCE][0], infoLoc[INFO_BOUNCE][1], yellow);
 
-  snprintf(thisparm, sizeof(thisparm), "%3s", mode->fadeout == YES ? "YES" : "NO");
-  WriteLineC(infoLoc[INFO_FADE][0], infoLoc[INFO_FADE][1], thisparm);
+  snprintf(text, sizeof(text), "%3s", mode->fadeout == YES ? "YES" : "NO");
+  WriteLine(text, infoLoc[INFO_FADE][0], infoLoc[INFO_FADE][1], yellow);
 
-  snprintf(thisparm, sizeof(thisparm), "%3s", mode->diffuse == YES ? "YES" : "NO");
-  WriteLineC(infoLoc[INFO_DIFFUSE][0], infoLoc[INFO_DIFFUSE][1], thisparm);
+  snprintf(text, sizeof(text), "%3s", mode->diffuse == YES ? "YES" : "NO");
+  WriteLine(text, infoLoc[INFO_DIFFUSE][0], infoLoc[INFO_DIFFUSE][1], yellow);
 
-  snprintf(thisparm, sizeof(thisparm), "%3s", mode->textScroller == YES ? "YES" : "NO");
-  WriteLineC(infoLoc[INFO_TEXTMODE][0], infoLoc[INFO_TEXTMODE][1], thisparm);
+  snprintf(text, sizeof(text), "%3s", mode->textScroller == YES ? "YES" : "NO");
+  WriteLine(text, infoLoc[INFO_TEXTMODE][0], infoLoc[INFO_TEXTMODE][1], yellow);
 
-  snprintf(thisparm, sizeof(thisparm), "%3s", mode->roller == YES ? "YES" : "NO");
-  WriteLineC(infoLoc[INFO_ROLL][0], infoLoc[INFO_ROLL][1], thisparm);
+  snprintf(text, sizeof(text), "%3s", mode->roller == YES ? "YES" : "NO");
+  WriteLine(text, infoLoc[INFO_ROLL][0], infoLoc[INFO_ROLL][1], yellow);
 
-  snprintf(thisparm, sizeof(thisparm), "%3s", mode->scroller == YES ? "YES" : "NO");
-  WriteLineC(infoLoc[INFO_SCROLL][0], infoLoc[INFO_SCROLL][1], thisparm);
+  snprintf(text, sizeof(text), "%3s", mode->scroller == YES ? "YES" : "NO");
+  WriteLine(text, infoLoc[INFO_SCROLL][0], infoLoc[INFO_SCROLL][1], yellow);
 
-  snprintf(thisparm, sizeof(thisparm), "%3s", mode->randDots == YES ? "YES" : "NO");
-  WriteLineC(infoLoc[INFO_DOTS][0], infoLoc[INFO_DOTS][1], thisparm);
+  snprintf(text, sizeof(text), "%3s", mode->randDots == YES ? "YES" : "NO");
+  WriteLine(text, infoLoc[INFO_DOTS][0], infoLoc[INFO_DOTS][1], yellow);
 
-  snprintf(thisparm, sizeof(thisparm), "%3s", mode->cycleForeground == YES ? "YES" : "NO");
-  WriteLineC(infoLoc[INFO_FG][0], infoLoc[INFO_FG][1], thisparm);
+  snprintf(text, sizeof(text), "%3s", mode->cycleForeground == YES ? "YES" : "NO");
+  WriteLine(text, infoLoc[INFO_FG][0], infoLoc[INFO_FG][1], yellow);
 
-  snprintf(thisparm, sizeof(thisparm), "%3s", mode->cycleBackground == YES ? "YES" : "NO");
-  WriteLineC(infoLoc[INFO_BG][0], infoLoc[INFO_BG][1], thisparm);
+  snprintf(text, sizeof(text), "%3s", mode->cycleBackground == YES ? "YES" : "NO");
+  WriteLine(text, infoLoc[INFO_BG][0], infoLoc[INFO_BG][1], yellow);
 
-  snprintf(thisparm, sizeof(thisparm), "%3s", mode->clearRed == YES ? "YES" : "NO");
-  WriteLineC(infoLoc[INFO_CLEARRED][0], infoLoc[INFO_CLEARRED][1], thisparm);
+  snprintf(text, sizeof(text), "%3s", mode->clearRed == YES ? "YES" : "NO");
+  WriteLine(text, infoLoc[INFO_CLEARRED][0], infoLoc[INFO_CLEARRED][1], yellow);
 
-  snprintf(thisparm, sizeof(thisparm), "%3s", mode->clearGreen == YES ? "YES" : "NO");
-  WriteLineC(infoLoc[INFO_CLEARGREEN][0], infoLoc[INFO_CLEARGREEN][1], thisparm);
+  snprintf(text, sizeof(text), "%3s", mode->clearGreen == YES ? "YES" : "NO");
+  WriteLine(text, infoLoc[INFO_CLEARGREEN][0], infoLoc[INFO_CLEARGREEN][1], yellow);
 
-  snprintf(thisparm, sizeof(thisparm), "%3s", mode->clearBlue == YES ? "YES" : "NO");
-  WriteLineC(infoLoc[INFO_CLEARBLUE][0], infoLoc[INFO_CLEARBLUE][1], thisparm);
+  snprintf(text, sizeof(text), "%3s", mode->clearBlue == YES ? "YES" : "NO");
+  WriteLine(text, infoLoc[INFO_CLEARBLUE][0], infoLoc[INFO_CLEARBLUE][1], yellow);
 
-  snprintf(thisparm, sizeof(thisparm), "%3s", randomMode == YES ? "YES" : "NO");
-  WriteLineC(infoLoc[INFO_RANDOM][0], infoLoc[INFO_RANDOM][1], thisparm);
+  snprintf(text, sizeof(text), "%3s", randomMode == YES ? "YES" : "NO");
+  WriteLine(text, infoLoc[INFO_RANDOM][0], infoLoc[INFO_RANDOM][1], yellow);
 
-  snprintf(thisparm, sizeof(thisparm), "%3s", mode->fade_mode == FADE_MODULAR ? "MOD" : "LIM");
-  WriteLineC(infoLoc[INFO_FADEMODE][0], infoLoc[INFO_FADEMODE][1], thisparm);
+  snprintf(text, sizeof(text), "%3s", mode->fade_mode == FADE_MODULAR ? "MOD" : "LIM");
+  WriteLine(text, infoLoc[INFO_FADEMODE][0], infoLoc[INFO_FADEMODE][1], yellow);
 
-  snprintf(thisparm, sizeof(thisparm), "%3s", mode->rotozoom == YES ? "YES" : "NO");
-  WriteLineC(infoLoc[INFO_ROTOZOOM][0], infoLoc[INFO_ROTOZOOM][1], thisparm);
+  snprintf(text, sizeof(text), "%3s", mode->rotozoom == YES ? "YES" : "NO");
+  WriteLine(text, infoLoc[INFO_ROTOZOOM][0], infoLoc[INFO_ROTOZOOM][1], yellow);
 
-  snprintf(thisparm, sizeof(thisparm), "%3s", mode->rotozoom2 == YES ? "YES" : "NO");
-  WriteLineC(infoLoc[INFO_ROTOZOOM2][0], infoLoc[INFO_ROTOZOOM2][1], thisparm);
+  snprintf(text, sizeof(text), "%3s", mode->rotozoom2 == YES ? "YES" : "NO");
+  WriteLine(text, infoLoc[INFO_ROTOZOOM2][0], infoLoc[INFO_ROTOZOOM2][1], yellow);
 
-  snprintf(thisparm, sizeof(thisparm), "%3s", mode->alias == YES ? "YES" : "NO");
-  WriteLineC(infoLoc[INFO_ALIAS][0], infoLoc[INFO_ALIAS][1], thisparm);
+  snprintf(text, sizeof(text), "%3s", mode->alias == YES ? "YES" : "NO");
+  WriteLine(text, infoLoc[INFO_ALIAS][0], infoLoc[INFO_ALIAS][1], yellow);
 
-  snprintf(thisparm, sizeof(thisparm), "%3s", mode->multiply == YES ? "YES" : "NO");
-  WriteLineC(infoLoc[INFO_MULTIPLY][0], infoLoc[INFO_MULTIPLY][1], thisparm);
+  snprintf(text, sizeof(text), "%3s", mode->multiply == YES ? "YES" : "NO");
+  WriteLine(text, infoLoc[INFO_MULTIPLY][0], infoLoc[INFO_MULTIPLY][1], yellow);
 
-  snprintf(thisparm, sizeof(thisparm), "%3s", mode->sidebar == YES ? "YES" : "NO");
-  WriteLineC(infoLoc[INFO_SIDEBAR][0], infoLoc[INFO_SIDEBAR][1], thisparm);
+  snprintf(text, sizeof(text), "%3s", mode->sidebar == YES ? "YES" : "NO");
+  WriteLine(text, infoLoc[INFO_SIDEBAR][0], infoLoc[INFO_SIDEBAR][1], yellow);
 
-  snprintf(thisparm, sizeof(thisparm), "%14.6f", parms->floatinc);
-  WriteLineC(infoLoc[INFO_INC][0], infoLoc[INFO_INC][1], thisparm);
+  snprintf(text, sizeof(text), "%14.6f", parms->floatinc);
+  WriteLine(text, infoLoc[INFO_INC][0], infoLoc[INFO_INC][1], yellow);
 
-  snprintf(thisparm, sizeof(thisparm), "%14.6f", parms->diffusion_coef);
-  WriteLineC(infoLoc[INFO_DIFF][0], infoLoc[INFO_DIFF][1], thisparm);
+  snprintf(text, sizeof(text), "%14.6f", parms->diffusion_coef);
+  WriteLine(text, infoLoc[INFO_DIFF][0], infoLoc[INFO_DIFF][1], yellow);
 
-  snprintf(thisparm, sizeof(thisparm), "%14.6f", parms->expand);
-  WriteLineC(infoLoc[INFO_EXP][0], infoLoc[INFO_EXP][1], thisparm);
+  snprintf(text, sizeof(text), "%14.6f", parms->expand);
+  WriteLine(text, infoLoc[INFO_EXP][0], infoLoc[INFO_EXP][1], yellow);
 
-  snprintf(thisparm, sizeof(thisparm), "%14i", parms->fadeout_dec);
-  WriteLineC(infoLoc[INFO_DEC][0], infoLoc[INFO_DEC][1], thisparm);
+  snprintf(text, sizeof(text), "%14i", parms->fadeout_dec);
+  WriteLine(text, infoLoc[INFO_DEC][0], infoLoc[INFO_DEC][1], yellow);
 
-  snprintf(thisparm, sizeof(thisparm), "%s", mode->shiftred == 0 ? " Hold" :
+  snprintf(text, sizeof(text), "%s", mode->shiftred == 0 ? " Hold" :
                                              mode->shiftred == 1 ? "   Up" :
                                              mode->shiftred == 2 ? " Left" :
                                              mode->shiftred == 3 ? " Down" :
                                              mode->shiftred == 4 ? "Right" :
                                                                    "Unk!!" );
-  WriteLineC(infoLoc[INFO_SHIFTRED][0], infoLoc[INFO_SHIFTRED][1], thisparm);
+  WriteLine(text, infoLoc[INFO_SHIFTRED][0], infoLoc[INFO_SHIFTRED][1], yellow);
 
-  snprintf(thisparm, sizeof(thisparm), "%s", mode->shiftgreen == 0 ? " Hold" :
+  snprintf(text, sizeof(text), "%s", mode->shiftgreen == 0 ? " Hold" :
                                              mode->shiftgreen == 1 ? "   Up" :
                                              mode->shiftgreen == 2 ? " Left" :
                                              mode->shiftgreen == 3 ? " Down" :
                                              mode->shiftgreen == 4 ? "Right" :
                                                                      "Unk!!" );
-  WriteLineC(infoLoc[INFO_SHIFTGREEN][0], infoLoc[INFO_SHIFTGREEN][1], thisparm);
+  WriteLine(text, infoLoc[INFO_SHIFTGREEN][0], infoLoc[INFO_SHIFTGREEN][1], yellow);
 
-  snprintf(thisparm, sizeof(thisparm), "%s", mode->shiftblue == 0 ? " Hold" :
+  snprintf(text, sizeof(text), "%s", mode->shiftblue == 0 ? " Hold" :
                                              mode->shiftblue == 1 ? "   Up" :
                                              mode->shiftblue == 2 ? " Left" :
                                              mode->shiftblue == 3 ? " Down" :
                                              mode->shiftblue == 4 ? "Right" :
                                                                     "Unk!!" );
-  WriteLineC(infoLoc[INFO_SHIFTBLUE][0], infoLoc[INFO_SHIFTBLUE][1], thisparm);
+  WriteLine(text, infoLoc[INFO_SHIFTBLUE][0], infoLoc[INFO_SHIFTBLUE][1], yellow);
 
-  snprintf(thisparm, sizeof(thisparm), "%s", mode->shiftcyan == 0 ? " Hold" :
+  snprintf(text, sizeof(text), "%s", mode->shiftcyan == 0 ? " Hold" :
                                              mode->shiftcyan == 1 ? "   Up" :
                                              mode->shiftcyan == 2 ? " Left" :
                                              mode->shiftcyan == 3 ? " Down" :
                                              mode->shiftcyan == 4 ? "Right" :
                                                                     "Unk!!" );
-  WriteLineC(infoLoc[INFO_SHIFTCYAN][0], infoLoc[INFO_SHIFTCYAN][1], thisparm);
+  WriteLine(text, infoLoc[INFO_SHIFTCYAN][0], infoLoc[INFO_SHIFTCYAN][1], yellow);
 
-  snprintf(thisparm, sizeof(thisparm), "%s", mode->shiftyellow == 0 ? " Hold" :
+  snprintf(text, sizeof(text), "%s", mode->shiftyellow == 0 ? " Hold" :
                                              mode->shiftyellow == 1 ? "   Up" :
                                              mode->shiftyellow == 2 ? " Left" :
                                              mode->shiftyellow == 3 ? " Down" :
                                              mode->shiftyellow == 4 ? "Right" :
                                                                     "Unk!!" );
-  WriteLineC(infoLoc[INFO_SHIFTYELLOW][0], infoLoc[INFO_SHIFTYELLOW][1], thisparm);
+  WriteLine(text, infoLoc[INFO_SHIFTYELLOW][0], infoLoc[INFO_SHIFTYELLOW][1], yellow);
 
-  snprintf(thisparm, sizeof(thisparm), "%s", mode->shiftmagenta == 0 ? " Hold" :
+  snprintf(text, sizeof(text), "%s", mode->shiftmagenta == 0 ? " Hold" :
                                              mode->shiftmagenta == 1 ? "   Up" :
                                              mode->shiftmagenta == 2 ? " Left" :
                                              mode->shiftmagenta == 3 ? " Down" :
                                              mode->shiftmagenta == 4 ? "Right" :
                                                                     "Unk!!" );
-  WriteLineC(infoLoc[INFO_SHIFTMAGENTA][0], infoLoc[INFO_SHIFTMAGENTA][1], thisparm);
+  WriteLine(text, infoLoc[INFO_SHIFTMAGENTA][0], infoLoc[INFO_SHIFTMAGENTA][1], yellow);
 
-  snprintf(thisparm, sizeof(thisparm), "%14.6f", parms->rotation2);
-  WriteLineC(infoLoc[INFO_ANGLE2][0], infoLoc[INFO_ANGLE2][1], thisparm);
+  snprintf(text, sizeof(text), "%14.6f", parms->rotation2);
+  WriteLine(text, infoLoc[INFO_ANGLE2][0], infoLoc[INFO_ANGLE2][1], yellow);
 
-  snprintf(thisparm, sizeof(thisparm), "%14i", parms->rainbowInc);
-  WriteLineC(infoLoc[INFO_RSPEED][0], infoLoc[INFO_RSPEED][1], thisparm);
+  snprintf(text, sizeof(text), "%14i", parms->rainbowInc);
+  WriteLine(text, infoLoc[INFO_RSPEED][0], infoLoc[INFO_RSPEED][1], yellow);
 
-  snprintf(thisparm, sizeof(thisparm), "%14.6f", parms->rotation);
-  WriteLineC(infoLoc[INFO_ANGLE1][0], infoLoc[INFO_ANGLE1][1], thisparm);
+  snprintf(text, sizeof(text), "%14.6f", parms->rotation);
+  WriteLine(text, infoLoc[INFO_ANGLE1][0], infoLoc[INFO_ANGLE1][1], yellow);
 
 
-  snprintf(thisparm, sizeof(thisparm), "%14.6f", parms->colorMultiplier);
-  WriteLineC(infoLoc[INFO_MULT][0], infoLoc[INFO_MULT][1], thisparm);
+  snprintf(text, sizeof(text), "%14.6f", parms->colorMultiplier);
+  WriteLine(text, infoLoc[INFO_MULT][0], infoLoc[INFO_MULT][1], yellow);
 
-  snprintf(thisparm, sizeof(thisparm), "%14.6f", parms->rotationDelta);
-  WriteLineC(infoLoc[INFO_ROT1SPEED][0], infoLoc[INFO_ROT1SPEED][1], thisparm);
+  snprintf(text, sizeof(text), "%14.6f", parms->rotationDelta);
+  WriteLine(text, infoLoc[INFO_ROT1SPEED][0], infoLoc[INFO_ROT1SPEED][1], yellow);
 
-  snprintf(thisparm, sizeof(thisparm), "%14i", parms->randMod);
-  WriteLineC(infoLoc[INFO_DOTF][0], infoLoc[INFO_DOTF][1], thisparm);
+  snprintf(text, sizeof(text), "%14i", parms->randMod);
+  WriteLine(text, infoLoc[INFO_DOTF][0], infoLoc[INFO_DOTF][1], yellow);
 
-  snprintf(thisparm, sizeof(thisparm), "%11s", parms->colorCycleMode == RGB ? "R-G-B" :
+  snprintf(text, sizeof(text), "%11s", parms->colorCycleMode == RGB ? "R-G-B" :
                                              parms->colorCycleMode == CMY ? "C-M-Y" :
                                              parms->colorCycleMode == RYGCBM ? "R-Y-G-C-B-M" :
                                              parms->colorCycleMode == RAINBOW ? "RAINBOW" :
                                              parms->colorCycleMode == RANDOM ? "RANDOM" : "UNKNOWN");
-  WriteLineC(infoLoc[INFO_CYCLE][0], infoLoc[INFO_CYCLE][1], thisparm);
+  WriteLine(text, infoLoc[INFO_CYCLE][0], infoLoc[INFO_CYCLE][1], yellow);
 
 
-  snprintf(thisparm, sizeof(thisparm), "%5s", parms->scrollerDir == UP ? "UP" :
+  snprintf(text, sizeof(text), "%5s", parms->scrollerDir == UP ? "UP" :
                                              parms->scrollerDir == DOWN ? "DOWN" :
                                              parms->scrollerDir == LEFT ? "LEFT" :
                                              parms->scrollerDir == RIGHT ? "RIGHT" : "UNK");
-  WriteLineC(infoLoc[INFO_DIR][0], infoLoc[INFO_DIR][1], thisparm);
+  WriteLine(text, infoLoc[INFO_DIR][0], infoLoc[INFO_DIR][1], yellow);
 
 
-  snprintf(thisparm, sizeof(thisparm), "%10s", palette_char[parms->foreground]);
-  WriteLineC(infoLoc[INFO_FGC][0], infoLoc[INFO_FGC][1], thisparm);
+  snprintf(text, sizeof(text), "%10s", palette_char[parms->foreground]);
+  WriteLine(text, infoLoc[INFO_FGC][0], infoLoc[INFO_FGC][1], yellow);
 
-  snprintf(thisparm, sizeof(thisparm), "%10s", palette_char[parms->background]);
-  WriteLineC(infoLoc[INFO_BGC][0], infoLoc[INFO_BGC][1], thisparm);
+  snprintf(text, sizeof(text), "%10s", palette_char[parms->background]);
+  WriteLine(text, infoLoc[INFO_BGC][0], infoLoc[INFO_BGC][1], yellow);
 
-  snprintf(thisparm, sizeof(thisparm), "%1i", now);
-  WriteLineC(infoLoc[INFO_NOW][0], infoLoc[INFO_NOW][1], thisparm);
+  snprintf(text, sizeof(text), "%1i", now);
+  WriteLine(text, infoLoc[INFO_NOW][0], infoLoc[INFO_NOW][1], yellow);
 
-  snprintf(thisparm, sizeof(thisparm), "%3i", parms->textRow);
-  WriteLineC(infoLoc[INFO_TEXTROW][0], infoLoc[INFO_TEXTROW][1], thisparm);
+  snprintf(text, sizeof(text), "%3i", parms->textRow);
+  WriteLine(text, infoLoc[INFO_TEXTROW][0], infoLoc[INFO_TEXTROW][1], yellow);
 
-  snprintf(thisparm, sizeof(thisparm), "%11s", mode->stagger == 1 ? "9RowStagger" :
+  snprintf(text, sizeof(text), "%11s", mode->stagger == 1 ? "9RowStagger" :
                                              mode->stagger == 2 ? "10RowBorder" :
                                              mode->stagger == 0 ? "8Row" :
                                              mode->stagger == 3 ? "FullBG" : "Unknown");
 
-  WriteLineC(infoLoc[INFO_TEXTSTAG][0], infoLoc[INFO_TEXTSTAG][1], thisparm);
+  WriteLine(text, infoLoc[INFO_TEXTSTAG][0], infoLoc[INFO_TEXTSTAG][1], yellow);
 
-  snprintf(thisparm, sizeof(thisparm), "%4i", (int) strlen(text->textBuffer));
-  WriteLineC(infoLoc[INFO_TEXTLEN][0], infoLoc[INFO_TEXTLEN][1], thisparm);
+  snprintf(text, sizeof(text), "%4i", (int) strlen(scrollText->textBuffer));
+  WriteLine(text, infoLoc[INFO_TEXTLEN][0], infoLoc[INFO_TEXTLEN][1], yellow);
 
-  length = strlen(text->textBuffer);
-  strncpy(mybuff, text->textBuffer + (length > 100 ? length - 100 : 0), 101);
-  snprintf(thisparm, sizeof(thisparm), "%-100s", mybuff );
-  WriteLineC(infoLoc[INFO_TEXT][0], infoLoc[INFO_TEXT][1], thisparm);
+  length = strlen(scrollText->textBuffer);
+  strncpy(mybuff, scrollText->textBuffer + (length > 100 ? length - 100 : 0), 101);
+  snprintf(text, sizeof(text), "%-100s", mybuff );
+  WriteLine(text, infoLoc[INFO_TEXT][0], infoLoc[INFO_TEXT][1], yellow);
 
   UpdateAll();
 }
 
-// Old way.  Slow.  No longer used.  My preview update gave me several more fps
-// after I dropped this.
-void QDrawRectangle(int x, int y, int width, int height, color_t color) {
 
-  int i;
-  Uint32 color_sdl;
-  Uint32 *bufp;
+// Writes a line of text to the selected line and column of the
+// output window with the selected color.
+void WriteLine(char * thisText, int line, int col, color_t color) {
 
-  if (SDL_MUSTLOCK(screen)) {
-    if (SDL_LockSurface(screen) < 0) {
-      return;
+  // Vars
+  const SDL_Color fontColor = {color.r, color.g, color.b};
+  const SDL_Color bgColor = {0, 0, 0};
+  SDL_Surface *textSurface;
+  SDL_Texture *textTexture;
+  SDL_Rect rect;
+
+  const int colstart[4] = {0, 275, 375, 675};
+
+  // Set the position of the output text.
+  rect.x = colstart[col];
+  rect.y = line * (PREVIEW_FONT_HEIGHT);
+
+  // Render the text to a surface.
+  textSurface = TTF_RenderText_Shaded(font, thisText, fontColor, bgColor);
+  if (textSurface) {
+    // Set the width and height of the output text.
+    rect.w = textSurface->w;
+    // rect.h = textSurface->h;
+    rect.h = PREVIEW_FONT_HEIGHT;
+
+    // Create a texture in video memory from the surface.
+    textTexture = SDL_CreateTextureFromSurface(mwRenderer, textSurface);
+    if (textTexture) {
+
+      // Copy it to the rendering context.
+      SDL_RenderCopy(mwRenderer, textTexture, NULL, &rect);
+      SDL_DestroyTexture(textTexture);  // Free video memory
+    } else {
+      fprintf(stderr, "Failed to create texture for \"%s\"!", thisText);
     }
-  }
-
-  color_sdl = SDL_MapRGB(screen->format, (Uint8) color.r, (Uint8) color.g, (Uint8) color.b);
-
-  // Vert
-  for(i = y; i <= (height + y); i++) {
-    bufp = (Uint32 *) screen->pixels + (i * screen->pitch / 4) + (width + x);
-    *bufp = color_sdl;
-
-    bufp = (Uint32 *) screen->pixels + (i * screen->pitch / 4) + (x);
-    *bufp = color_sdl;
-  }
-
-  // Horz
-  for(i = x; i <= (width + x); i++) {
-    bufp= (Uint32 *) screen->pixels + ((height + y) * screen->pitch / 4) + i;
-    *bufp = color_sdl;
-
-    bufp= (Uint32 *) screen->pixels + (y * screen->pitch / 4) + i;
-    *bufp = color_sdl;
-  }
-
-  if (SDL_MUSTLOCK(screen)) {
-    SDL_UnlockSurface(screen);
-  }
-
-  SDL_UpdateRect(screen, x, y, width + 1, height + 1);
-}
-
-
-
-void WriteLine(int line, int col, char * thistext) {
-  const SDL_Color font_color = {255, 255, 255};
-  SDL_Surface *text_surface;
-  SDL_Rect rect;
-  const int colstart[4] = {0, 275, 375, 675};
-
-  rect.x = colstart[col];
-  rect.y = line * (PREVIEW_FONT_HEIGHT);
-  rect.w = 0;
-  rect.h = 0;
-
-  text_surface = TTF_RenderText_Solid(font, thistext, font_color);
-  if (text_surface != NULL) {
-   SDL_BlitSurface(text_surface, NULL, screen, &rect);
-   SDL_FreeSurface(text_surface);
+    SDL_FreeSurface(textSurface);  // Free RAM.
+  } else {
+    fprintf(stderr, "Failed to create surface for \"%s\"!", thisText);
   }
 }
-
-void WriteLineC(int line, int col, char * thistext) {
-  const SDL_Color font_color = {255, 255, 0};
-  SDL_Surface *text_surface;
-  SDL_Rect rect;
-  const SDL_Color bg_color = {0, 0, 0};
-  const int colstart[4] = {0, 275, 375, 675};
-
-  rect.x = colstart[col];
-  rect.y = line * (PREVIEW_FONT_HEIGHT);
-
-  text_surface = TTF_RenderText_Shaded(font, thistext, font_color, bg_color);
-  if (text_surface != NULL) {
-   SDL_BlitSurface(text_surface, NULL, screen, &rect);
-   SDL_FreeSurface(text_surface);
-  }
-}
-
 
 
 void UpdateAll(void) {
-  SDL_UpdateRect(screen, 0, 0, 900, 768);
+  SDL_RenderPresent(mwRenderer);
 }
 
 
 void ClearAll(void) {
-  SDL_Rect rect1={0,
-      PREVIEW_FONT_HEIGHT * 8,
-                 TENSOR_PREVIEW_WIDTH + (PREVIEW_BORDER_THICKNESS * 2) + 1,
-                 768 - (PREVIEW_FONT_HEIGHT * 8)};
-
-  SDL_Rect rect2={TENSOR_PREVIEW_WIDTH + (PREVIEW_BORDER_THICKNESS * 2) + 1,
-                  0,
-                  900 - TENSOR_PREVIEW_WIDTH + (PREVIEW_BORDER_THICKNESS * 2),
-                  768};
-
-  SDL_FillRect(screen, &rect1, 0);
-  SDL_FillRect(screen, &rect2, 0);
+  SDL_SetRenderDrawColor(mwRenderer, 0, 0, 0, 255);
+  SDL_RenderClear(mwRenderer);
 }
 
 // Set some dimensions according to orientation
 void SetDims(void) {
-  if (tensor_landscape_p) {
+   if (tensor_landscape_p) {
     TENSOR_WIDTH_EFF = TENSOR_HEIGHT;
     TENSOR_HEIGHT_EFF = TENSOR_WIDTH;
 
@@ -2803,70 +2578,54 @@ void SetDims(void) {
     TENSOR_HEIGHT_EFF = TENSOR_HEIGHT;
   }
 
-  if (!ttemp) {
-    SDL_FreeSurface(ttemp);
+  if (!previewSurface) {
+    SDL_FreeSurface(previewSurface);
   }
 
-  ttemp = SDL_CreateRGBSurface(SDL_SWSURFACE, TENSOR_WIDTH_EFF, TENSOR_HEIGHT_EFF, 32, 0,0,0,0);
-  if (ttemp == NULL) {
+  previewSurface = SDL_CreateRGBSurface(0, TENSOR_WIDTH_EFF, TENSOR_HEIGHT_EFF,
+    32, 0, 0, 0, 0);
+  if (previewSurface == NULL) {
     fprintf(stderr, "Unable to allocate a temp buffer: %s\n", SDL_GetError());
     exit(EXIT_FAILURE);
   }
 }
 
 void DrawRectangle(int x, int y, int w, int h, color_t color) {
-  rectangleRGBA(screen, x, y, x + (w - 1), y + (h - 1),
-                (Uint8) color.r, (Uint8) color.g, (Uint8) color.b, (Uint8) color.a);
+  rectangleRGBA(mwRenderer, x, y, x + (w - 1), y + (h - 1),
+    (Uint8) color.r, (Uint8) color.g, (Uint8) color.b, (Uint8) color.a);
 }
 
 void DrawBox(int x, int y, int w, int h, color_t color) {
-  boxRGBA(screen, x, y, x + (w - 1), y + (h - 1),
-                (Uint8) color.r, (Uint8) color.g, (Uint8) color.b, (Uint8) color.a);
+  boxRGBA(mwRenderer, x, y, x + (w - 1), y + (h - 1),
+    (Uint8) color.r, (Uint8) color.g, (Uint8) color.b, (Uint8) color.a);
 }
 
-void DrawImage(moment_t *currentMoment) {
-  SDL_Rect location;
-  SDL_Surface *ttemp;
 
-  location.x = 0;
-  location.y = 0;
-  ttemp = SDL_CreateRGBSurface(SDL_SWSURFACE, TENSOR_WIDTH_EFF, TENSOR_HEIGHT_EFF, 32, 0,0,0,0);
-  SDL_BlitSurface(image, NULL, ttemp, &location);
-  SurfaceToFB(currentMoment->fb, ttemp);
-  SDL_FreeSurface(ttemp);
-}
-
-//void DrawImage2(moment_t *currentMoment) {
-void DrawImage2(double angle, double expansion, int aliasmode, unsigned char *fb_dst) {
-  SDL_Surface *tttemp;
+// Draw an image to the output with appropriate rotation and expansion.
+// Rotation is acheived using SDL_gfx primitive rotozoom.
+void DrawImage(double angle, double expansion, int aliasmode, unsigned char *fb_dst) {
+  SDL_Surface *rotatedImage;
   SDL_Rect offset;
 
-  // Rotation is acheived using SDL_gfx primitive rotozoom.
-  // Copy the frame buffer to the sdl surface.
-  // FBToSurface(ttemp, &fb_src[0]);
-  // Already have image.
-
   // Rotate / scale it.
-  tttemp = rotozoomSurface (image, angle, expansion, (aliasmode == YES) ? 1 : 0);
+  rotatedImage = rotozoomSurface (imageSeed, angle, expansion, (aliasmode == YES) ? 1 : 0);
+  if (!rotatedImage) {
+    fprintf(stderr, "Error rotating image: %s\n", SDL_GetError());
+    return;
+  }
 
-  offset.x = 0 - (tttemp->w - ttemp->w) / 2;
-  offset.y = 0 - (tttemp->h - ttemp->h) / 2;
-  //dst.x = UserCenterX - ((MposX - CposX) * BlockRectW) - (W / 2);
+  // This clips the image and recenters it on the preview window.
+  offset.x = 0 - (rotatedImage->w - previewSurface->w) / 2;
+  offset.y = 0 - (rotatedImage->h - previewSurface->h) / 2;
+  SDL_BlitSurface(rotatedImage, NULL, previewSurface, &offset);
 
-  // dst.y = UserCenter_y
-  // - (Me.pos.y-CurBullet->pos.y)*Block_Rect.w-CurBullet->SurfacePointer[ PhaseOfBullet ]->h/2;
-
-  //SDL_BlitSurface(SDL_Surface *src, SDL_Rect *srcrect, SDL_Surface *dst, SDL_Rect *dstrect);
-  boxRGBA(ttemp, 0, 0, TENSOR_WIDTH_EFF, TENSOR_HEIGHT_EFF, 0, 0, 0, 255);
-  SDL_BlitSurface(tttemp, NULL, ttemp, &offset);
-
-  //SDL_BlitSurface()
-  //SDL_BlitSurface(temp2, NULL, visuals->Screen, &destinationRectangle);
   // Copy the result back to the frame buffer.
-  SurfaceToFB(fb_dst, ttemp);
-  SDL_FreeSurface(tttemp);
+  SurfaceToFB(fb_dst, previewSurface);
+  SDL_FreeSurface(rotatedImage);
 }
 
+
+// Draw the borders around the preview output.
 void DrawPreviewBorder(void) {
   int w, h, w2, h2;
 
@@ -2876,7 +2635,6 @@ void DrawPreviewBorder(void) {
 
   // Erase the old preview.
   DrawBox(0, 0, h, w, black);
-  SDL_UpdateRect(screen, 0, 0, h + 1, w + 1);
 
   // Draw the new border.
   DrawRectangle(0, 0, w, h, white);
@@ -2903,11 +2661,7 @@ void DrawPreviewBorder(void) {
                   (w2 / 3) + 1, h2, gray);
   }
 
-  SDL_UpdateRect(screen, 0, 0, w + 1, h + 1);
-}
-
-void DrawID(void) {
-  // I'm a function!
+  SDL_RenderPresent(mwRenderer);
 }
 
 
@@ -3042,6 +2796,14 @@ void ClearBlue(moment_t *currentMoment) {
 
 int min(int a, int b) {
   if (a < b) {
+    return a;
+  } else {
+    return b;
+  }
+}
+
+int max(int a, int b) {
+  if (b < a) {
     return a;
   } else {
     return b;

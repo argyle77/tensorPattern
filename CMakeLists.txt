@@ -1,4 +1,4 @@
-# Tensor Control Project CMAKELists.txt 
+# Tensor Control Project CMAKELists.txt
 # Created 2014_11_14 by Argyle
 cmake_minimum_required(VERSION 2.6)
 
@@ -14,28 +14,18 @@ set (VERSION_PRERELEASE)
 
 if ("${VERSION_PRERELEASE}" STREQUAL "")
   message(STATUS "Configuring build version v" ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH})
-else()  
+else()
   message(STATUS "Configuring build version v" ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}-${VERSION_PRERELEASE})
 endif()
 
 # gcc flags
 add_compile_options(-Wall -g)
 
-# Libraries 
-find_package(SDL)
-if ( NOT SDL_FOUND )
-  message(FATAL_ERROR "SDL not found! Please install libsdl1.2-dev!")
-endif ( NOT SDL_FOUND )
-
-find_package(SDL_ttf)
-if ( NOT SDL_TTF_FOUND )
-  message(FATAL_ERROR "SDL TTF not found! Please install libsdl-ttf2.0-dev!")
-endif ( NOT SDL_TTF_FOUND )
-
-find_package(SDL_image)
-if ( NOT SDL_IMAGE_FOUND )
-  message(FATAL_ERROR "SDL IMAGE not found! Please install libsdl-image1.2-dev!")
-endif ( NOT SDL_IMAGE_FOUND )
+# Libraries
+include(FindPkgConfig)
+PKG_SEARCH_MODULE(SDL2 REQUIRED sdl2)
+PKG_SEARCH_MODULE(SDL2IMAGE REQUIRED SDL2_image>=2.0.0)
+PKG_SEARCH_MODULE(SDL2TTF REQUIRED SDL2_ttf>=2.0.0)
 
 # Verbose output (or use: make VERBOSE=1)
 #set ( CMAKE_VERBOSE_MAKEFILE on )
