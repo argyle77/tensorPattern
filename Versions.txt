@@ -46,9 +46,14 @@ Version 3.8:
   Added to info display, added image load, fps control, bi-planes.
   Released to pdf and decom 2010 lists.
 
+Version 3.9:
+  Upgraded to use SDL2.
+
 Version 4.0:
-  ?
+  Dead-end experiments with GTK / Glade
+  Do not continue the project from this point.
 
 Version 4.1:
-  ?
+  Dead-end experiments with GTK / Glade
+  Do not continue the project from this point.
 
