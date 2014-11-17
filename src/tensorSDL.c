@@ -22,18 +22,13 @@
 
 
 // Defines
-#define YES 0  // Oh for the love of god,
-#define NO 1   // this will never do.
+#define NO 0
+#define YES 1
 #define OFF 0
 #define ON 1
-#define PASS 0
-#define FAIL -1
-#define AUTO 0
-#define MANUAL 1
 #define FOREGROUND 0
 #define BACKGROUND 1
 #define FOREVER for(;;)
-#define PI 3.14159265
 #define RANDOM_LIMIT 1000
 
 // Tensor output
@@ -84,7 +79,7 @@
 // Types
 
 // 32 bit Pixel Color, which is, as yet, sadly underused.
-typedef struct {
+typedef struct color_t {
   unsigned char r;
   unsigned char g;
   unsigned char b;
@@ -92,12 +87,12 @@ typedef struct {
 } color_t;
 
 // Scroller directions
-typedef enum {
+typedef enum dir_e {
   UP = 0, LEFT, DOWN, RIGHT
 } dir_e;
 
 // Better scroller directions
-typedef enum {
+typedef enum scr_e{
   SCR_HOLD, SCR_UL, SCR_U, SCR_UR, SCR_L, SCR_R, SCR_DL, SCR_D, SCR_DR, SCR_COUNT
 } scr_e;
 
@@ -112,12 +107,12 @@ typedef enum {
 #define PLANE_MAGENTA (PLANE_RED | PLANE_BLUE)
 #define PLANE_ALL     (PLANE_RED | PLANE_BLUE | PLANE_GREEN)
 
-typedef enum {
+typedef enum fade_mode_e{
   FADE_TO_ZERO, FADE_MODULAR, FADE_HALF
 } fade_mode_e;
 
 // Pattern modes
-typedef struct {
+typedef struct modes_t {
   int textScroller;
   int cellAutoFun;
   int bouncer;
@@ -151,15 +146,15 @@ typedef struct {
   int image;
 } modes_t;
 
-typedef enum {
+typedef enum colorCycles_e{
   RGB, CMY, RYGCBM, RAINBOW, RANDOM
 } colorCycles_e;
 
-typedef enum {RED_E, ORANGE_E, YELLOW_E, GREEN_E, CYAN_E, BLUE_E, MAGENTA_E,
+typedef enum color_e {RED_E, ORANGE_E, YELLOW_E, GREEN_E, CYAN_E, BLUE_E, MAGENTA_E,
               WHITE_E, LIGHT_GRAY_E, GRAY_E, DARK_GREY_E, BLACK_E} color_e;
 
 // Parameters
-typedef struct {
+typedef struct parms_t{
   color_e foreground;
   color_e background;
   int fadeout_dec;
@@ -183,7 +178,7 @@ typedef struct {
   int delay;
 } parms_t;
 
-typedef struct {
+typedef struct text_info_t{
   char textBuffer[TEXT_BUFFER_SIZE];
   int tindex;  // How many chars in.
   int imaginaryIndex;  // How many pixel cols in?
@@ -191,7 +186,7 @@ typedef struct {
   dir_e lastDirection;
 } text_info_t;
 
-typedef struct {
+typedef struct moment_t{
   modes_t mode;
   parms_t coefs;
   text_info_t text;
@@ -199,7 +194,7 @@ typedef struct {
 } moment_t;
 
 // A list of the items to update for more information.
-typedef enum {
+typedef enum infoList_e {
   INFO_CELL, INFO_BOUNCE, INFO_FADE, INFO_DIFFUSE, INFO_TEXTMODE, INFO_ROLL,
   INFO_SCROLL, INFO_DOTS, INFO_FG, INFO_BG, INFO_RANDOM, INFO_FADEMODE,
   INFO_ROTOZOOM, INFO_ROTOZOOM2, INFO_ALIAS, INFO_MULTIPLY, INFO_TEXTLEN,
@@ -208,7 +203,8 @@ typedef enum {
   INFO_DIR, INFO_FGC, INFO_BGC, INFO_NOW, INFO_TEXTROW, INFO_TEXTSTAG,
   INFO_SIDEBAR, INFO_CLEARRED, INFO_CLEARGREEN, INFO_CLEARBLUE,
   INFO_SHIFTRED, INFO_SHIFTGREEN, INFO_SHIFTBLUE, INFO_FPS, INFO_DELAY,
-  INFO_SHIFTCYAN, INFO_SHIFTYELLOW, INFO_SHIFTMAGENTA, INFO_IMAGE, INFO_COUNT
+  INFO_SHIFTCYAN, INFO_SHIFTYELLOW, INFO_SHIFTMAGENTA, INFO_IMAGE,
+  INFO_COUNT  // Always last.
 } infoList_e;
 
 // The location of those items on screen (row, col#)
@@ -359,9 +355,7 @@ int main(int argc, char *argv[]) {
   // Variable declarations
   int i;
   unsigned char exitProgram = 0;
-
   char caption_temp[100];
-
   SDL_Event event;
 
   // Some inits
@@ -419,7 +413,7 @@ int main(int argc, char *argv[]) {
   // Draw a border around the preview
   DrawPreviewBorder();
 
-   sleep(1);  // I don't remember.
+  sleep(1);  // I don't remember.
 
   // Set up the keyboard and window access.
   SDL_EnableUNICODE(1);
@@ -441,11 +435,11 @@ int main(int argc, char *argv[]) {
   }
 
   // Init tensor.
-  #ifdef USE_TENSOR
-    tensor_init();
-    //tensor_landscape_p = 1;  // Landscape mode.
-    tensor_landscape_p = 0;  // Portrait mode.
-  #endif
+#ifdef USE_TENSOR
+  tensor_init();
+  //tensor_landscape_p = 1;  // Landscape mode.
+  tensor_landscape_p = 0;  // Portrait mode.
+#endif
 
   // Set up moment 0.
   currentMode->alias = NO;
