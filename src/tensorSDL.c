@@ -61,7 +61,6 @@
 #define INITIAL_ROTATION_ANGLE2 10
 
 // Some colors
-#define PALETTE_COUNT 12
 #define COLOR_WHITE {.r = 255, .g = 255, .b = 255, .a = 255}
 #define COLOR_LIGHT_GRAY {.r = 191, .g = 191, .b = 191, .a = 255}
 #define COLOR_GRAY {.r = 127, .g = 127, .b = 127, .a = 255}
@@ -74,7 +73,6 @@
 #define COLOR_CYAN {.r = 0, .g = 255, .b = 255, .a = 255}
 #define COLOR_BLUE {.r = 0, .g = 0, .b = 255, .a = 255}
 #define COLOR_MAGENTA {.r = 255, .g = 0, .b = 255, .a = 255}
-
 
 // Types
 
@@ -193,73 +191,91 @@ typedef struct moment_t{
   unsigned char fb[TENSOR_BYTES];  // Tensor frame buffer
 } moment_t;
 
-// A list of the items to update for more information.
-typedef enum infoList_e {
-  INFO_CELL, INFO_BOUNCE, INFO_FADE, INFO_DIFFUSE, INFO_TEXTMODE, INFO_ROLL,
-  INFO_SCROLL, INFO_DOTS, INFO_FG, INFO_BG, INFO_RANDOM, INFO_FADEMODE,
-  INFO_ROTOZOOM, INFO_ROTOZOOM2, INFO_ALIAS, INFO_MULTIPLY, INFO_TEXTLEN,
-  INFO_TEXT, INFO_INC, INFO_DIFF, INFO_EXP, INFO_DEC, INFO_ANGLE2,
-  INFO_RSPEED, INFO_ANGLE1, INFO_MULT, INFO_ROT1SPEED, INFO_DOTF, INFO_CYCLE,
-  INFO_DIR, INFO_FGC, INFO_BGC, INFO_NOW, INFO_TEXTROW, INFO_TEXTSTAG,
-  INFO_SIDEBAR, INFO_CLEARRED, INFO_CLEARGREEN, INFO_CLEARBLUE,
-  INFO_SHIFTRED, INFO_SHIFTGREEN, INFO_SHIFTBLUE, INFO_FPS, INFO_DELAY,
-  INFO_SHIFTCYAN, INFO_SHIFTYELLOW, INFO_SHIFTMAGENTA, INFO_IMAGE,
-  INFO_COUNT  // Always last.
-} infoList_e;
+// Display menu items
+typedef struct displayText_t {
+  int line;
+  int col;
+  char *text;
+} displayText_t;
 
-// The location of those items on screen (row, col#)
-// What a mess.
-const int infoLoc[INFO_COUNT][2] = {
-  /* INFO_CELL */      {23,1},
-  /* INFO_BOUNCE */    {24,1},
-  /* INFO_FADE */      {25,1},
-  /* INFO_DIFFUSE */   {26,1},
-  /* INFO_TEXTMODE */  {27,1},
-  /* INFO_ROLL */      {28,1},
-  /* INFO_SCROLL */    {29,1},
-  /* INFO_DOTS */      {34,1},
-  /* INFO_FG */        {35,1},
-  /* INFO_BG */        {36,1},
-  /* INFO_RANDOM */    {37,1},
-  /* INFO_FADEMODE */  {38,1},
-  /* INFO_ROTOZOOM */  {40,1},
-  /* INFO_ROTOZOOM2 */ {42,1},
-  /* INFO_ALIAS */     {43,1},
-  /* INFO_MULTIPLY */  {44,1},
-  /* INFO_TEXTLEN */   {39,3},
-  /* INFO_TEXT */      {52,0},
-  /* INFO_INC */       {3,3},
-  /* INFO_DIFF */      {5,3},
-  /* INFO_EXP */       {6,3},
-  /* INFO_DEC */       {7,3},
-  /* INFO_ANGLE2 */    {8,3},
-  /* INFO_RSPEED */    {9,3},
-  /* INFO_ANGLE1 */    {10,3},
-  /* INFO_MULT */      {11,3},
-  /* INFO_ROT1SPEED */ {12,3},
-  /* INFO_DOTF */      {13,3},
-  /* INFO_CYCLE */     {14,3},
-  /* INFO_DIR */       {15,3},
-  /* INFO_FGC */       {21,3},
-  /* INFO_BGC */       {22,3},
-  /* INFO_NOW */       {27,3},
-  /* INFO_TEXTROW */   {37,3},
-  /* INFO_TEXTSTAG */  {38,3},
-  /* INFO_SIDEBAR */   {45,1},
-  /* INFO_CLEARRED */  {46, 1},
-  /* INFO_CLEARGREEN */ {47, 1},
-  /* INFO_CLEARBLUE */ {48, 1},
-  /* INFO_SHIFTRED */ {44,3},
-  /* INFO_SHIFTGREEN */ {45,3},
-  /* INFO_SHIFTBLUE */ {46,3},
-  /* INFO_FPS */       {21,1},
-  /* INFO_DELAY */     {16, 3},
-  /* INFO_SHIFTCYAN */ {47, 3},
-  /* INFO_SHIFTYELLOW */ {48, 3},
-  /* INFO_SHIFTMAGENTA */ {49,3},
-  /* INFO_IMAGE */  {49,1 }
+const displayText_t displayText[] = {
+  {21, 0, "Modes:                       FPS:"},
+  {23, 0, "<ctrl> q - CellAutoFun"},
+  {24, 0, "<ctrl> w - Bouncer"},
+  {25, 0, "<ctrl> e - Fader"},
+  {26, 0, "<ctrl> r - Diffuse"},
+  {27, 0, "<ctrl> t - Text"},
+  {28, 0, "<ctrl> y - Roller"},
+  {29, 0, "<ctrl> u - Scroller"},
+  {30, 0, "<ctrl> i - Horizontal bars!"},
+  {31, 0, "<ctrl> o - Vertical bars!"},
+  {32, 0, "<crtl> p - Foreground color all!"},
+  {33, 0, "<crtl> a - Background color all!"},
+  {34, 0, "<ctrl> s - Random dots"},
+  {35, 0, "<ctrl> d - FG cycle"},
+  {36, 0, "<ctrl> f - BG cycle"},
+  {37, 0, "<ctrl> g - Random mode"},
+  {38, 0, "<ctrl> h - Fader mode"},
+  {39, 0, "<ctrl> j - Reset text to start."},
+  {40, 0, "<ctrl> k - Roto1 mode"},
+  {41, 0, "<ctrl> l - All modes off."},
+  {42, 0, "<ctrl> z - Roto2 mode"},
+  {43, 0, "<ctrl> x - Roto anti-alias"},
+  {44, 0, "<ctrl> c - Multiplier"},
+  {45, 0, "<ctrl> n - SideBar"},
+  {46, 0, "<ctrl> m - No Red"},
+  {47, 0, "<ctrl> , - No Green"},
+  {48, 0, "<ctrl> . - No Blue"},
+  {49, 0, "<ctrl> <alt> p - Image Toggle"},
+  {51, 0, "Text Buffer:"},
+  {1, 2, "Coeffs: (3 Keys = Increment, Reset, Decrement)"},
+  {3, 2, "<alt> m  ,  . - Float step size"},
+  {5, 2, "<alt> q  w  e - Diffusion"},
+  {6, 2, "<alt> a  s  d - Expansion"},
+  {7, 2, "<alt> z  x  c - Fade Decrement"},
+  {8, 2, "<alt> r  t  y - Roto2 Angle"},
+  {9, 2, "<alt> f  g  h - Rainbow Speed"},
+  {10, 2, "<alt> v  b  n - Roto1 Angle"},
+  {11, 2, "<alt> u  i  o - Multiplier"},
+  {12, 2, "<alt> j  k  l - Roto1 Speed"},
+  {13, 2, "<alt> ; - Random dot period"},
+  {14, 2, "<alt> p - Color cycle type"},
+  {15, 2, "<alt> <arrows> - Scroller direction"},
+  {16, 2, "<ctrl> <alt> u i o - Frame delay(ms)"},
+  {19, 2, "Colors:"},
+  {21, 2, "<ctrl> <alt> q w - foreground:"},
+  {22, 2, "<ctrl> <alt> a s - background:"},
+  {25, 2, "Moments:"},
+  {27, 2, "<ctrl> 0-9 - Load Moment. Current:"},
+  {28, 2, "<ctrl> <alt> 0-9 - Copy moment over current."},
+  {29, 2, "<alt> 0-9 - Load another moment's image buffer."},
+  {32, 2, "Text Entry:"},
+  {34, 2, "<Unmodified keys> - Add text."},
+  {35, 2, "<backspace> - Delete last letter."},
+  {36, 2, "<delete> - Erase all text."},
+  {37, 2, "<crtl> <alt> z x - vertical offset:"},
+  {38, 2, "<ctrl> b - text mode:"},
+  {39, 2, "Text Buffer Size:"},
+  {42, 2, "More Modes:"},
+  {44, 2, "<ctrl> [ - Red Plane:"},
+  {45, 2, "<ctrl> ] - Green Plane:"},
+  {46, 2, "<ctrl> \\ - Blue Plane:"},
+  {47, 2, "<ctrl> <alt> [ - Cyan Plane:"},
+  {48, 2, "<ctrl> <alt> ] - Yellow Plane:"},
+  {49, 2, "<ctrl> <alt> \\ - Magenta Plane:"},
+  {51, 2, "<esc> - Quit."}
 };
+#define DISPLAY_TEXT_SIZE (sizeof(displayText) / sizeof(displayText_t))
 
+// Display enumeration strings.
+char *shiftText[] = {" Hold", "   Up", " Left", " Down", "Right"};
+char *dirText[] = {"   Up", " Left", " Down", "Right"};
+char *colorCycleText[] = { "      R-G-B", "      C-M-Y", "R-Y-G-C-B-M",
+  "    RAINBOW", "     RANDOM"};
+char *fadeModeText[] = {"Limited", "Modular"};
+char *staggerText[] = {"       8Row", "9RowStagger", "10RowBorder", "     FullBG"};
+char *paletteText[] = { "    red", " orange", " yellow", "  green", "   cyan",
+  "   blue", "magenta", "  white", "    3/4", "    1/2", "    1/4", "  black" };
 
 // Constants
 const color_t red = COLOR_RED;
@@ -274,16 +290,14 @@ const color_t light_gray = COLOR_LIGHT_GRAY;
 const color_t gray = COLOR_GRAY;
 const color_t dark_gray = COLOR_DARK_GRAY;
 const color_t black = COLOR_BLACK;
-const color_t palette[PALETTE_COUNT] = {
+const color_t palette[] = {
   COLOR_RED, COLOR_ORANGE, COLOR_YELLOW, COLOR_GREEN, COLOR_CYAN, COLOR_BLUE,
   COLOR_MAGENTA, COLOR_WHITE, COLOR_LIGHT_GRAY, COLOR_GRAY, COLOR_DARK_GRAY,
   COLOR_BLACK };
-const char *palette_char[] = {
-  "red", "orange", "yellow", "green", "cyan", "blue", "magenta", "white", "3/4",
-  "1/2", "1/4", "black" };
+#define PALETTE_COUNT (sizeof(palette) / sizeof(color_t))
 
 // Globals - We do love our globals.
-TTF_Font *font;
+TTF_Font *screenFont;
 SDL_Window *mainWindow = NULL;
 SDL_Renderer *mwRenderer = NULL;
 SDL_Surface *previewSurface = NULL;
@@ -341,7 +355,7 @@ void SetPixelA(int x, int y, color_t color, unsigned char *buffer);
 void ClearRed(moment_t *currentMoment);
 void ClearGreen(moment_t *currentMoment);
 void ClearBlue(moment_t *currentMoment);
-void HandleInput(SDL_Event *key_event);
+int HandleInput(SDL_Event *key_event);
 void ProcessModes(void);
 void MainLoop(void);
 Uint32 TriggerProcessing(Uint32 interval, void *param);
@@ -351,6 +365,8 @@ void SetPixelByPlane(int x, int y, color_t color, unsigned char plane, unsigned 
 void DrawImage(double angle, double expansion, int aliasmode, unsigned char *fb_dst);
 int max(int a, int b);
 int min(int a, int b);
+void WriteBool(int value, int row, int col);
+void WriteLineAdjusted(char * thisText, int line, int col, int offset, color_t color);
 
 // Main
 int main(int argc, char *argv[]) {
@@ -431,8 +447,8 @@ int main(int argc, char *argv[]) {
     printf("Couldn't initialize TTF: %s\n", TTF_GetError());
     exit(EXIT_FAILURE);
   } else {
-    font=TTF_OpenFont("font.ttf", PREVIEW_FONT_SIZE);
-    if(!font) {
+    screenFont = TTF_OpenFont("font.ttf", PREVIEW_FONT_SIZE);
+    if(!screenFont) {
       fprintf(stderr, "TTF_OpenFont: %s\n", TTF_GetError());
       exit(EXIT_FAILURE);
     }
@@ -545,7 +561,9 @@ int main(int argc, char *argv[]) {
     while (SDL_PollEvent(&event)) {
       switch(event.type) {
         case SDL_KEYDOWN:
-          HandleInput(&event);
+          if (!HandleInput(&event)) {
+            exitProgram = 1;
+          }
           break;
 
         // User events are either an fps counter update, or calculating and writing a new frame.
@@ -568,7 +586,8 @@ int main(int argc, char *argv[]) {
           break;
 
        case SDL_WINDOWEVENT:
-         if (event.window.event == SDL_WINDOWEVENT_RESIZED) {
+         if ((event.window.event == SDL_WINDOWEVENT_RESIZED) ||
+             (event.window.event == SDL_WINDOWEVENT_EXPOSED)) {
            ClearAll();
            DrawPreviewBorder();
            InitInfoDisplay();
@@ -586,6 +605,13 @@ int main(int argc, char *argv[]) {
       doprocess = NO;
       frames++;
       MainLoop();
+    } else {
+      // Large delays make the CPU go way up.  Its because were stuck in a
+      // tight loop, polling for events that never occur.  Best to get out of
+      // the way...
+      if (currentParms->delay > 30) {
+        nanosleep((struct timespec[]) {{0,1000000}}, NULL);  // 1ms.
+      }
     }
 
     if (exitProgram) {
@@ -594,8 +620,8 @@ int main(int argc, char *argv[]) {
   }  // End program loop
 
   // Cleanup.
-  TTF_CloseFont(font);
-  font=NULL; // to be safe...?
+  TTF_CloseFont(screenFont);
+  screenFont = NULL; // to be safe...?
   TTF_Quit();
   exit(EXIT_SUCCESS);  // Is it?
 }
@@ -811,7 +837,7 @@ void ProcessModes(void) {
 }
 
 // Key press processing.
-void HandleInput(SDL_Event *key_event) {
+int HandleInput(SDL_Event *key_event) {
 
   // <ctrl> <alt>
   if ((key_event->key.keysym.mod & KMOD_ALT) && (key_event->key.keysym.mod & KMOD_CTRL)) {
@@ -846,7 +872,13 @@ void HandleInput(SDL_Event *key_event) {
   } else {
     if (key_event->key.keysym.sym < 0x80 && key_event->key.keysym.sym > 0) {
       switch(key_event->key.keysym.sym) {
+        case SDLK_ESCAPE:
+          // This will exit the program.
+          return 0;
+          break;
+
         case SDLK_BACKSPACE:
+          // Reduce the buffer by 1 character off the end.
           currentText->tindex--;
           if (currentText->tindex < 0) {
             currentText->tindex = 0;
@@ -855,6 +887,7 @@ void HandleInput(SDL_Event *key_event) {
           break;
 
         case SDLK_RETURN:
+          // Um, place a carriage return in the buffer?
           currentText->textBuffer[currentText->tindex] = '\n';
           currentText->textBuffer[currentText->tindex + 1] = 0x00;
           currentText->tindex++;
@@ -863,22 +896,106 @@ void HandleInput(SDL_Event *key_event) {
           }
           break;
 
-        case SDLK_ESCAPE:
+        case SDLK_DELETE:
+          // Erase the entire buffer by settings its size to 0 and terminating it.
           currentText->tindex = 0;
           currentText->textBuffer[0] = 0x00;
           break;
 
         default:
-          currentText->textBuffer[currentText->tindex] = (char)key_event->key.keysym.sym;
+          // Place the pressed key into the text buffer.
+          if (key_event->key.keysym.mod & KMOD_SHIFT) {
+            // Shift was pushed.
+            if (key_event->key.keysym.sym <= 122 && key_event->key.keysym.sym >= 97) {
+              // Capitalize for a - z.
+              currentText->textBuffer[currentText->tindex] = (char)key_event->key.keysym.sym - 32;
+            } else {
+              // Lookup the symbols for the rest of the keys.
+              switch (key_event->key.keysym.sym) {
+                case SDLK_1:
+                  currentText->textBuffer[currentText->tindex] = '!';
+                  break;
+                case SDLK_2:
+                  currentText->textBuffer[currentText->tindex] = '@';
+                  break;
+                case SDLK_3:
+                  currentText->textBuffer[currentText->tindex] = '#';
+                  break;
+                case SDLK_4:
+                  currentText->textBuffer[currentText->tindex] = '$';
+                  break;
+                case SDLK_5:
+                  currentText->textBuffer[currentText->tindex] = '%';
+                  break;
+                case SDLK_6:
+                  currentText->textBuffer[currentText->tindex] = '^';
+                  break;
+                case SDLK_7:
+                  currentText->textBuffer[currentText->tindex] = '&';
+                  break;
+                case SDLK_8:
+                  currentText->textBuffer[currentText->tindex] = '*';
+                  break;
+                case SDLK_9:
+                  currentText->textBuffer[currentText->tindex] = '(';
+                  break;
+                case SDLK_0:
+                  currentText->textBuffer[currentText->tindex] = ')';
+                  break;
+                case SDLK_BACKSLASH:
+                  currentText->textBuffer[currentText->tindex] = '|';
+                  break;
+                case SDLK_BACKQUOTE:
+                  currentText->textBuffer[currentText->tindex] = '~';
+                  break;
+                case SDLK_MINUS:
+                  currentText->textBuffer[currentText->tindex] = '_';
+                  break;
+                case SDLK_EQUALS:
+                  currentText->textBuffer[currentText->tindex] = '+';
+                  break;
+                case SDLK_LEFTBRACKET:
+                  currentText->textBuffer[currentText->tindex] = '{';
+                  break;
+                case SDLK_RIGHTBRACKET:
+                  currentText->textBuffer[currentText->tindex] = '}';
+                  break;
+                case SDLK_SEMICOLON:
+                  currentText->textBuffer[currentText->tindex] = ':';
+                  break;
+                case SDLK_COMMA:
+                  currentText->textBuffer[currentText->tindex] = '<';
+                  break;
+                case SDLK_PERIOD:
+                  currentText->textBuffer[currentText->tindex] = '>';
+                  break;
+                case SDLK_SLASH:
+                  currentText->textBuffer[currentText->tindex] = '?';
+                  break;
+                case SDLK_QUOTE:
+                  currentText->textBuffer[currentText->tindex] = '"';
+                  break;
+                default:
+                  break;
+              }
+            }
+          } else {
+            // Unmodified key entry.
+            currentText->textBuffer[currentText->tindex] = (char)key_event->key.keysym.sym;
+          }
+          // Advance the terminating null and increase the buffer size.
           currentText->textBuffer[currentText->tindex + 1] = 0x00;
           currentText->tindex++;
+
+          // But not too much.
           if (currentText->tindex >= (sizeof(currentText->textBuffer) - 2)) {
             currentText->tindex--;
           }
-          break;
-      }
-    }  // End normal keys.
+          break;  // End the default case (most keys).
+      } // End normal key switch.
+    }  // End normal key else.
   }  // End elses between modifier keys.
+  return 1;
 }
 
 // Weighted Averager.
@@ -1563,13 +1680,6 @@ int ModeAlter(int thiskey, moment_t *moments, int now) {
   text_info_t *text = &moment->text;
 
   switch(thiskey) {
-    case SDLK_ESCAPE:
-      printf("CTRL-ESC pushed. Exiting Program.\n");
-      TTF_CloseFont(font);
-      font=NULL; // to be safe...
-      TTF_Quit();
-      exit(EXIT_SUCCESS);
-      break;
 
     case SDLK_t:
       mode->textScroller = (mode->textScroller + 1) % 2;
@@ -2076,440 +2186,103 @@ void ColorCycle(parms_t *parms, int fb_mode) {
   }
 }
 
-// You can put your head in your hands here.
+
+// Write the static menu information to the display.
 void InitInfoDisplay(void) {
-
-    char text[1024];
-    int line;
-
-    line = 21;
-
-    snprintf(text, sizeof(text), "Modes: ");
-    WriteLine(text, line++, 0, white);
-
-    line++;
-
-    snprintf(text, sizeof(text), "<ctrl> q - CellAutoFun");
-    WriteLine(text, line++, 0, white);
-
-    snprintf(text, sizeof(text), "<ctrl> w - Bouncer");
-    WriteLine(text, line++, 0, white);
-
-    snprintf(text, sizeof(text), "<ctrl> e - Fader");
-    WriteLine(text, line++, 0, white);
-
-    snprintf(text, sizeof(text), "<ctrl> r - Diffuse");
-    WriteLine(text, line++, 0, white);
-
-    snprintf(text, sizeof(text), "<ctrl> t - Text");
-    WriteLine(text, line++, 0, white);
-
-    snprintf(text, sizeof(text), "<ctrl> y - Roller");
-    WriteLine(text, line++, 0, white);
-
-    snprintf(text, sizeof(text), "<ctrl> u - Scroller");
-    WriteLine(text, line++, 0, white);
-
-    snprintf(text, sizeof(text), "<ctrl> i - Horizontal bars!");
-    WriteLine(text, line++, 0, white);
-
-    snprintf(text, sizeof(text), "<ctrl> o - Vertical bars!");
-    WriteLine(text, line++, 0, white);
-
-    snprintf(text, sizeof(text), "<crtl> p - Foreground color all!");
-    WriteLine(text, line++, 0, white);
-
-    snprintf(text, sizeof(text), "<crtl> a - Background color all!");
-    WriteLine(text, line++, 0, white);
-
-    snprintf(text, sizeof(text), "<ctrl> s - Random dots");
-    WriteLine(text, line++, 0, white);
-
-    snprintf(text, sizeof(text), "<ctrl> d - FG cycle");
-    WriteLine(text, line++, 0, white);
-
-    snprintf(text, sizeof(text), "<ctrl> f - BG cycle");
-    WriteLine(text, line++, 0, white);
-
-    snprintf(text, sizeof(text), "<ctrl> g - Random mode");
-    WriteLine(text, line++, 0, white);
-
-    snprintf(text, sizeof(text), "<ctrl> h - Fader mode");
-    WriteLine(text, line++, 0, white);
-
-    snprintf(text, sizeof(text), "<ctrl> j - Reset text to start.");
-    WriteLine(text, line++, 0, white);
-
-    snprintf(text, sizeof(text), "<ctrl> k - Roto1 mode");
-    WriteLine(text, line++, 0, white);
-
-    snprintf(text, sizeof(text), "<ctrl> l - All modes off.");
-    WriteLine(text, line++, 0, white);
-
-    snprintf(text, sizeof(text), "<ctrl> z - Roto2 mode");
-    WriteLine(text, line++, 0, white);
-
-    snprintf(text, sizeof(text), "<ctrl> x - Roto anti-alias");
-    WriteLine(text, line++, 0, white);
-
-    snprintf(text, sizeof(text), "<ctrl> c - Multiplier");
-    WriteLine(text, line++, 0, white);
-
-    snprintf(text, sizeof(text), "<ctrl> n - SideBar");
-    WriteLine(text, line++, 0, white);
-
-    snprintf(text, sizeof(text), "<ctrl> m - No Red");
-    WriteLine(text, line++, 0, white);
-
-    snprintf(text, sizeof(text), "<ctrl> , - No Green");
-    WriteLine(text, line++, 0, white);
-
-    snprintf(text, sizeof(text), "<ctrl> . - No Blue");
-    WriteLine(text, line++, 0, white);
-
-    snprintf(text, sizeof(text), "<ctrl> <alt> p - Image Toggle");
-    WriteLine(text, line++, 0, white);
-
-
-    line++;
-    snprintf(text, sizeof(text), "Text Buffer:");
-    WriteLine(text, line++, 0, white);
-
-    // Alt
-    line = 1;
-    snprintf(text, sizeof(text), "Coeffs: (3 Keys = Increment, Reset, Decrement)");
-    WriteLine(text, line++, 2, white);
-
-    line++;
-
-    snprintf(text, sizeof(text), "<alt> m  ,  . - Float step size");
-    WriteLine(text, line++, 2, white);
-    line++;
-
-    snprintf(text, sizeof(text), "<alt> q  w  e - Diffusion");
-    WriteLine(text, line++, 2, white);
-
-    snprintf(text, sizeof(text), "<alt> a  s  d - Expansion");
-    WriteLine(text, line++, 2, white);
-
-    snprintf(text, sizeof(text), "<alt> z  x  c - Fade Decrement");
-    WriteLine(text, line++, 2, white);
-
-    snprintf(text, sizeof(text), "<alt> r  t  y - Roto2 Angle");
-    WriteLine(text, line++, 2, white);
-
-    snprintf(text, sizeof(text), "<alt> f  g  h - Rainbow Speed");
-    WriteLine(text, line++, 2, white);
-
-    snprintf(text, sizeof(text), "<alt> v  b  n - Roto1 Angle");
-    WriteLine(text, line++, 2, white);
-
-    snprintf(text, sizeof(text), "<alt> u  i  o - Multiplier");
-    WriteLine(text, line++, 2, white);
-
-    snprintf(text, sizeof(text), "<alt> j  k  l - Roto1 Speed");
-    WriteLine(text, line++, 2, white);
-
-    snprintf(text, sizeof(text), "<alt> ; - Random dot period");
-    WriteLine(text, line++, 2, white);
-
-    snprintf(text, sizeof(text), "<alt> p - Color cycle type");
-    WriteLine(text, line++, 2, white);
-
-    snprintf(text, sizeof(text), "<alt> <arrows> - Scroller direction");
-    WriteLine(text, line++, 2, white);
-
-    snprintf(text, sizeof(text), "<ctrl> <alt> u i o - Frame delay(ms)");
-    WriteLine(text, line++, 2, white);
-
-    line++;
-    line++;
-
-    snprintf(text, sizeof(text), "Colors:");
-    WriteLine(text, line++, 2, white);
-
-    line++;
-
-    snprintf(text, sizeof(text), "<ctrl> <alt> q w - foreground:");
-    WriteLine(text, line++, 2, white);
-
-    snprintf(text, sizeof(text), "<ctrl> <alt> a s - background:");
-    WriteLine(text, line++, 2, white);
-
-    line++;
-    line++;
-
-    snprintf(text, sizeof(text), "Moments:");
-    WriteLine(text, line++, 2, white);
-
-    line++;
-
-    snprintf(text, sizeof(text), "<ctrl> 0-9 - Load Moment. Current:");
-    WriteLine(text, line++, 2, white);
-
-    snprintf(text, sizeof(text), "<ctrl> <alt> 0-9 - Copy Moment.");
-    WriteLine(text, line++, 2, white);
-
-    snprintf(text, sizeof(text), "<alt> 0-9 - Load another moment's image buffer.");
-    WriteLine(text, line++, 2, white);
-
-    line++;
-    line++;
-
-    snprintf(text, sizeof(text), "Text Entry:");
-    WriteLine(text, line++, 2, white);
-
-    line++;
-
-    snprintf(text, sizeof(text), "<Unmodified keys> - Add text.");
-    WriteLine(text, line++, 2, white);
-
-    snprintf(text, sizeof(text), "<backspace> - Delete last letter.");
-    WriteLine(text, line++, 2, white);
-
-    snprintf(text, sizeof(text), "<esc> - Erase all text.");
-    WriteLine(text, line++, 2, white);
-
-    snprintf(text, sizeof(text), "<crtl> <alt> z x - text row:");
-    WriteLine(text, line++, 2, white);
-
-    snprintf(text, sizeof(text), "<ctrl> b - text mod:");
-    WriteLine(text, line++, 2, white);
-
-    snprintf(text, sizeof(text), "Text Buffer Size:");
-    WriteLine(text, line++, 2, white);
-
-    line++;
-    line++;
-
-    snprintf(text, sizeof(text), "More Modes:");
-    WriteLine(text, line++, 2, white);
-
-    line++;
-
-    snprintf(text, sizeof(text), "<ctrl> [ - Red Plane:");
-    WriteLine(text, line++, 2, white);
-
-    snprintf(text, sizeof(text), "<ctrl> ] - Green Plane:");
-    WriteLine(text, line++, 2, white);
-
-    snprintf(text, sizeof(text), "<ctrl> \\ - Blue Plane:");
-    WriteLine(text, line++, 2, white);
-
-    snprintf(text, sizeof(text), "<ctrl> <alt> [ - Cyan Plane:");
-    WriteLine(text, line++, 2, white);
-
-    snprintf(text, sizeof(text), "<ctrl> <alt> ] - Yellow Plane:");
-    WriteLine(text, line++, 2, white);
-
-    snprintf(text, sizeof(text), "<ctrl> <alt> \\ - Magenta Plane:");
-    WriteLine(text, line++, 2, white);
-
-    line++;
-
-    snprintf(text, sizeof(text), "<ctrl> <esc> - Quit.");
-    WriteLine(text, line++, 2, white);
-
-    UpdateAll();
+  int i;
+  for (i = 0; i < DISPLAY_TEXT_SIZE; i++) {
+    WriteLine(displayText[i].text, displayText[i].line, displayText[i].col, white);
+  }
 }
 
-// And here.
+void WriteBool(int value, int row, int col) {
+  if (value) {
+    WriteLine("YES", row, col, yellow);
+  } else {
+    WriteLine(" NO", row, col, yellow);
+  }
+}
+
+void WriteEnum(int value, char **enumText, int row, int col, int offset) {
+  WriteLineAdjusted(enumText[value], row, col, offset, yellow);
+}
+
+void WriteInt(int value, int row, int col, int width) {
+  char text[100];
+  snprintf(text, sizeof(text), "%*i", width, value);
+  WriteLine(text, row, col, yellow);
+}
+
+void WriteFloat(float value, int row, int col, int width, int precision) {
+  char text[100];
+  snprintf(text, sizeof(text), "%*.*f", width, precision, value);
+  WriteLine(text, row, col, yellow);
+}
+
 void UpdateInfoDisplay(moment_t *moment, int now) {
+
   char text[1024], mybuff[102];
   int length;
   parms_t *parms = &moment->coefs;
   modes_t *mode = &moment->mode;
   text_info_t *scrollText = &moment->text;
 
-  snprintf(text, sizeof(text), "FPS: %4i", fps);
-  WriteLine(text, infoLoc[INFO_FPS][0], infoLoc[INFO_FPS][1], yellow);
+  // First column
+  WriteInt(fps, 21, 1, 3);
+  WriteBool(mode->cellAutoFun, 23, 1);
+  WriteBool(mode->bouncer, 24, 1);
+  WriteBool(mode->fadeout, 25, 1);
+  WriteBool(mode->diffuse, 26, 1);
+  WriteBool(mode->textScroller, 27, 1);
+  WriteBool(mode->roller, 28, 1);
+  WriteBool(mode->scroller, 29, 1);
+  WriteBool(mode->randDots, 34, 1);
+  WriteBool(mode->cycleForeground, 35, 1);
+  WriteBool(mode->cycleBackground, 36, 1);
+  WriteBool(randomMode, 37, 1);
+  WriteEnum(mode->fade_mode, fadeModeText, 38, 1, 0);
+  WriteBool(mode->rotozoom, 40, 1);
+  WriteBool(mode->rotozoom2, 42, 1);
+  WriteBool(mode->alias, 43, 1);
+  WriteBool(mode->multiply, 44, 1);
+  WriteBool(mode->sidebar, 45, 1);
+  WriteBool(mode->clearRed, 46, 1);
+  WriteBool(mode->clearGreen, 47, 1);
+  WriteBool(mode->clearBlue, 48, 1);
+  WriteBool(mode->image, 49, 1);
 
-  snprintf(text, sizeof(text), "%6i", parms->delay);
-  WriteLine(text, infoLoc[INFO_DELAY][0], infoLoc[INFO_DELAY][1], yellow);
+  // Second column
+  WriteFloat(parms->floatinc, 3, 3, 14, 6);
+  WriteFloat(parms->diffusion_coef, 5, 3, 14, 6);
+  WriteFloat(parms->expand, 6, 3, 14, 6);
+  WriteInt(parms->fadeout_dec, 7, 3, 14);
+  WriteFloat(parms->rotation2, 8, 3, 14, 6);
+  WriteInt(parms->rainbowInc, 9, 3, 14);
+  WriteFloat(parms->rotation, 10, 3, 14, 6);
+  WriteFloat(parms->colorMultiplier, 11, 3, 14, 6);
+  WriteFloat(parms->rotationDelta, 12, 3, 14, 6);
+  WriteInt(parms->randMod, 13, 3, 14);
+  WriteEnum(parms->colorCycleMode, colorCycleText, 14, 3, 3);
+  WriteEnum(parms->scrollerDir, dirText, 15, 3, 9);
+  WriteInt(parms->delay, 16, 3, 14);
+  WriteEnum(parms->foreground, paletteText, 21, 3, 7);
+  WriteEnum(parms->background, paletteText, 22, 3, 7);
+  WriteInt(now, 27, 3, 14);
+  WriteInt(parms->textRow, 37, 3, 14);
+  WriteEnum(mode->stagger, staggerText, 38, 3, 3);
+  WriteInt((int) strlen(scrollText->textBuffer), 39, 3, 14);
+  WriteEnum(mode->shiftred, shiftText, 44, 3, 9);
+  WriteEnum(mode->shiftgreen, shiftText, 45, 3, 9);
+  WriteEnum(mode->shiftblue, shiftText, 46, 3, 9);
+  WriteEnum(mode->shiftcyan, shiftText, 47, 3, 9);
+  WriteEnum(mode->shiftyellow, shiftText, 48, 3, 9);
+  WriteEnum(mode->shiftmagenta, shiftText, 49, 3, 9);
 
-  snprintf(text, sizeof(text), "%3s", mode->image == YES ? "YES" : "NO");
-  WriteLine(text, infoLoc[INFO_IMAGE][0], infoLoc[INFO_IMAGE][1], yellow);
-
-  snprintf(text, sizeof(text), "%3s", mode->cellAutoFun == YES ? "YES" : "NO");
-  WriteLine(text, infoLoc[INFO_CELL][0], infoLoc[INFO_CELL][1], yellow);
-
-  snprintf(text, sizeof(text), "%3s", mode->bouncer == YES ? "YES" : "NO");
-  WriteLine(text, infoLoc[INFO_BOUNCE][0], infoLoc[INFO_BOUNCE][1], yellow);
-
-  snprintf(text, sizeof(text), "%3s", mode->fadeout == YES ? "YES" : "NO");
-  WriteLine(text, infoLoc[INFO_FADE][0], infoLoc[INFO_FADE][1], yellow);
-
-  snprintf(text, sizeof(text), "%3s", mode->diffuse == YES ? "YES" : "NO");
-  WriteLine(text, infoLoc[INFO_DIFFUSE][0], infoLoc[INFO_DIFFUSE][1], yellow);
-
-  snprintf(text, sizeof(text), "%3s", mode->textScroller == YES ? "YES" : "NO");
-  WriteLine(text, infoLoc[INFO_TEXTMODE][0], infoLoc[INFO_TEXTMODE][1], yellow);
-
-  snprintf(text, sizeof(text), "%3s", mode->roller == YES ? "YES" : "NO");
-  WriteLine(text, infoLoc[INFO_ROLL][0], infoLoc[INFO_ROLL][1], yellow);
-
-  snprintf(text, sizeof(text), "%3s", mode->scroller == YES ? "YES" : "NO");
-  WriteLine(text, infoLoc[INFO_SCROLL][0], infoLoc[INFO_SCROLL][1], yellow);
-
-  snprintf(text, sizeof(text), "%3s", mode->randDots == YES ? "YES" : "NO");
-  WriteLine(text, infoLoc[INFO_DOTS][0], infoLoc[INFO_DOTS][1], yellow);
-
-  snprintf(text, sizeof(text), "%3s", mode->cycleForeground == YES ? "YES" : "NO");
-  WriteLine(text, infoLoc[INFO_FG][0], infoLoc[INFO_FG][1], yellow);
-
-  snprintf(text, sizeof(text), "%3s", mode->cycleBackground == YES ? "YES" : "NO");
-  WriteLine(text, infoLoc[INFO_BG][0], infoLoc[INFO_BG][1], yellow);
-
-  snprintf(text, sizeof(text), "%3s", mode->clearRed == YES ? "YES" : "NO");
-  WriteLine(text, infoLoc[INFO_CLEARRED][0], infoLoc[INFO_CLEARRED][1], yellow);
-
-  snprintf(text, sizeof(text), "%3s", mode->clearGreen == YES ? "YES" : "NO");
-  WriteLine(text, infoLoc[INFO_CLEARGREEN][0], infoLoc[INFO_CLEARGREEN][1], yellow);
-
-  snprintf(text, sizeof(text), "%3s", mode->clearBlue == YES ? "YES" : "NO");
-  WriteLine(text, infoLoc[INFO_CLEARBLUE][0], infoLoc[INFO_CLEARBLUE][1], yellow);
-
-  snprintf(text, sizeof(text), "%3s", randomMode == YES ? "YES" : "NO");
-  WriteLine(text, infoLoc[INFO_RANDOM][0], infoLoc[INFO_RANDOM][1], yellow);
-
-  snprintf(text, sizeof(text), "%3s", mode->fade_mode == FADE_MODULAR ? "MOD" : "LIM");
-  WriteLine(text, infoLoc[INFO_FADEMODE][0], infoLoc[INFO_FADEMODE][1], yellow);
-
-  snprintf(text, sizeof(text), "%3s", mode->rotozoom == YES ? "YES" : "NO");
-  WriteLine(text, infoLoc[INFO_ROTOZOOM][0], infoLoc[INFO_ROTOZOOM][1], yellow);
-
-  snprintf(text, sizeof(text), "%3s", mode->rotozoom2 == YES ? "YES" : "NO");
-  WriteLine(text, infoLoc[INFO_ROTOZOOM2][0], infoLoc[INFO_ROTOZOOM2][1], yellow);
-
-  snprintf(text, sizeof(text), "%3s", mode->alias == YES ? "YES" : "NO");
-  WriteLine(text, infoLoc[INFO_ALIAS][0], infoLoc[INFO_ALIAS][1], yellow);
-
-  snprintf(text, sizeof(text), "%3s", mode->multiply == YES ? "YES" : "NO");
-  WriteLine(text, infoLoc[INFO_MULTIPLY][0], infoLoc[INFO_MULTIPLY][1], yellow);
-
-  snprintf(text, sizeof(text), "%3s", mode->sidebar == YES ? "YES" : "NO");
-  WriteLine(text, infoLoc[INFO_SIDEBAR][0], infoLoc[INFO_SIDEBAR][1], yellow);
-
-  snprintf(text, sizeof(text), "%14.6f", parms->floatinc);
-  WriteLine(text, infoLoc[INFO_INC][0], infoLoc[INFO_INC][1], yellow);
-
-  snprintf(text, sizeof(text), "%14.6f", parms->diffusion_coef);
-  WriteLine(text, infoLoc[INFO_DIFF][0], infoLoc[INFO_DIFF][1], yellow);
-
-  snprintf(text, sizeof(text), "%14.6f", parms->expand);
-  WriteLine(text, infoLoc[INFO_EXP][0], infoLoc[INFO_EXP][1], yellow);
-
-  snprintf(text, sizeof(text), "%14i", parms->fadeout_dec);
-  WriteLine(text, infoLoc[INFO_DEC][0], infoLoc[INFO_DEC][1], yellow);
-
-  snprintf(text, sizeof(text), "%s", mode->shiftred == 0 ? " Hold" :
-                                             mode->shiftred == 1 ? "   Up" :
-                                             mode->shiftred == 2 ? " Left" :
-                                             mode->shiftred == 3 ? " Down" :
-                                             mode->shiftred == 4 ? "Right" :
-                                                                   "Unk!!" );
-  WriteLine(text, infoLoc[INFO_SHIFTRED][0], infoLoc[INFO_SHIFTRED][1], yellow);
-
-  snprintf(text, sizeof(text), "%s", mode->shiftgreen == 0 ? " Hold" :
-                                             mode->shiftgreen == 1 ? "   Up" :
-                                             mode->shiftgreen == 2 ? " Left" :
-                                             mode->shiftgreen == 3 ? " Down" :
-                                             mode->shiftgreen == 4 ? "Right" :
-                                                                     "Unk!!" );
-  WriteLine(text, infoLoc[INFO_SHIFTGREEN][0], infoLoc[INFO_SHIFTGREEN][1], yellow);
-
-  snprintf(text, sizeof(text), "%s", mode->shiftblue == 0 ? " Hold" :
-                                             mode->shiftblue == 1 ? "   Up" :
-                                             mode->shiftblue == 2 ? " Left" :
-                                             mode->shiftblue == 3 ? " Down" :
-                                             mode->shiftblue == 4 ? "Right" :
-                                                                    "Unk!!" );
-  WriteLine(text, infoLoc[INFO_SHIFTBLUE][0], infoLoc[INFO_SHIFTBLUE][1], yellow);
-
-  snprintf(text, sizeof(text), "%s", mode->shiftcyan == 0 ? " Hold" :
-                                             mode->shiftcyan == 1 ? "   Up" :
-                                             mode->shiftcyan == 2 ? " Left" :
-                                             mode->shiftcyan == 3 ? " Down" :
-                                             mode->shiftcyan == 4 ? "Right" :
-                                                                    "Unk!!" );
-  WriteLine(text, infoLoc[INFO_SHIFTCYAN][0], infoLoc[INFO_SHIFTCYAN][1], yellow);
-
-  snprintf(text, sizeof(text), "%s", mode->shiftyellow == 0 ? " Hold" :
-                                             mode->shiftyellow == 1 ? "   Up" :
-                                             mode->shiftyellow == 2 ? " Left" :
-                                             mode->shiftyellow == 3 ? " Down" :
-                                             mode->shiftyellow == 4 ? "Right" :
-                                                                    "Unk!!" );
-  WriteLine(text, infoLoc[INFO_SHIFTYELLOW][0], infoLoc[INFO_SHIFTYELLOW][1], yellow);
-
-  snprintf(text, sizeof(text), "%s", mode->shiftmagenta == 0 ? " Hold" :
-                                             mode->shiftmagenta == 1 ? "   Up" :
-                                             mode->shiftmagenta == 2 ? " Left" :
-                                             mode->shiftmagenta == 3 ? " Down" :
-                                             mode->shiftmagenta == 4 ? "Right" :
-                                                                    "Unk!!" );
-  WriteLine(text, infoLoc[INFO_SHIFTMAGENTA][0], infoLoc[INFO_SHIFTMAGENTA][1], yellow);
-
-  snprintf(text, sizeof(text), "%14.6f", parms->rotation2);
-  WriteLine(text, infoLoc[INFO_ANGLE2][0], infoLoc[INFO_ANGLE2][1], yellow);
-
-  snprintf(text, sizeof(text), "%14i", parms->rainbowInc);
-  WriteLine(text, infoLoc[INFO_RSPEED][0], infoLoc[INFO_RSPEED][1], yellow);
-
-  snprintf(text, sizeof(text), "%14.6f", parms->rotation);
-  WriteLine(text, infoLoc[INFO_ANGLE1][0], infoLoc[INFO_ANGLE1][1], yellow);
-
-
-  snprintf(text, sizeof(text), "%14.6f", parms->colorMultiplier);
-  WriteLine(text, infoLoc[INFO_MULT][0], infoLoc[INFO_MULT][1], yellow);
-
-  snprintf(text, sizeof(text), "%14.6f", parms->rotationDelta);
-  WriteLine(text, infoLoc[INFO_ROT1SPEED][0], infoLoc[INFO_ROT1SPEED][1], yellow);
-
-  snprintf(text, sizeof(text), "%14i", parms->randMod);
-  WriteLine(text, infoLoc[INFO_DOTF][0], infoLoc[INFO_DOTF][1], yellow);
-
-  snprintf(text, sizeof(text), "%11s", parms->colorCycleMode == RGB ? "R-G-B" :
-                                             parms->colorCycleMode == CMY ? "C-M-Y" :
-                                             parms->colorCycleMode == RYGCBM ? "R-Y-G-C-B-M" :
-                                             parms->colorCycleMode == RAINBOW ? "RAINBOW" :
-                                             parms->colorCycleMode == RANDOM ? "RANDOM" : "UNKNOWN");
-  WriteLine(text, infoLoc[INFO_CYCLE][0], infoLoc[INFO_CYCLE][1], yellow);
-
-
-  snprintf(text, sizeof(text), "%5s", parms->scrollerDir == UP ? "UP" :
-                                             parms->scrollerDir == DOWN ? "DOWN" :
-                                             parms->scrollerDir == LEFT ? "LEFT" :
-                                             parms->scrollerDir == RIGHT ? "RIGHT" : "UNK");
-  WriteLine(text, infoLoc[INFO_DIR][0], infoLoc[INFO_DIR][1], yellow);
-
-
-  snprintf(text, sizeof(text), "%10s", palette_char[parms->foreground]);
-  WriteLine(text, infoLoc[INFO_FGC][0], infoLoc[INFO_FGC][1], yellow);
-
-  snprintf(text, sizeof(text), "%10s", palette_char[parms->background]);
-  WriteLine(text, infoLoc[INFO_BGC][0], infoLoc[INFO_BGC][1], yellow);
-
-  snprintf(text, sizeof(text), "%1i", now);
-  WriteLine(text, infoLoc[INFO_NOW][0], infoLoc[INFO_NOW][1], yellow);
-
-  snprintf(text, sizeof(text), "%3i", parms->textRow);
-  WriteLine(text, infoLoc[INFO_TEXTROW][0], infoLoc[INFO_TEXTROW][1], yellow);
-
-  snprintf(text, sizeof(text), "%11s", mode->stagger == 1 ? "9RowStagger" :
-                                             mode->stagger == 2 ? "10RowBorder" :
-                                             mode->stagger == 0 ? "8Row" :
-                                             mode->stagger == 3 ? "FullBG" : "Unknown");
-
-  WriteLine(text, infoLoc[INFO_TEXTSTAG][0], infoLoc[INFO_TEXTSTAG][1], yellow);
-
-  snprintf(text, sizeof(text), "%4i", (int) strlen(scrollText->textBuffer));
-  WriteLine(text, infoLoc[INFO_TEXTLEN][0], infoLoc[INFO_TEXTLEN][1], yellow);
-
+  // Show the last 100 bytes of the text buffer.
   length = strlen(scrollText->textBuffer);
   strncpy(mybuff, scrollText->textBuffer + (length > 100 ? length - 100 : 0), 101);
   snprintf(text, sizeof(text), "%-100s", mybuff );
-  WriteLine(text, infoLoc[INFO_TEXT][0], infoLoc[INFO_TEXT][1], yellow);
+  WriteLine(text, 52, 0, yellow);
 
   UpdateAll();
 }
@@ -2517,23 +2290,35 @@ void UpdateInfoDisplay(moment_t *moment, int now) {
 
 // Writes a line of text to the selected line and column of the
 // output window with the selected color.
-void WriteLine(char * thisText, int line, int col, color_t color) {
+void WriteLineAdjusted(char * thisText, int line, int col, int offset, color_t color) {
 
   // Vars
   const SDL_Color fontColor = {color.r, color.g, color.b};
   const SDL_Color bgColor = {0, 0, 0};
+  const int colstart[4] = {0, 275, 375, 675};
   SDL_Surface *textSurface;
   SDL_Texture *textTexture;
   SDL_Rect rect;
+  static int testWidth = 0;
 
-  const int colstart[4] = {0, 275, 375, 675};
+  // On initial startup, measure the font letter width so offsets will work.
+  if (!testWidth) {
+    textSurface = TTF_RenderText_Shaded(screenFont, "X", fontColor, bgColor);
+    if (!textSurface) {
+      fprintf(stderr, "Unable to create initial font size: %s\n", SDL_GetError());
+      return;
+    }
+    testWidth = textSurface->w;
+    SDL_FreeSurface(textSurface);
+    printf("Test width: %i\n", testWidth);
+  }
 
   // Set the position of the output text.
-  rect.x = colstart[col];
+  rect.x = colstart[col] + (offset * testWidth);
   rect.y = line * (PREVIEW_FONT_HEIGHT);
 
   // Render the text to a surface.
-  textSurface = TTF_RenderText_Shaded(font, thisText, fontColor, bgColor);
+  textSurface = TTF_RenderText_Shaded(screenFont, thisText, fontColor, bgColor);
   if (textSurface) {
     // Set the width and height of the output text.
     rect.w = textSurface->w;
@@ -2556,11 +2341,14 @@ void WriteLine(char * thisText, int line, int col, color_t color) {
   }
 }
 
+// Prototype with no offset.
+void WriteLine(char * thisText, int line, int col, color_t color) {
+  WriteLineAdjusted(thisText, line, col, 0, color);
+}
 
 void UpdateAll(void) {
   SDL_RenderPresent(mwRenderer);
 }
-
 
 void ClearAll(void) {
   SDL_SetRenderDrawColor(mwRenderer, 0, 0, 0, 255);
@@ -2572,19 +2360,16 @@ void SetDims(void) {
    if (tensor_landscape_p) {
     TENSOR_WIDTH_EFF = TENSOR_HEIGHT;
     TENSOR_HEIGHT_EFF = TENSOR_WIDTH;
-
   } else {
     TENSOR_WIDTH_EFF = TENSOR_WIDTH;
     TENSOR_HEIGHT_EFF = TENSOR_HEIGHT;
   }
 
-  if (!previewSurface) {
-    SDL_FreeSurface(previewSurface);
-  }
+  if (previewSurface) SDL_FreeSurface(previewSurface);
 
   previewSurface = SDL_CreateRGBSurface(0, TENSOR_WIDTH_EFF, TENSOR_HEIGHT_EFF,
     32, 0, 0, 0, 0);
-  if (previewSurface == NULL) {
+  if (!previewSurface) {
     fprintf(stderr, "Unable to allocate a temp buffer: %s\n", SDL_GetError());
     exit(EXIT_FAILURE);
   }
