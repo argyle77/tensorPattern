@@ -8,9 +8,9 @@ project(tensorPattern)
 # Let's set a version number.
 # This file must be manually changed to effect version change.
 set (VERSION_MAJOR 3)
-set (VERSION_MINOR 8)
+set (VERSION_MINOR 9)
 set (VERSION_PATCH 2)
-set (VERSION_PRERELEASE)
+set (VERSION_PRERELEASE a)
 
 if ("${VERSION_PRERELEASE}" STREQUAL "")
   message(STATUS "Configuring build version v" ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH})
