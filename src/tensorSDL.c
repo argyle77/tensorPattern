@@ -5,7 +5,6 @@
 
 #define MAIN_C_
 
-
 // Includes
 #include <stdio.h>
 #include <stdlib.h>
@@ -20,7 +19,6 @@
 #include "drv-tensor.h"
 #include "my_font.h"
 
-
 // Defines
 #define NO 0
 #define YES 1
@@ -28,8 +26,10 @@
 #define ON 1
 #define FOREGROUND 0
 #define BACKGROUND 1
+#define FORWARDS 0
+#define BACKWARDS 1
 #define FOREVER for(;;)
-#define RANDOM_LIMIT 1000
+#define CYCLE_FRAME_LIMIT 1000
 
 // Tensor output
 #define USE_TENSOR
@@ -40,59 +40,24 @@
 #define PREVIEW_PIXEL_HEIGHT 10
 #define PREVIEW_BORDER_THICKNESS 10
 #define PREVIEW_FONT_SIZE 14
-#define PREVIEW_FONT_WIDTH 14
 #define PREVIEW_FONT_HEIGHT 14
 #define TENSOR_PREVIEW_WIDTH (TENSOR_WIDTH * PREVIEW_PIXEL_WIDTH)
 #define TENSOR_PREVIEW_HEIGHT (TENSOR_WIDTH * PREVIEW_PIXEL_HEIGHT)
 
-#define TEXT_BUFFER_SIZE 4096
+#define TEXT_BUFFER_SIZE 2048
 
 // Initial Values
 #define MOMENT_COUNT 10
 #define INITIAL_COLOR_MULTIPLIER 1.0
 #define INITIAL_DIFF_COEF 0.002
 #define INITIAL_FADEOUT_DEC 1
-#define INITIAL_RAND_MOD 4
+#define INITIAL_RAND_MOD 100
 #define INITIAL_RAINBOW_INC 8
 #define INITIAL_EXPAND 1
 #define INITIAL_FLOAT_INC 0.1
 #define INITIAL_ROTATION_DELTA 1.0
 #define INITIAL_ROTATION_ANGLE 0
 #define INITIAL_ROTATION_ANGLE2 10
-
-// Some colors
-#define COLOR_WHITE {.r = 255, .g = 255, .b = 255, .a = 255}
-#define COLOR_LIGHT_GRAY {.r = 191, .g = 191, .b = 191, .a = 255}
-#define COLOR_GRAY {.r = 127, .g = 127, .b = 127, .a = 255}
-#define COLOR_DARK_GRAY {.r = 63, .g = 63, .b = 63, .a = 255}
-#define COLOR_BLACK {.r = 0, .g = 0, .b = 0, .a = 255}
-#define COLOR_RED {.r = 255, .g = 0, .b = 0, .a = 255}
-#define COLOR_ORANGE {.r = 255, .g = 127, .b = 0, .a = 255}
-#define COLOR_YELLOW {.r = 255, .g = 255, .b = 0, .a = 255}
-#define COLOR_GREEN {.r = 0, .g = 255, .b = 0, .a = 255}
-#define COLOR_CYAN {.r = 0, .g = 255, .b = 255, .a = 255}
-#define COLOR_BLUE {.r = 0, .g = 0, .b = 255, .a = 255}
-#define COLOR_MAGENTA {.r = 255, .g = 0, .b = 255, .a = 255}
-
-// Types
-
-// 32 bit Pixel Color, which is, as yet, sadly underused.
-typedef struct color_t {
-  unsigned char r;
-  unsigned char g;
-  unsigned char b;
-  unsigned char a;  // right
-} color_t;
-
-// Scroller directions
-typedef enum dir_e {
-  UP = 0, LEFT, DOWN, RIGHT
-} dir_e;
-
-// Better scroller directions
-typedef enum scr_e{
-  SCR_HOLD, SCR_UL, SCR_U, SCR_UR, SCR_L, SCR_R, SCR_DL, SCR_D, SCR_DR, SCR_COUNT
-} scr_e;
 
 // Color plane flags - I'm unsatified with the way the cym color planes worked
 // out.  I should be using a different color space or something.
@@ -105,61 +70,203 @@ typedef enum scr_e{
 #define PLANE_MAGENTA (PLANE_RED | PLANE_BLUE)
 #define PLANE_ALL     (PLANE_RED | PLANE_BLUE | PLANE_GREEN)
 
-typedef enum fade_mode_e{
-  FADE_TO_ZERO, FADE_MODULAR, FADE_HALF
-} fade_mode_e;
+
+// Colors / palettes
+
+// 32 bit per pixel color type - Named or array access through union.
+typedef union color_t {
+  struct {
+    unsigned char r, g, b, a;
+  };
+  unsigned char rgba[4];
+} color_t;
+
+// Named color definitions
+#define CD_RED        {.r = 255, .g = 0,   .b = 0,   .a = 255}
+#define CD_ORANGE     {.r = 255, .g = 127, .b = 0,   .a = 255}
+#define CD_YELLOW     {.r = 255, .g = 255, .b = 0,   .a = 255}
+#define CD_CHARTREUSE {.r = 127, .g = 255, .b = 0,   .a = 255}
+#define CD_GREEN      {.r = 0,   .g = 255, .b = 0,   .a = 255}
+#define CD_AQUA       {.r = 0,   .g = 255, .b = 127, .a = 255}
+#define CD_CYAN       {.r = 0,   .g = 255, .b = 255, .a = 255}
+#define CD_AZURE      {.r = 0  , .g = 127, .b = 255, .a = 255}
+#define CD_BLUE       {.r = 0,   .g = 0,   .b = 255, .a = 255}
+#define CD_VIOLET     {.r = 127, .g = 0,   .b = 255, .a = 255}
+#define CD_MAGENTA    {.r = 255, .g = 0,   .b = 255, .a = 255}
+#define CD_ROSE       {.r = 255, .g = 0,   .b = 127, .a = 255}
+#define CD_WHITE      {.r = 255, .g = 255, .b = 255, .a = 255}
+#define CD_LTGRAY     {.r = 191, .g = 191, .b = 191, .a = 255}
+#define CD_GRAY       {.r = 127, .g = 127, .b = 127, .a = 255}
+#define CD_DKGRAY     {.r = 63,  .g = 63,  .b = 63,  .a = 255}
+#define CD_BLACK      {.r = 0,   .g = 0,   .b = 0,   .a = 255}
+
+// Named color constants
+const color_t cRed = CD_RED;
+const color_t cOrange = CD_ORANGE;
+const color_t cYellow = CD_YELLOW;
+const color_t cChartreuse = CD_CHARTREUSE;
+const color_t cGreen = CD_GREEN;
+const color_t cAqua = CD_AQUA;
+const color_t cCyan = CD_CYAN;
+const color_t cAzure = CD_AZURE;
+const color_t cBlue = CD_BLUE;
+const color_t cViolet = CD_VIOLET;
+const color_t cMagenta = CD_MAGENTA;
+const color_t cRose = CD_ROSE;
+const color_t cWhite = CD_WHITE;
+const color_t cLtGray = CD_LTGRAY;
+const color_t cGray = CD_GRAY;
+const color_t cDkGray = CD_DKGRAY;
+const color_t cBlack = CD_BLACK;
+
+#define PARAMETER_COLOR cAzure
+
+// Named color palette structures and constants
+typedef struct palette_t {
+  char *name;
+  color_t color;
+} palette_t;
+
+// If you change this, change palette too.
+typedef enum color_e {
+  CE_RED = 0, CE_ORANGE, CE_YELLOW, CE_CHARTREUSE, CE_GREEN, CE_AQUA, CE_CYAN,
+  CE_AZURE, CE_BLUE, CE_VIOLET, CE_MAGENTA, CE_ROSE, CE_WHITE, CE_LTGRAY,
+  CE_GRAY, CE_DKGRAY, CE_BLACK,
+  CE_COUNT // Last.
+} color_e;
+
+// This palette order should line up with color_e enumeration values.
+const palette_t namedPalette[CE_COUNT] = {
+  { "red", CD_RED },
+  { "orange", CD_ORANGE },
+  { "yellow", CD_YELLOW },
+  { "chartreuse", CD_CHARTREUSE },
+  { "green", CD_GREEN },
+  { "aqua", CD_AQUA },
+  { "cyan", CD_CYAN },
+  { "azure", CD_AZURE },
+  { "blue", CD_BLUE },
+  { "violet", CD_VIOLET },
+  { "magenta", CD_MAGENTA },
+  { "rose", CD_ROSE },
+  { "white", CD_WHITE },
+  { "lt gray", CD_LTGRAY },
+  { "gray", CD_GRAY },
+  { "dk gray", CD_DKGRAY },
+  { "black", CD_BLACK }
+};
+
+
+// Enumerations and Strings.
+
+// Scroller directions
+typedef enum dir_e {
+  DIR_UP = 0, DIR_LEFT, DIR_DOWN, DIR_RIGHT,
+  DIR_COUNT // Last.
+} dir_e;
+const char *dirText[] = { "Up", "Left", "Down", "Right" };
+
+// Fade mode enumerations.
+typedef enum fadeModes_e{
+  FM_LIMIT = 0, FM_MODULAR,
+  FM_COUNT // Last.
+} fadeModes_e;
+const char *fadeModeText[] = { "Limited", "Modular" };
+
+// Color plane shift modes.
+typedef enum shiftModes_e {
+  SM_HOLD = 0, SM_UP, SM_LEFT, SM_DOWN, SM_RIGHT,
+  SM_COUNT // Last.
+} shiftModes_e;
+const char *shiftText[] = { "Hold", "Up", "Left", "Down", "Right" };
+
+// Text background modes
+typedef enum textStaggerMode_e {
+  TS_8ROW, TS_9ROWSTAGGER, TS_10ROWBORDER, TS_FULLBG,
+  TS_COUNT // Last.
+} textStaggerMode_e;
+char *staggerText[] = { "8 Row", "9RowStagger", "10RowBorder", "FullBG" };
+
+// Color palette cycle modes
+typedef enum colorCycleModes_e{
+  CM_RGB, CM_CMY, CM_SECONDARY, CM_TERTIARY, CM_GRAY, CM_RAINBOW, CM_RANDOM,
+  CM_COUNT // Last.
+} colorCycleModes_e;
+const char *colorCycleText[] = { "R-G-B", "C-M-Y", "Secondary", "Tertiary", "Gray", "Rainbow", "Random" };
+
+// A way to keep track of palette size.
+typedef struct cyclePalette_t {
+  const color_e *palette;
+  int size;
+} cyclePalette_t;
+
+// Some color palettes for cycling
+const color_e paletteRGBcolors[] = { CE_RED, CE_GREEN, CE_BLUE };
+const cyclePalette_t paletteRGB = { paletteRGBcolors, (sizeof(paletteRGBcolors) / sizeof(color_e)) };
+
+const color_e paletteCMYcolors[] = { CE_CYAN, CE_MAGENTA, CE_YELLOW };
+const cyclePalette_t paletteCMY = { paletteCMYcolors, (sizeof(paletteCMYcolors) / sizeof(color_e)) };
+
+const color_e paletteSeccolors[] = { CE_RED, CE_YELLOW, CE_GREEN, CE_CYAN, CE_BLUE, CE_MAGENTA };
+const cyclePalette_t paletteSec = { paletteSeccolors, (sizeof(paletteSeccolors) / sizeof(color_e)) };
+
+const color_e paletteTercolors[] = { CE_RED, CE_ORANGE, CE_YELLOW, CE_CHARTREUSE, CE_GREEN, CE_AQUA,
+  CE_CYAN, CE_AZURE, CE_BLUE, CE_VIOLET, CE_MAGENTA, CE_ROSE };
+const cyclePalette_t paletteTer = { paletteTercolors, (sizeof(paletteTercolors) / sizeof(color_e)) };
+
+const color_e paletteGrycolors[] = { CE_WHITE, CE_LTGRAY, CE_GRAY, CE_DKGRAY };
+const cyclePalette_t paletteGry = { paletteGrycolors, (sizeof(paletteGrycolors) / sizeof(color_e)) };
+
+// Types
 
 // Pattern modes
 typedef struct modes_t {
-  int textScroller;
-  int cellAutoFun;
-  int bouncer;
-  int fadeout;
-  int diffuse;
-  int roller;
-  int scroller;
-  int horizontalBars;
-  int verticalBars;
-  int colorAll;
-  int clearAll;
-  int randDots;
-  int cycleForeground;
-  int cycleBackground;
-  fade_mode_e fade_mode;
-  int rotozoom;
-  int rotozoom2;
-  int alias;
-  int multiply;
-  int stagger;
-  int sidebar;
-  int clearRed;
-  int clearGreen;
-  int clearBlue;
-  int shiftred;
-  int shiftgreen;
-  int shiftblue;
-  int shiftcyan;
-  int shiftyellow;
-  int shiftmagenta;
-  int image;
+  unsigned char textSeed;
+  unsigned char cellAutoFun;
+  unsigned char bouncer;
+  unsigned char fadeout;
+  unsigned char diffuse;
+  unsigned char roller;
+  unsigned char scroller;
+  unsigned char horizontalBars;
+  unsigned char verticalBars;
+  unsigned char colorAll;
+  unsigned char clearAll;
+  unsigned char randDots;
+  unsigned char cycleForeground;
+  unsigned char cycleBackground;
+  fadeModes_e fadeMode;
+  unsigned char postRotateZoom;
+  unsigned char preRotateZoom;
+  unsigned char alias;
+  unsigned char multiply;
+  textStaggerMode_e textStagger;
+  unsigned char sidebar;
+  unsigned char clearRed;
+  unsigned char clearGreen;
+  unsigned char clearBlue;
+  shiftModes_e shiftRed;
+  shiftModes_e shiftGreen;
+  shiftModes_e shiftBlue;
+  shiftModes_e shiftCyan;
+  shiftModes_e shiftYellow;
+  shiftModes_e shiftMagenta;
+  unsigned char postImage;
+  unsigned char fontFlip;
+  unsigned char fontDirection;
 } modes_t;
-
-typedef enum colorCycles_e{
-  RGB, CMY, RYGCBM, RAINBOW, RANDOM
-} colorCycles_e;
-
-typedef enum color_e {RED_E, ORANGE_E, YELLOW_E, GREEN_E, CYAN_E, BLUE_E, MAGENTA_E,
-              WHITE_E, LIGHT_GRAY_E, GRAY_E, DARK_GREY_E, BLACK_E} color_e;
 
 // Parameters
 typedef struct parms_t{
   color_e foreground;
   color_e background;
+  color_t fg;
+  color_t bg;
   int fadeout_dec;
   float diffusion_coef;
   dir_e scrollerDir;
-  unsigned int randMod;
-  colorCycles_e colorCycleMode;
+  int randMod;
+  colorCycleModes_e colorCycleMode;
   int rainbowInc;
   float expand;
   float floatinc;
@@ -167,12 +274,10 @@ typedef struct parms_t{
   float rotation2;
   float rotationDelta;
   float colorMultiplier;
-  int cycleF;
-  int cycleB;
-  color_t fg;
-  color_t bg;
+  int cycleSaveForegound;
+  int cycleSaveBackground;
   int cellAutoCount;
-  int textRow;
+  int textOffset;
   int delay;
 } parms_t;
 
@@ -195,106 +300,82 @@ typedef struct moment_t{
 typedef struct displayText_t {
   int line;
   int col;
+  color_t color;
   char *text;
 } displayText_t;
 
 const displayText_t displayText[] = {
-  {21, 0, "Modes:                       FPS:"},
-  {23, 0, "<ctrl> q - CellAutoFun"},
-  {24, 0, "<ctrl> w - Bouncer"},
-  {25, 0, "<ctrl> e - Fader"},
-  {26, 0, "<ctrl> r - Diffuse"},
-  {27, 0, "<ctrl> t - Text"},
-  {28, 0, "<ctrl> y - Roller"},
-  {29, 0, "<ctrl> u - Scroller"},
-  {30, 0, "<ctrl> i - Horizontal bars!"},
-  {31, 0, "<ctrl> o - Vertical bars!"},
-  {32, 0, "<crtl> p - Foreground color all!"},
-  {33, 0, "<crtl> a - Background color all!"},
-  {34, 0, "<ctrl> s - Random dots"},
-  {35, 0, "<ctrl> d - FG cycle"},
-  {36, 0, "<ctrl> f - BG cycle"},
-  {37, 0, "<ctrl> g - Random mode"},
-  {38, 0, "<ctrl> h - Fader mode"},
-  {39, 0, "<ctrl> j - Reset text to start."},
-  {40, 0, "<ctrl> k - Roto1 mode"},
-  {41, 0, "<ctrl> l - All modes off."},
-  {42, 0, "<ctrl> z - Roto2 mode"},
-  {43, 0, "<ctrl> x - Roto anti-alias"},
-  {44, 0, "<ctrl> c - Multiplier"},
-  {45, 0, "<ctrl> n - SideBar"},
-  {46, 0, "<ctrl> m - No Red"},
-  {47, 0, "<ctrl> , - No Green"},
-  {48, 0, "<ctrl> . - No Blue"},
-  {49, 0, "<ctrl> <alt> p - Image Toggle"},
-  {51, 0, "Text Buffer:"},
-  {1, 2, "Coeffs: (3 Keys = Increment, Reset, Decrement)"},
-  {3, 2, "<alt> m  ,  . - Float step size"},
-  {5, 2, "<alt> q  w  e - Diffusion"},
-  {6, 2, "<alt> a  s  d - Expansion"},
-  {7, 2, "<alt> z  x  c - Fade Decrement"},
-  {8, 2, "<alt> r  t  y - Roto2 Angle"},
-  {9, 2, "<alt> f  g  h - Rainbow Speed"},
-  {10, 2, "<alt> v  b  n - Roto1 Angle"},
-  {11, 2, "<alt> u  i  o - Multiplier"},
-  {12, 2, "<alt> j  k  l - Roto1 Speed"},
-  {13, 2, "<alt> ; - Random dot period"},
-  {14, 2, "<alt> p - Color cycle type"},
-  {15, 2, "<alt> <arrows> - Scroller direction"},
-  {16, 2, "<ctrl> <alt> u i o - Frame delay(ms)"},
-  {19, 2, "Colors:"},
-  {21, 2, "<ctrl> <alt> q w - foreground:"},
-  {22, 2, "<ctrl> <alt> a s - background:"},
-  {25, 2, "Moments:"},
-  {27, 2, "<ctrl> 0-9 - Load Moment. Current:"},
-  {28, 2, "<ctrl> <alt> 0-9 - Copy moment over current."},
-  {29, 2, "<alt> 0-9 - Load another moment's image buffer."},
-  {32, 2, "Text Entry:"},
-  {34, 2, "<Unmodified keys> - Add text."},
-  {35, 2, "<backspace> - Delete last letter."},
-  {36, 2, "<delete> - Erase all text."},
-  {37, 2, "<crtl> <alt> z x - vertical offset:"},
-  {38, 2, "<ctrl> b - text mode:"},
-  {39, 2, "Text Buffer Size:"},
-  {42, 2, "More Modes:"},
-  {44, 2, "<ctrl> [ - Red Plane:"},
-  {45, 2, "<ctrl> ] - Green Plane:"},
-  {46, 2, "<ctrl> \\ - Blue Plane:"},
-  {47, 2, "<ctrl> <alt> [ - Cyan Plane:"},
-  {48, 2, "<ctrl> <alt> ] - Yellow Plane:"},
-  {49, 2, "<ctrl> <alt> \\ - Magenta Plane:"},
-  {51, 2, "<esc> - Quit."}
+  {21, 0, CD_YELLOW,  "Modes:                       FPS:"},
+  {23, 0, CD_LTGRAY, "<ctrl> q - Cell pattern"},
+  {24, 0, CD_LTGRAY, "<ctrl> w - Bouncer"},
+  {25, 0, CD_LTGRAY, "<ctrl> e - Fader"},
+  {26, 0, CD_LTGRAY, "<ctrl> r - Diffuser"},
+  {27, 0, CD_LTGRAY, "<ctrl> t - Text seed"},
+  {28, 0, CD_LTGRAY, "<ctrl> y - Scroll rollover"},
+  {29, 0, CD_LTGRAY, "<ctrl> u - Scroller"},
+  {30, 0, CD_LTGRAY, "<ctrl> i - Horizontal bars!"},
+  {31, 0, CD_LTGRAY, "<ctrl> o - Vertical bars!"},
+  {32, 0, CD_LTGRAY, "<crtl> p - Foreground color all!"},
+  {33, 0, CD_LTGRAY, "<crtl> a - Background color all!"},
+  {34, 0, CD_LTGRAY, "<ctrl> s - Random dot seed"},
+  {35, 0, CD_LTGRAY, "<ctrl> d - FG cycle"},
+  {36, 0, CD_LTGRAY, "<ctrl> f - BG cycle"},
+  {37, 0, CD_LTGRAY, "<ctrl> g - Cycle moments"},
+  {38, 0, CD_LTGRAY, "<ctrl> h - Fader mode"},
+  {39, 0, CD_LTGRAY, "<ctrl> j - Reset text to start"},
+  {40, 0, CD_LTGRAY, "<ctrl> k - Post-rotate/zoom"},
+  {41, 0, CD_LTGRAY, "<ctrl> l - All modes off"},
+  {42, 0, CD_LTGRAY, "<ctrl> z - Pre-rotate/zoom"},
+  {43, 0, CD_LTGRAY, "<ctrl> x - Rotate/zoom anti-alias"},
+  {44, 0, CD_LTGRAY, "<ctrl> c - Multiplier"},
+  {45, 0, CD_LTGRAY, "<ctrl> n - Sidebar seed"},
+  {46, 0, CD_LTGRAY, "<ctrl> m - Supress red"},
+  {47, 0, CD_LTGRAY, "<ctrl> , - Supress green"},
+  {48, 0, CD_LTGRAY, "<ctrl> . - Supress blue"},
+  {49, 0, CD_LTGRAY, "<ctrl> <alt> p - Image overlay"},
+  {51, 0, CD_YELLOW,  "Text buffer:"},
+  {0, 2,  CD_YELLOW,  "Coeffs: (3 keys = increment / reset / decrement)"},
+  {2, 2, CD_LTGRAY, "<alt> m  ,  . - Float step size"},
+  {4, 2, CD_LTGRAY, "<alt> q  w  e - Diffusion"},
+  {5, 2, CD_LTGRAY, "<alt> a  s  d - Expansion"},
+  {6, 2, CD_LTGRAY, "<alt> z  x  c - Fade amount"},
+  {7, 2, CD_LTGRAY, "<alt> r  t  y - Pre rotation angle"},
+  {8, 2, CD_LTGRAY, "<alt> f  g  h - Rainbow Speed"},
+  {9, 2, CD_LTGRAY, "<alt> v  b  n - Post rotation angle"},
+  {10, 2, CD_LTGRAY, "<alt> u  i  o - Multiplier"},
+  {11, 2, CD_LTGRAY, "<alt> j  k  l - Post rotation incr"},
+  {12, 2, CD_LTGRAY, "<alt> p  [  ] - Dot randomness"},
+  {13, 2, CD_LTGRAY, "<alt> ;       - Color cycle mode"},
+  {14, 2, CD_LTGRAY, "(<alt>) <arrows> - Scroll direction"},
+  {15, 2, CD_LTGRAY, "<ctrl> <alt> u i o - Frame delay(ms)"},
+  {18, 2, CD_YELLOW, "Colors:"},
+  {20, 2, CD_LTGRAY, "<ctrl> <alt> q w - foreground:"},
+  {21, 2, CD_LTGRAY, "<ctrl> <alt> a s - background:"},
+  {24, 2, CD_YELLOW, "Moments:"},
+  {26, 2, CD_LTGRAY, "<ctrl> 0-9 - Load Moment.    Current:"},
+  {27, 2, CD_LTGRAY, "<ctrl> <alt> 0-9 - Copy moment over current."},
+  {28, 2, CD_LTGRAY, "<alt> 0-9 - Load another moment's image buffer."},
+  {31, 2, CD_YELLOW, "Text entry:"},
+  {32, 2, CD_LTGRAY, "<Unmodified keys> - Add text."},
+  {33, 2, CD_LTGRAY, "<backspace> - Delete last letter."},
+  {34, 2, CD_LTGRAY, "<delete> - Erase all text."},
+  {35, 2, CD_LTGRAY, "<ctrl> ' - Reverse text."},
+  {36, 2, CD_LTGRAY, "<ctrl> ; - Flip text."},
+  {37, 2, CD_LTGRAY, "<crtl> <alt> z x - Offset:"},
+  {38, 2, CD_LTGRAY, "<ctrl> b - Text mode:"},
+  {39, 2, CD_LTGRAY, "Text buffer size:"},
+  {42, 2, CD_YELLOW, "More modes:"},
+  {44, 2, CD_LTGRAY, "<ctrl> [ - Red plane:"},
+  {45, 2, CD_LTGRAY, "<ctrl> ] - Green plane:"},
+  {46, 2, CD_LTGRAY, "<ctrl> \\ - Blue plane:"},
+  {47, 2, CD_LTGRAY, "<ctrl> <alt> [ - Cyan plane:"},
+  {48, 2, CD_LTGRAY, "<ctrl> <alt> ] - Yellow plane:"},
+  {49, 2, CD_LTGRAY, "<ctrl> <alt> \\ - Magenta plane:"},
+  {51, 2, CD_YELLOW, "<esc> - Quit."}
 };
 #define DISPLAY_TEXT_SIZE (sizeof(displayText) / sizeof(displayText_t))
 
-// Display enumeration strings.
-char *shiftText[] = {" Hold", "   Up", " Left", " Down", "Right"};
-char *dirText[] = {"   Up", " Left", " Down", "Right"};
-char *colorCycleText[] = { "      R-G-B", "      C-M-Y", "R-Y-G-C-B-M",
-  "    RAINBOW", "     RANDOM"};
-char *fadeModeText[] = {"Limited", "Modular"};
-char *staggerText[] = {"       8Row", "9RowStagger", "10RowBorder", "     FullBG"};
-char *paletteText[] = { "    red", " orange", " yellow", "  green", "   cyan",
-  "   blue", "magenta", "  white", "    3/4", "    1/2", "    1/4", "  black" };
 
-// Constants
-const color_t red = COLOR_RED;
-const color_t orange = COLOR_ORANGE;
-const color_t yellow = COLOR_YELLOW;
-const color_t green = COLOR_GREEN;
-const color_t cyan = COLOR_CYAN;
-const color_t blue = COLOR_BLUE;
-const color_t magenta = COLOR_MAGENTA;
-const color_t white = COLOR_WHITE;
-const color_t light_gray = COLOR_LIGHT_GRAY;
-const color_t gray = COLOR_GRAY;
-const color_t dark_gray = COLOR_DARK_GRAY;
-const color_t black = COLOR_BLACK;
-const color_t palette[] = {
-  COLOR_RED, COLOR_ORANGE, COLOR_YELLOW, COLOR_GREEN, COLOR_CYAN, COLOR_BLUE,
-  COLOR_MAGENTA, COLOR_WHITE, COLOR_LIGHT_GRAY, COLOR_GRAY, COLOR_DARK_GRAY,
-  COLOR_BLACK };
-#define PALETTE_COUNT (sizeof(palette) / sizeof(color_t))
 
 // Globals - We do love our globals.
 TTF_Font *screenFont;
@@ -303,7 +384,7 @@ SDL_Renderer *mwRenderer = NULL;
 SDL_Surface *previewSurface = NULL;
 SDL_Surface *imageSeed = NULL;
 int TENSOR_WIDTH_EFF, TENSOR_HEIGHT_EFF;
-int randomMode = NO;  // Random mode is a global (for now).
+int cycleMomentsMode = NO;  // cycleMomentsMode mode is a global (for now).
 moment_t moments[MOMENT_COUNT];
 int now;
 moment_t *currentMoment;
@@ -312,22 +393,24 @@ parms_t *currentParms;
 text_info_t *currentText;
 unsigned char *currentFB;
 float global_intensity_limit;
-time_t mnow;
 int frames, fps;
 
 // Prototypes
+void MainLoop(void);
+void ProcessModes(void);
+Uint32 TriggerProcessing(Uint32 interval, void *param);
+Uint32 FrameCounter(Uint32 interval, void *param);
 void SetPixel(int x, int y, color_t color, unsigned char *fb);
 color_t GetPixel(int x, int y, unsigned char *buffer);
-void FadeAll(int dec, fade_mode_e fade_mode, unsigned char *buffer);
+void FadeAll(int dec, fadeModes_e fadeMode, unsigned char *buffer);
 void Scroll (dir_e direction, int rollovermode, unsigned char *fb, unsigned char plane);
 void WriteSlice(moment_t *moment);
 void CellFun(moment_t *moment);
 void DrawSideBar(moment_t *moment);
-void UpdateTensor(unsigned char *buffer);
-void UpdatePreview(unsigned char *buffer);
 void Diffuse(float diffusion_coeff, unsigned char *buffer);
 void HorizontalBars(color_t color, unsigned char *buffer);
 void VerticalBars(color_t color, unsigned char *buffer);
+int HandleInput(SDL_Event *key_event);
 int ColorAlter(int thiskey, moment_t *moments,int now);
 int ModeAlter(int thiskey, moment_t *moments, int now);
 void ParmAlter(int thiskey, moment_t *moments, int now);
@@ -336,37 +419,35 @@ void LoadMoments(SDL_KeyboardEvent *key, moment_t *moments, char *fn);
 void RandomDots(color_t color, unsigned int rFreq, unsigned char *buffer);
 void ColorCycle(parms_t *parms, int fb_mode);
 void ColorAll(color_t color, unsigned char *fb);
-void UpdateInfoDisplay(moment_t *moment, int now);
-void qDrawRectangle(int x, int y, int width, int height, color_t color);
-void WriteLine(char * thisText, int line, int col, color_t color);
+void SetDims(void);
 void Update(float intensity_limit, moment_t *moment);
 void UpdateAll(void);
+void UpdateTensor(unsigned char *buffer);
+void DrawPreviewBorder(void);
+void UpdatePreview(unsigned char *buffer);
+void InitInfoDisplay(void);
+void UpdateInfoDisplay(moment_t *moment, int now);
 void ClearAll(void);
+void WriteLine(char * thisText, int line, int col, color_t color);
+void WriteBool(int value, int row, int col);
+void WriteInt(int value, int row, int col, int width);
+void WriteFloat(float value, int row, int col, int width, int precision);
+void WriteString(const char *text, int line, int col, int width);
 SDL_Surface * FBToSurface(SDL_Surface *surface, unsigned char *FB);
 unsigned char * SurfaceToFB(unsigned char *FB, SDL_Surface *surface);
 void Rotate(double angle, double expansion, int aliasmode, unsigned char *fb_dst, unsigned char *fb_src);
 void Multiply(float multiplier, unsigned char *buffer);
-void InitInfoDisplay(void);
-void SetDims(void);
-void DrawPreviewBorder(void);
 void DrawRectangle(int x, int y, int w, int h, color_t color);
 void DrawBox(int x, int y, int w, int h, color_t color);
 void SetPixelA(int x, int y, color_t color, unsigned char *buffer);
 void ClearRed(moment_t *currentMoment);
 void ClearGreen(moment_t *currentMoment);
 void ClearBlue(moment_t *currentMoment);
-int HandleInput(SDL_Event *key_event);
-void ProcessModes(void);
-void MainLoop(void);
-Uint32 TriggerProcessing(Uint32 interval, void *param);
-Uint32 FrameCounter(Uint32 interval, void *param);
-int min(int a, int b);
 void SetPixelByPlane(int x, int y, color_t color, unsigned char plane, unsigned char *buffer);
 void DrawImage(double angle, double expansion, int aliasmode, unsigned char *fb_dst);
-int max(int a, int b);
 int min(int a, int b);
-void WriteBool(int value, int row, int col);
-void WriteLineAdjusted(char * thisText, int line, int col, int offset, color_t color);
+int max(int a, int b);
+
 
 // Main
 int main(int argc, char *argv[]) {
@@ -388,9 +469,6 @@ int main(int argc, char *argv[]) {
   frames = 0;
   fps = 0;
 
-  // Set the times
-  mnow = time(NULL);
-
   // Unbuffer the console...
   setvbuf(stdout, (char *)NULL, _IONBF, 0);
   setvbuf(stderr, (char *)NULL, _IONBF, 0);
@@ -410,19 +488,17 @@ int main(int argc, char *argv[]) {
     fprintf(stderr, "Unable to init SDL: %s\n", SDL_GetError());
     exit(EXIT_FAILURE);
   }
-  atexit(SDL_Quit);
+  atexit(SDL_Quit);  // Register the SDL cleanup function.
 
   // Initialize the SDL window and renderer.
   SDL_CreateWindowAndRenderer(900, 768, SDL_WINDOW_RESIZABLE, &mainWindow, &mwRenderer);
-  if (!mainWindow) {
-    fprintf(stderr, "Unable to create main window: %s\n", SDL_GetError());
+  if ((!mainWindow) || (!mwRenderer)) {
+    fprintf(stderr, "Unable to create main window or renderer: %s\n", SDL_GetError());
     exit(EXIT_FAILURE);
   }
-  if (!mwRenderer) {
-    fprintf(stderr, "Unable to create renderer: %s\n", SDL_GetError());
-    exit(EXIT_FAILURE);
-  }
-  SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "best");
+
+  // Window scaling hints:
+  SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");
   SDL_RenderSetLogicalSize(mwRenderer, 900, 768);
 
   // Set the window title
@@ -442,7 +518,7 @@ int main(int argc, char *argv[]) {
   // Draw a border around the preview
   DrawPreviewBorder();
 
-  // Load the font.
+  // Load the font.  Should be a fixed width font.
   if(TTF_Init() < 0) {
     printf("Couldn't initialize TTF: %s\n", TTF_GetError());
     exit(EXIT_FAILURE);
@@ -470,59 +546,61 @@ int main(int argc, char *argv[]) {
   currentMode->cycleBackground = NO;
   currentMode->cycleForeground = YES;
   currentMode->diffuse = NO;
-  currentMode->fade_mode = FADE_TO_ZERO;
+  currentMode->fadeMode = FM_LIMIT;
   currentMode->fadeout = NO;
   currentMode->horizontalBars = NO;
   currentMode->multiply = NO;
   currentMode->randDots = NO;
   currentMode->roller = NO;
-  currentMode->rotozoom = NO;
-  currentMode->rotozoom2 = NO;
+  currentMode->postRotateZoom = NO;
+  currentMode->preRotateZoom = NO;
   currentMode->scroller = YES;
-  currentMode->textScroller = YES;
+  currentMode->textSeed = YES;
   currentMode->verticalBars = NO;
-  currentMode->stagger = 3;
+  currentMode->textStagger = TS_FULLBG;
   currentMode->sidebar = NO;
   currentMode->clearBlue = NO;
   currentMode->clearGreen = NO;
   currentMode->clearRed = NO;
-  currentMode->shiftred = 0;
-  currentMode->shiftgreen = 0;
-  currentMode->shiftblue = 0;
-  currentMode->shiftcyan = 0;
-  currentMode->shiftmagenta = 0;
-  currentMode->shiftyellow = 0;
-  currentMode->image = NO;
+  currentMode->shiftRed = SM_HOLD;
+  currentMode->shiftGreen = SM_HOLD;
+  currentMode->shiftBlue = SM_HOLD;
+  currentMode->shiftCyan = SM_HOLD;
+  currentMode->shiftMagenta = SM_HOLD;
+  currentMode->shiftYellow = SM_HOLD;
+  currentMode->postImage = NO;
+  currentMode->fontFlip = NO;
+  currentMode->fontDirection = FORWARDS;
 
-  currentParms->background = BLACK_E;
-  currentParms->bg = palette[currentParms->background];
-  currentParms->colorCycleMode = RAINBOW;
+  currentParms->background = CE_BLACK;
+  currentParms->bg = namedPalette[currentParms->background].color;
+  currentParms->colorCycleMode = CM_RAINBOW;
   currentParms->colorMultiplier = INITIAL_COLOR_MULTIPLIER;
-  currentParms->cycleF = 0;
-  currentParms->cycleB = 0;
+  currentParms->cycleSaveForegound = 0;
+  currentParms->cycleSaveBackground = 0;
   currentParms->diffusion_coef = INITIAL_DIFF_COEF;
   currentParms->expand = INITIAL_EXPAND;
   currentParms->fadeout_dec = INITIAL_FADEOUT_DEC;
   currentParms->floatinc = INITIAL_FLOAT_INC;
-  currentParms->foreground = RED_E;
-  currentParms->fg = palette[currentParms->foreground];
+  currentParms->foreground = CE_RED;
+  currentParms->fg = namedPalette[currentParms->foreground].color;
   currentParms->rainbowInc = INITIAL_RAINBOW_INC;
   currentParms->randMod = INITIAL_RAND_MOD;
   currentParms->rotation = INITIAL_ROTATION_ANGLE;
   currentParms->rotation2 = INITIAL_ROTATION_ANGLE2;
   currentParms->rotationDelta = INITIAL_ROTATION_DELTA;
-  currentParms->scrollerDir = LEFT;
+  currentParms->scrollerDir = DIR_LEFT;
   currentParms->cellAutoCount = 0;
-  currentParms->textRow = TENSOR_HEIGHT_EFF / 3 - 1;
+  currentParms->textOffset = TENSOR_HEIGHT_EFF / 3 - 1;
   currentParms->delay = 60;
 
   snprintf(currentText->textBuffer, TEXT_BUFFER_SIZE, "Frostbyte was an engineer. ");
   currentText->tindex = strlen(currentText->textBuffer);
   currentText->imaginaryIndex = -1;
-  currentText->lastDirection = LEFT;
-  currentText->textBufferRand[0] = 'a';
+  currentText->lastDirection = DIR_LEFT;
+  currentText->textBufferRand[0] = 'a';  // Initializing value.
 
-  ColorAll(black, currentFB);
+  ColorAll(cBlack, currentFB);
 
   // There is a secret hidden bug in the moment copying or changing or disk read / write
   // that I haven't found yet...
@@ -534,7 +612,7 @@ int main(int argc, char *argv[]) {
   LoadMoments(NULL, &moments[0], "1.now");
 
   // Bam!
-  ColorAll(black, currentFB);
+  ColorAll(cBlack, currentFB);
   Update(global_intensity_limit, currentMoment);
 
   // Add the text.
@@ -676,16 +754,16 @@ void MainLoop(void) {
 
 // Time to make a mess of the array.
 void ProcessModes(void) {
-  static int randomCount = 0;    // Frame Count.
-  static dir_e scrDir = UP;
+  static int cycleFrameCount = 0;    // Frame Count.
+  static dir_e scrDir = DIR_UP;
 
   // Random mode isn't random.  It cycles through the moments.  It allows you
   // to set up a bunch of pattern sets and switch between them one at a time at
   // some interval.
-  if (randomMode == YES) {
-    randomCount++;
-    if (randomCount >= RANDOM_LIMIT) {
-      randomCount = 0;
+  if (cycleMomentsMode) {
+    cycleFrameCount++;
+    if (cycleFrameCount >= CYCLE_FRAME_LIMIT) {
+      cycleFrameCount = 0;
 
       now = (now + 1) % MOMENT_COUNT;
       // Re-appoint the pointers.
@@ -698,140 +776,140 @@ void ProcessModes(void) {
   }
 
   // Change foreground color.
-  if (currentMode->cycleForeground == YES) {
+  if (currentMode->cycleForeground) {
     ColorCycle(currentParms, FOREGROUND);
   }
 
   // Change background color.
-  if (currentMode->cycleBackground == YES) {
+  if (currentMode->cycleBackground) {
     ColorCycle(currentParms, BACKGROUND);
   }
 
   // Seed the entire array with the foreground color.
-  if (currentMode->colorAll == YES) {
+  if (currentMode->colorAll) {
     ColorAll(currentParms->fg, currentFB);
     currentMode->colorAll = NO;
   }
 
   // Scroller.
-  if (currentMode->scroller == YES) {
+  if (currentMode->scroller) {
     Scroll(currentParms->scrollerDir, currentMode->roller, currentFB, PLANE_ALL);
   }
 
   // Scroll red.
-  if ((currentMode->shiftred != 0)) {
-    Scroll(currentMode->shiftred - 1, currentMode->roller, currentFB, PLANE_RED);
+  if (currentMode->shiftRed) {
+    Scroll(currentMode->shiftRed - 1, currentMode->roller, currentFB, PLANE_RED);
   }
 
   // Scroll green.
-  if ((currentMode->shiftgreen != 0)) {
-    Scroll(currentMode->shiftgreen - 1, currentMode->roller, currentFB, PLANE_GREEN);
+  if (currentMode->shiftGreen) {
+    Scroll(currentMode->shiftGreen - 1, currentMode->roller, currentFB, PLANE_GREEN);
   }
 
   // Scroll blue.
-  if ((currentMode->shiftblue != 0)) {
-    Scroll(currentMode->shiftblue - 1, currentMode->roller, currentFB, PLANE_BLUE);
+  if (currentMode->shiftBlue) {
+    Scroll(currentMode->shiftBlue - 1, currentMode->roller, currentFB, PLANE_BLUE);
   }
 
   // Scroll blue and green
-  if ((currentMode->shiftcyan != 0)) {
-      Scroll(currentMode->shiftcyan - 1, currentMode->roller, currentFB, PLANE_CYAN);
+  if (currentMode->shiftCyan) {
+      Scroll(currentMode->shiftCyan - 1, currentMode->roller, currentFB, PLANE_CYAN);
   }
 
   // Scroll red and blue.
-  if ((currentMode->shiftmagenta != 0)) {
-    Scroll(currentMode->shiftmagenta - 1, currentMode->roller, currentFB, PLANE_MAGENTA);
+  if (currentMode->shiftMagenta) {
+    Scroll(currentMode->shiftMagenta - 1, currentMode->roller, currentFB, PLANE_MAGENTA);
   }
 
   // Scroll green and red.
-  if ((currentMode->shiftyellow != 0)) {
-    Scroll(currentMode->shiftyellow - 1, currentMode->roller, currentFB, PLANE_YELLOW);
+  if (currentMode->shiftYellow) {
+    Scroll(currentMode->shiftYellow - 1, currentMode->roller, currentFB, PLANE_YELLOW);
   }
 
   // Draw a solid bar up the side we are scrolling from.
-  if (currentMode->sidebar == YES) {
+  if (currentMode->sidebar) {
     DrawSideBar(currentMoment);
   }
 
   // First stab experimental image drawing.  Needs work.
-  if (currentMode->image == YES) {
+  if (currentMode->postImage) {
     DrawImage(currentParms->rotation, currentParms->expand, currentMode->alias, currentFB);
     currentParms->rotation = currentParms->rotation + currentParms->rotationDelta;
   }
 
   // I think this just writes a column of text on the right or left.
-  if (currentMode->textScroller == YES) {
+  if (currentMode->textSeed) {
     // Scroll provided by scroller if its on.
     WriteSlice(currentMoment);
   }
 
   // Cellular automata manips?  Not actually cellular auto.  Never finished this.
-  if (currentMode->cellAutoFun == YES) {
+  if (currentMode->cellAutoFun) {
     // Give each pixel a color value.
     CellFun(currentMoment);
   }
 
   // Bouncy bouncy (ick).
-  if (currentMode->bouncer == YES) {
+  if (currentMode->bouncer) {
     scrDir = (scrDir + 1) % 4;
     Scroll(scrDir, currentMode->roller, currentFB, PLANE_ALL);
   }
 
   // Bam!  Draw some horizontal bars.
-  if (currentMode->horizontalBars == YES) {
+  if (currentMode->horizontalBars) {
     HorizontalBars(currentParms->fg, currentFB);
     currentMode->horizontalBars = NO;
   }
 
   // Bam!
-  if (currentMode->verticalBars == YES) {
+  if (currentMode->verticalBars) {
     VerticalBars(currentParms->fg, currentFB);
     currentMode->verticalBars = NO;
   }
 
   // Random dots.  Most useful seed ever.
-  if (currentMode->randDots == YES) {
+  if (currentMode->randDots) {
     RandomDots(currentParms->fg, currentParms->randMod, currentFB);
   }
 
   // Fader
-  if (currentMode->fadeout == YES) {
-    FadeAll(currentParms->fadeout_dec, currentMode->fade_mode, currentFB);
+  if (currentMode->fadeout) {
+    FadeAll(currentParms->fadeout_dec, currentMode->fadeMode, currentFB);
   }
 
   // Averager
-  if (currentMode->diffuse == YES) {
+  if (currentMode->diffuse) {
     Diffuse(currentParms->diffusion_coef, currentFB);
   }
 
   // Clear screen.
-  if (currentMode->clearAll == YES) {
+  if (currentMode->clearAll) {
     ColorAll(currentParms->bg, currentFB);
     currentMode->clearAll = NO;
   }
 
   // Multiplier
-  if (currentMode->multiply == YES) {
+  if (currentMode->multiply) {
     Multiply(currentParms->colorMultiplier, currentFB);
   }
 
   // Experimental Rotozoomer
-  if (currentMode->rotozoom2 == YES) {
+  if (currentMode->preRotateZoom) {
     Rotate(currentParms->rotation2, currentParms->expand, currentMode->alias, currentFB, currentFB);
   }
 
   // Zero the red.
-  if (currentMode->clearRed == YES) {
+  if (currentMode->clearRed) {
     ClearRed(currentMoment);
   }
 
   // Zero the blue.
-  if (currentMode->clearBlue == YES) {
+  if (currentMode->clearBlue) {
     ClearBlue(currentMoment);
   }
 
   // Zero the green.
-  if (currentMode->clearGreen == YES) {
+  if (currentMode->clearGreen) {
     ClearGreen(currentMoment);
   }
 }
@@ -870,6 +948,26 @@ int HandleInput(SDL_Event *key_event) {
 
   // No modifier keys.  Text buffer stuff.
   } else {
+    // Check for arrows here.
+    switch (key_event->key.keysym.sym) {
+      case SDLK_UP:
+        currentParms->scrollerDir = DIR_UP;
+        break;
+
+      case SDLK_DOWN:
+        currentParms->scrollerDir = DIR_DOWN;
+        break;
+
+      case SDLK_LEFT:
+        currentParms->scrollerDir = DIR_LEFT;
+        break;
+
+      case SDLK_RIGHT:
+        currentParms->scrollerDir = DIR_RIGHT;
+        break;
+      default:
+        break;
+    }
     if (key_event->key.keysym.sym < 0x80 && key_event->key.keysym.sym > 0) {
       switch(key_event->key.keysym.sym) {
         case SDLK_ESCAPE:
@@ -1067,33 +1165,42 @@ void Multiply(float multiplier, unsigned char *buffer) {
 
 
 // Darken (or lighten) all the pixels by a certain value.
-void FadeAll(int dec, fade_mode_e fade_mode, unsigned char *buffer) {
-  int x,y;
-  color_t oldColor;
+void FadeAll(int dec, fadeModes_e fadeMode, unsigned char *buffer) {
+  int x, y, r, g, b;
+  color_t colorTemp;
 
   for (x = 0; x < TENSOR_WIDTH_EFF; x++) {
     for (y = 0; y < TENSOR_HEIGHT_EFF; y++) {
-      oldColor = GetPixel(x, y, buffer);
-      if ((oldColor.r < dec) && (fade_mode == FADE_TO_ZERO)) {
-        oldColor.r = 0;
+
+      // Grab the pixel color.
+      colorTemp = GetPixel(x, y, buffer);
+
+      if (fadeMode == FM_MODULAR) {
+        // Modular color fade is easy regardless of dec sign.
+        // Unsigned chars rollover.
+        colorTemp.r -= dec;
+        colorTemp.g -= dec;
+        colorTemp.b -= dec;
       } else {
-        // 8 bit modular fade.
-        oldColor.r -= dec;
+        // For the limiter, we'll do the math with ints.
+        r = colorTemp.r;
+        g = colorTemp.g;
+        b = colorTemp.b;
+        r -= dec;
+        g -= dec;
+        b -= dec;
+        if ( r < 0 ) r = 0;
+        if ( g < 0 ) g = 0;
+        if ( b < 0 ) b = 0;
+        if ( r > 255 ) r = 255;
+        if ( g > 255 ) g = 255;
+        if ( b > 255 ) b = 255;
+        colorTemp.r = r;
+        colorTemp.g = g;
+        colorTemp.b = b;
       }
 
-      if ((oldColor.g < dec) && (fade_mode == FADE_TO_ZERO)) {
-        oldColor.g = 0;
-      } else {
-        oldColor.g -= dec;
-      }
-
-      if ((oldColor.b < dec) && (fade_mode == FADE_TO_ZERO)) {
-        oldColor.b = 0;
-      } else {
-        oldColor.b -= dec;
-      }
-
-      SetPixel(x,y,oldColor, buffer);
+      SetPixel(x, y, colorTemp, buffer);
     }
   }
 }
@@ -1207,7 +1314,7 @@ void Update(float intensity_limit, moment_t *moment) {
   int i;
 
   // Output rotate (doesn't effect array values, but does effect the final image).
-  if (mode->rotozoom == YES) {
+  if (mode->postRotateZoom) {
     parms->rotation = parms->rotation + parms->rotationDelta;
     Rotate(parms->rotation, parms->expand, mode->alias, &fba[0], &buffer[0]);
 
@@ -1246,7 +1353,7 @@ void Rotate(double angle, double expansion, int aliasmode, unsigned char *fb_dst
   FBToSurface(previewSurface, fb_src);
 
   // Rotate / scale it.
-  rotatedSurface = rotozoomSurface (previewSurface, angle, expansion, (aliasmode == YES) ? 1 : 0);
+  rotatedSurface = rotozoomSurface (previewSurface, angle, expansion, aliasmode ? 1 : 0);
   if (!rotatedSurface) {
     fprintf(stderr, "Error rotating surface: %s\n", SDL_GetError());
     return;
@@ -1341,25 +1448,25 @@ void Scroll (dir_e direction, int rollovermode, unsigned char *fb, unsigned char
   // rollover mode?
   if (rollovermode == YES) {
     switch(direction) {
-      case UP:
+      case DIR_UP:
         for(i = 0; i < TENSOR_WIDTH_EFF; i++) {
           rollSave[i] = GetPixel(i, 0, fb);
         }
         break;
 
-      case DOWN:
+      case DIR_DOWN:
         for (i = 0; i < TENSOR_WIDTH_EFF; i++) {
           rollSave[i] = GetPixel(i, TENSOR_HEIGHT_EFF - 1, fb);
         }
         break;
 
-      case RIGHT:
+      case DIR_RIGHT:
         for (i = 0; i < TENSOR_HEIGHT_EFF; i++) {
           rollSave[i] = GetPixel(TENSOR_WIDTH_EFF - 1, i, fb);
         }
       break;
 
-      case LEFT:
+      case DIR_LEFT:
         for (i = 0; i < TENSOR_HEIGHT_EFF; i++) {
           rollSave[i] = GetPixel(0, i, fb);
         }
@@ -1372,7 +1479,7 @@ void Scroll (dir_e direction, int rollovermode, unsigned char *fb, unsigned char
 
   //
   switch(direction) {
-    case UP:
+    case DIR_UP:
       for (y = 0; y < (TENSOR_HEIGHT_EFF - 1); y++) {
         for (x = 0; x < TENSOR_WIDTH_EFF; x++) {
           SetPixelByPlane(x, y, GetPixel(x, y+1, fb), plane, fb);
@@ -1380,7 +1487,7 @@ void Scroll (dir_e direction, int rollovermode, unsigned char *fb, unsigned char
       }
       break;
 
-    case DOWN:
+    case DIR_DOWN:
       for (y = (TENSOR_HEIGHT_EFF - 1); y > 0; y--) {
         for (x = 0; x < TENSOR_WIDTH_EFF; x++) {
           SetPixelByPlane(x, y, GetPixel(x, y - 1, fb), plane, fb);
@@ -1388,7 +1495,7 @@ void Scroll (dir_e direction, int rollovermode, unsigned char *fb, unsigned char
       }
       break;
 
-    case LEFT:
+    case DIR_LEFT:
       for (y = 0; y < TENSOR_HEIGHT_EFF; y++) {
         for (x = 0; x < (TENSOR_WIDTH_EFF - 1); x++) {
           SetPixelByPlane(x, y, GetPixel(x + 1, y, fb),plane, fb);
@@ -1396,7 +1503,7 @@ void Scroll (dir_e direction, int rollovermode, unsigned char *fb, unsigned char
       }
       break;
 
-    case RIGHT:
+    case DIR_RIGHT:
     default:
       for (y = 0; y < TENSOR_HEIGHT_EFF; y++) {
         for (x = (TENSOR_WIDTH_EFF - 1); x > 0; x--) {
@@ -1409,25 +1516,25 @@ void Scroll (dir_e direction, int rollovermode, unsigned char *fb, unsigned char
   // rollover mode?
   if (rollovermode == YES) {
     switch(direction) {
-      case UP:
+      case DIR_UP:
         for(i = 0; i < TENSOR_WIDTH_EFF; i++) {
           SetPixelByPlane(i, TENSOR_HEIGHT_EFF - 1, rollSave[i], plane, fb);
         }
         break;
 
-      case DOWN:
+      case DIR_DOWN:
         for (i = 0; i < TENSOR_WIDTH_EFF; i++) {
           SetPixelByPlane(i, 0, rollSave[i],plane, fb);
         }
         break;
 
-      case RIGHT:
+      case DIR_RIGHT:
         for (i = 0; i < TENSOR_HEIGHT_EFF; i++) {
           SetPixelByPlane(0, i, rollSave[i],plane, fb);
         }
       break;
 
-      case LEFT:
+      case DIR_LEFT:
         for (i = 0; i < TENSOR_HEIGHT_EFF; i++) {
           SetPixelByPlane(TENSOR_WIDTH_EFF - 1, i, rollSave[i],plane, fb);
         }
@@ -1449,130 +1556,223 @@ void UpdateTensor(unsigned char *buffer) {
 
 // Write a slice of text.
 void WriteSlice(moment_t *moment) {
-  const unsigned char char_masks[] = { 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80 };
-  char *buffer = moment->text.textBuffer;
-  unsigned char *fb = moment->fb;
-  dir_e direction = moment->coefs.scrollerDir;
-  int textRow = moment->coefs.textRow;
-  int effRow;
-  int column;
-  unsigned char character;
-  int imaginaryBufferSize;
-  int *imaginaryBufferIndex = &moment->text.imaginaryIndex;
-  int fontPixelIndex;
-  int bufferIndex;
-  int charCol;
-  int i;
-  int useRand;
-  color_t bg_color = moment->coefs.bg;
-  color_t fg_color = moment->coefs.fg;
+  const unsigned char charColMasks[] = { 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80 };
+  int sliceColOrRow;  // The seed target column / row (depending on direction).
+  int sliceIndex;     // A pixel of the target slice we are working on.
+  char character;     // The current character being output.
+  int imaginaryBufferSize;  // Number of pixel columns in the text buffer.
+  int fontPixelIndex;  // Index into the font to a selected pixel.
+  int bufferIndex;  // Index into the text buffer of the current character.
+  int charCol;  // Index into the font pixels column of the current character.
+  int i, j;
+  int useRand;  // The random number used during staggering (if at all).
+  unsigned char horizontal;
+  unsigned char pixelOn;
+  unsigned char textDirection;
 
-  if (direction == RIGHT) {
-    column = 0;
-  } else {
-    column = TENSOR_WIDTH_EFF - 1;
+  // Figure out which row or column to place the seed slice into depending on direction.
+  horizontal = YES;
+  switch (moment->coefs.scrollerDir) {
+    case DIR_LEFT:
+      sliceColOrRow = TENSOR_WIDTH_EFF - 1;
+      break;
+
+    case DIR_UP:
+      horizontal = NO;
+      sliceColOrRow = TENSOR_HEIGHT_EFF - 1;
+      break;
+
+    case DIR_DOWN:
+      horizontal = NO;
+      // Fallthrough...
+    case DIR_RIGHT:
+    default:
+      sliceColOrRow = 0;
+      break;
   }
 
-  // Some inits just in case.
+  // Initialize textBufferRand, if necessary.  This is used for 9 row stagger,
+  // which is meant for an 8 pixel font height on a 9 pixel high display.
   if (moment->text.textBufferRand[0] == 'a') {
     for (i = 0; i < TEXT_BUFFER_SIZE; i++) {
       moment->text.textBufferRand[i] = rand() % 2;
     }
   }
 
-  // The imaginary buffer correspends to the real buffer, but further subdivides
-  // each array index into 8 parts.
-  imaginaryBufferSize = strlen(buffer) * FONT_WIDTH;
+  // The imaginary buffer correspends to the real text buffer, but further
+  // subdivides each array index into a part for every pixel of the text width.
+  imaginaryBufferSize = strlen(moment->text.textBuffer) * FONT_WIDTH;
 
+  // Trivially, no text in the buffer.
   if (imaginaryBufferSize == 0) {
+    // Just exit.  This actually causes the background to stop scrolling, which
+    // might not be desireable.
     return;
   }
 
   // Prior to writing out a line, we increment the imaginary buffer index to
-  // point to the next part of the line to be written.  This depends on a couple
-  // of things, i.e. direction (for instance).
-  if (moment->text.lastDirection != direction) {
+  // point to the next part of the line to be written.  This depends on
+  // scroll direction, text direction.
+  textDirection = moment->coefs.scrollerDir;
+  if (moment->mode.fontDirection == BACKWARDS) {
+    switch (textDirection) {
+      case DIR_LEFT:
+        textDirection = DIR_RIGHT;
+        break;
+      case DIR_RIGHT:
+        textDirection = DIR_LEFT;
+        break;
+      case DIR_DOWN:
+        textDirection = DIR_UP;
+        break;
+      case DIR_UP:
+        textDirection = DIR_DOWN;
+        break;
+      default:
+        break;
+    }
+  }
+  if (moment->text.lastDirection != moment->coefs.scrollerDir) {
+
     // Looks like we changed direction.
-    moment->text.lastDirection = direction;
-    if (direction == LEFT) {
-      *imaginaryBufferIndex = (*imaginaryBufferIndex + TENSOR_WIDTH_EFF) % imaginaryBufferSize;
-    } else {
-      *imaginaryBufferIndex = *imaginaryBufferIndex - TENSOR_WIDTH_EFF;
-      if (*imaginaryBufferIndex < 0) {
-        *imaginaryBufferIndex = imaginaryBufferSize + *imaginaryBufferIndex;
-      }
-    }  // +/- 1
+    moment->text.lastDirection = moment->coefs.scrollerDir;
+
+    // TENSOR_WIDTH_EFF is used here to preserve continuity of the text, even
+    // across text buffer wrap-around, when the direction changes (but only
+    // really between UP - DOWN or RIGHT - LEFT changes).
+    switch(textDirection) {
+      case DIR_LEFT:
+        moment->text.imaginaryIndex = (moment->text.imaginaryIndex + TENSOR_WIDTH_EFF) % imaginaryBufferSize;
+        break;
+      case DIR_RIGHT:
+        moment->text.imaginaryIndex = moment->text.imaginaryIndex - TENSOR_WIDTH_EFF;
+        if (moment->text.imaginaryIndex < 0) {
+          moment->text.imaginaryIndex = imaginaryBufferSize + moment->text.imaginaryIndex;
+        }
+        break;
+      case DIR_DOWN:
+        moment->text.imaginaryIndex = (moment->text.imaginaryIndex + TENSOR_HEIGHT_EFF) % imaginaryBufferSize;
+        break;
+      case DIR_UP:
+        moment->text.imaginaryIndex = moment->text.imaginaryIndex - TENSOR_HEIGHT_EFF;
+        if (moment->text.imaginaryIndex < 0) {
+          moment->text.imaginaryIndex = imaginaryBufferSize + moment->text.imaginaryIndex;
+        }
+        break;
+      default:
+        break;
+    }
   } else {
-    if (direction == LEFT) {
-      *imaginaryBufferIndex = (*imaginaryBufferIndex + 1) % imaginaryBufferSize;
-    } else {
-      *imaginaryBufferIndex = *imaginaryBufferIndex - 1;
-      if (*imaginaryBufferIndex < 0) {
-        *imaginaryBufferIndex = imaginaryBufferSize - 1;
-      }
+    // No change in direction, so we increment without worrying about continuity
+    // preservation.
+    switch(textDirection) {
+      case DIR_LEFT:
+      case DIR_DOWN:
+        moment->text.imaginaryIndex = (moment->text.imaginaryIndex + 1) % imaginaryBufferSize;
+        break;
+      case DIR_RIGHT:
+      case DIR_UP:
+        moment->text.imaginaryIndex--;
+        if ((moment->text.imaginaryIndex < 0) || (moment->text.imaginaryIndex >= imaginaryBufferSize)) {
+          moment->text.imaginaryIndex = imaginaryBufferSize - 1;
+        }
+        break;
+      default:
+        break;
     }
   }
 
   // Now using the imaginary index, we find out where in the real buffer we are.
-  // Integer division.
-  bufferIndex = *imaginaryBufferIndex / FONT_WIDTH;
+  // (Integer division.)
+  bufferIndex = moment->text.imaginaryIndex / FONT_WIDTH;
 
   // And where in that character is the left over from above...
-  charCol = (FONT_WIDTH - 1) - (*imaginaryBufferIndex % FONT_WIDTH);
+  charCol = (FONT_WIDTH - 1) - (moment->text.imaginaryIndex % FONT_WIDTH);
 
-  // What the character is. (What it is, man.)
-  character = buffer[bufferIndex];
-  //printf("%c ", character);
+  // What the character is.  What it is, man.
+  character = moment->text.textBuffer[bufferIndex];
 
-  // Up or down justified (zig zagger) for better fit on landscape panel.
+  // First we draw the seed's background according to our textStagger mode.
   useRand = 0;
-  if (moment->mode.stagger == 1) {
-    // Stagger.  For landscape.  Fill in the row that isn't covered by the letter.
-    if (moment->text.textBufferRand[bufferIndex] == 1) {
-      effRow = textRow;
-    } else {
-      effRow = textRow + 8;
-    }
+  switch (moment->mode.textStagger) {
+    case TS_9ROWSTAGGER:
+      // Stagger.  For landscape - 8 pixel font on 9 pixels high display.
+      // Stagger the letter and fill in the pixel that isn't covered by the
+      // letter with our background.
+      sliceIndex = moment->coefs.textOffset;
+      if (!moment->text.textBufferRand[bufferIndex]) sliceIndex += 8;
+      if (horizontal) {
+        sliceIndex = sliceIndex % TENSOR_HEIGHT_EFF;
+        SetPixelA(sliceColOrRow, sliceIndex, moment->coefs.bg, moment->fb);
+      } else {
+        sliceIndex = sliceIndex % TENSOR_WIDTH_EFF;
+        SetPixelA(sliceIndex, sliceColOrRow, moment->coefs.bg, moment->fb);
+      }
+      useRand = moment->text.textBufferRand[bufferIndex];
+      break;
 
-    if ((effRow >= 0) && (effRow < TENSOR_HEIGHT_EFF)) {
-      SetPixelA(column, effRow, bg_color,fb);
-    }
+    case TS_10ROWBORDER:
+      // No stagger. Draw a single line border on top & bottom of text with bg.
+      sliceIndex = moment->coefs.textOffset - 1;
+      if (horizontal) {
+        if (sliceIndex < 0) sliceIndex = TENSOR_HEIGHT_EFF - 1;
+        sliceIndex %= TENSOR_HEIGHT_EFF;
+        SetPixelA(sliceColOrRow, sliceIndex, moment->coefs.bg, moment->fb);
+      } else {
+        if (sliceIndex < 0) sliceIndex = TENSOR_WIDTH_EFF - 1;
+        sliceIndex %= TENSOR_WIDTH_EFF;
+        SetPixelA(sliceIndex, sliceColOrRow, moment->coefs.bg, moment->fb);
+      }
+      sliceIndex = moment->coefs.textOffset + 8;
+      if (horizontal) {
+        sliceIndex %= TENSOR_HEIGHT_EFF;
+        SetPixelA(sliceColOrRow, sliceIndex, moment->coefs.bg, moment->fb);
+      } else {
+        sliceIndex %= TENSOR_WIDTH_EFF;
+        SetPixelA(sliceIndex, sliceColOrRow, moment->coefs.bg, moment->fb);
+      }
+      break;
 
-    useRand = moment->text.textBufferRand[bufferIndex];
-  } else if (moment->mode.stagger == 2) {
-    // No stagger, but draw a single line border on top and bottom of text with bg.
-    effRow = textRow - 1;
-    if ((effRow >= 0) && (effRow < TENSOR_HEIGHT_EFF)) {
-      SetPixelA(column, effRow, bg_color,fb);
-    }
-    effRow = textRow + 8;
-    if ((effRow >= 0) && (effRow < TENSOR_HEIGHT_EFF)) {
-      SetPixelA(column, effRow, bg_color,fb);
-    }
-  } else if (moment->mode.stagger == 3) {
-    // No stagger, but background the whole image.
-    for (i = 0; i < TENSOR_HEIGHT_EFF; i++) {
-      SetPixelA(column, i, bg_color, fb);
-    }
+    case TS_FULLBG:
+      // No stagger, but background on the whole image.
+      if (horizontal) {
+        for (i = 0; i < TENSOR_HEIGHT_EFF; i++) {
+          SetPixelA(sliceColOrRow, i, moment->coefs.bg, moment->fb);
+        }
+      } else {
+        for (i = 0; i < TENSOR_WIDTH_EFF; i++) {
+          SetPixelA(i, sliceColOrRow, moment->coefs.bg, moment->fb);
+        }
+      }
+      break;
+
+    default:
+      // textStagger == TS_8ROW, which means no border, no stagger, no extra
+      // background to draw, so do nothing.
+      break;
   }
-
-  // stagger == 0 means no border, no stagger.
 
   // Now go through each pixel value to find out what to write.
   for (i = 0; i < FONT_HEIGHT; i++) {
-    fontPixelIndex = (i * FONT_CHARACTER_COUNT) + character;
-    effRow = i + useRand + textRow;
-    if ((myfont[fontPixelIndex] & char_masks[charCol]) != 0) {
-      SetPixelA(column, effRow, fg_color,fb);
+    if (moment->mode.fontFlip) {
+      j = (FONT_HEIGHT - 1) - i;
     } else {
-      SetPixelA(column, effRow, bg_color, fb);
+      j = i;
+    }
+    fontPixelIndex = (j * FONT_CHARACTER_COUNT) + character;
+    sliceIndex = i + useRand + moment->coefs.textOffset;
+    pixelOn = myfont[fontPixelIndex] & charColMasks[charCol];
+    if (horizontal) {
+      sliceIndex = sliceIndex % TENSOR_HEIGHT_EFF;
+      SetPixelA(sliceColOrRow, sliceIndex, pixelOn ? moment->coefs.fg : moment->coefs.bg, moment->fb);
+    } else {
+      sliceIndex = sliceIndex % TENSOR_WIDTH_EFF;
+      SetPixelA(sliceIndex, sliceColOrRow, pixelOn ? moment->coefs.fg : moment->coefs.bg, moment->fb);
     }
   }
 
   return;
 }
-
-
 
 // Alter foreground and background colors according to key press.
 // There's more here than just that, though.
@@ -1583,35 +1783,35 @@ int ColorAlter(int thiskey, moment_t *moments, int now) {
 
   switch (thiskey) {
     case SDLK_q:
-      parms->foreground = parms->foreground - 1;
-      if (parms->foreground < 0 || parms->foreground >= PALETTE_COUNT) {
-        parms->foreground = PALETTE_COUNT - 1;
+      parms->foreground--;
+      if (parms->foreground < 0 || parms->foreground >= CE_COUNT) {
+        parms->foreground = CE_COUNT - 1;
       }
-      parms->fg = palette[parms->foreground];
+      parms->fg = namedPalette[parms->foreground].color;
       break;
 
     case SDLK_w:
       parms->foreground++;
-      if (parms->foreground >= PALETTE_COUNT) {
+      if (parms->foreground >= CE_COUNT) {
         parms->foreground = 0;
       }
-      parms->fg = palette[parms->foreground];
+      parms->fg = namedPalette[parms->foreground].color;
       break;
 
     case SDLK_a:
       parms->background--;
-      if (parms->background < 0 || parms->background >= PALETTE_COUNT) {
-        parms->background = PALETTE_COUNT - 1;
+      if (parms->background < 0 || parms->background >= CE_COUNT) {
+        parms->background = CE_COUNT - 1;
       }
-      parms->bg = palette[parms->background];
+      parms->bg = namedPalette[parms->background].color;
       break;
 
     case SDLK_s:
       parms->background++;
-      if (parms->background >= PALETTE_COUNT) {
+      if (parms->background >= CE_COUNT) {
         parms->background = 0;
       }
-      parms->bg = palette[parms->background];
+      parms->bg = namedPalette[parms->background].color;
       break;
 
     case SDLK_0: case SDLK_1: case SDLK_2: case SDLK_3: case SDLK_4: case SDLK_5:
@@ -1621,16 +1821,26 @@ int ColorAlter(int thiskey, moment_t *moments, int now) {
       break;
 
     case SDLK_z:
-      parms->textRow--;
-      if (parms->textRow < (0 - (FONT_HEIGHT + 1))) {
-        parms->textRow = TENSOR_HEIGHT_EFF;
+      parms->textOffset--;
+      if (parms->textOffset < 0) {
+        if ((parms->scrollerDir == DIR_LEFT) || (parms->scrollerDir == DIR_RIGHT)) {
+          parms->textOffset = TENSOR_HEIGHT_EFF - 1;
+        } else {
+          parms->textOffset = TENSOR_WIDTH_EFF - 1;
+        }
       }
       break;
 
     case SDLK_x:
-      parms->textRow++;
-      if (parms->textRow > TENSOR_HEIGHT_EFF) {
-        parms->textRow = 0 - (FONT_HEIGHT + 1);
+      parms->textOffset++;
+      if ((parms->scrollerDir == DIR_LEFT) || (parms->scrollerDir == DIR_RIGHT)) {
+        if (parms->textOffset >= TENSOR_HEIGHT_EFF) {
+          parms->textOffset = 0;
+        }
+      } else {
+        if (parms->textOffset >= TENSOR_WIDTH_EFF) {
+          parms->textOffset = 0;
+        }
       }
       break;
 
@@ -1650,19 +1860,19 @@ int ColorAlter(int thiskey, moment_t *moments, int now) {
       break;
 
     case SDLK_LEFTBRACKET:
-      mode->shiftcyan = (mode->shiftcyan + 1) % 5;
+      mode->shiftCyan = (mode->shiftCyan + 1) % SM_COUNT;
       break;
 
     case SDLK_RIGHTBRACKET:
-      mode->shiftyellow = (mode->shiftyellow + 1) % 5;
+      mode->shiftYellow = (mode->shiftYellow + 1) % SM_COUNT;
       break;
 
     case SDLK_BACKSLASH:
-      mode->shiftmagenta = (mode->shiftmagenta + 1) % 5;
+      mode->shiftMagenta = (mode->shiftMagenta + 1) % SM_COUNT;
       break;
 
     case SDLK_p:
-      mode->image = (mode->image + 1) % 2;
+      mode->postImage = !mode->postImage;
       break;
 
     default:
@@ -1681,32 +1891,40 @@ int ModeAlter(int thiskey, moment_t *moments, int now) {
 
   switch(thiskey) {
 
+    case SDLK_SEMICOLON:
+      mode->fontFlip = !mode->fontFlip;
+      break;
+
+    case SDLK_QUOTE:
+      mode->fontDirection = !mode->fontDirection;
+      break;
+
     case SDLK_t:
-      mode->textScroller = (mode->textScroller + 1) % 2;
+      mode->textSeed = !mode->textSeed;
       break;
 
     case SDLK_q:
-      mode->cellAutoFun = (mode->cellAutoFun + 1) % 2;
+      mode->cellAutoFun = !mode->cellAutoFun;
       break;
 
     case SDLK_w:
-      mode->bouncer = (mode->bouncer + 1) % 2;
+      mode->bouncer = !mode->bouncer;
       break;
 
     case SDLK_e:
-      mode->fadeout = (mode->fadeout + 1) % 2;
+      mode->fadeout = !mode->fadeout;
       break;
 
     case SDLK_r:
-      mode->diffuse = (mode->diffuse + 1) % 2;
+      mode->diffuse = !mode->diffuse;
       break;
 
     case SDLK_y:
-      mode->roller = (mode->roller + 1) % 2;
+      mode->roller = !mode->roller;
       break;
 
     case SDLK_u:
-      mode->scroller = (mode->scroller + 1) %2;
+      mode->scroller = !mode->scroller;
       break;
 
     case SDLK_i:
@@ -1726,19 +1944,19 @@ int ModeAlter(int thiskey, moment_t *moments, int now) {
       break;
 
     case SDLK_s:
-      mode->randDots = (mode->randDots + 1) % 2;
+      mode->randDots = !mode->randDots;
       break;
 
     case SDLK_d:
-      mode->cycleForeground = (mode->cycleForeground + 1) % 2;
+      mode->cycleForeground = !mode->cycleForeground;
       break;
 
     case SDLK_f:
-      mode->cycleBackground = (mode->cycleBackground + 1) % 2;
+      mode->cycleBackground = !mode->cycleBackground;
       break;
 
     case SDLK_g:
-      randomMode = (randomMode + 1) % 2;
+      cycleMomentsMode = !cycleMomentsMode;
       break;
 
     case SDLK_l:
@@ -1750,27 +1968,27 @@ int ModeAlter(int thiskey, moment_t *moments, int now) {
       mode->cycleBackground = NO;
       mode->cycleForeground = NO;
       mode->diffuse = NO;
-      mode->fade_mode = FADE_TO_ZERO;
+      mode->fadeMode = FM_LIMIT;
       mode->fadeout = NO;
       mode->horizontalBars = NO;
       mode->multiply = NO;
       mode->randDots = NO;
       mode->roller = NO;
-      mode->rotozoom = NO;
-      mode->rotozoom2 = NO;
+      mode->postRotateZoom = NO;
+      mode->preRotateZoom = NO;
       mode->scroller = NO;
-      mode->textScroller = NO;
+      mode->textSeed = NO;
       mode->verticalBars = NO;
       mode->sidebar = NO;
       mode->clearRed = NO;
       mode->clearBlue = NO;
       mode->clearGreen = NO;
-      mode->shiftblue = 0;  // Oh shit, I just realized that NO = 1.
-      mode->shiftcyan = 0;
-      mode->shiftgreen = 0;
-      mode->shiftmagenta = 0;
-      mode->shiftyellow = 0;
-      mode->shiftred = 0;
+      mode->shiftBlue = SM_HOLD;
+      mode->shiftCyan = SM_HOLD;
+      mode->shiftGreen = SM_HOLD;
+      mode->shiftMagenta = SM_HOLD;
+      mode->shiftYellow = SM_HOLD;
+      mode->shiftRed = SM_HOLD;
       break;
 
     case SDLK_0: case SDLK_1: case SDLK_2: case SDLK_3: case SDLK_4: case SDLK_5:
@@ -1780,19 +1998,19 @@ int ModeAlter(int thiskey, moment_t *moments, int now) {
       break;
 
     case SDLK_h:
-      mode->fade_mode = (mode->fade_mode + 1) % 2;
+      mode->fadeMode = !mode->fadeMode;
       break;
 
     case SDLK_m:
-      mode->clearRed = (mode->clearRed + 1) % 2;
+      mode->clearRed = !mode->clearRed;
       break;
 
     case SDLK_COMMA:
-         mode->clearGreen = (mode->clearGreen + 1) % 2;
+         mode->clearGreen = !mode->clearGreen;
          break;
 
     case SDLK_PERIOD:
-         mode->clearBlue = (mode->clearBlue + 1) % 2;
+         mode->clearBlue = !mode->clearBlue;
          break;
 
     case SDLK_j:
@@ -1800,44 +2018,46 @@ int ModeAlter(int thiskey, moment_t *moments, int now) {
       break;
 
     case SDLK_k:
-      mode->rotozoom = (mode->rotozoom + 1) % 2;
+      mode->postRotateZoom = !mode->postRotateZoom;
       parms->rotation = 0;
       break;
 
     case SDLK_z:
-      mode->rotozoom2 = (mode->rotozoom2 + 1) % 2;
+      mode->preRotateZoom = !mode->preRotateZoom;
       break;
 
     case SDLK_x:
-      mode->alias = (mode->alias + 1) % 2;
+      mode->alias = !mode->alias;
       break;
 
     case SDLK_c:
-      mode->multiply = (mode->multiply + 1) % 2;
+      mode->multiply = !mode->multiply;
       break;
 
     case SDLK_n:
-      mode->sidebar = (mode->sidebar + 1) % 2;
+      mode->sidebar = !mode->sidebar;
       break;
 
     case SDLK_v:
-      tensor_landscape_p = (tensor_landscape_p + 1) % 2;
+      tensor_landscape_p = !tensor_landscape_p;
       SetDims();
       DrawPreviewBorder();
       break;
 
     case SDLK_b:
-      mode->stagger = (mode->stagger + 1) % 4;
+      mode->textStagger = (mode->textStagger + 1) % TS_COUNT;
       break;
 
     case SDLK_LEFTBRACKET:
-      mode->shiftred = (mode->shiftred + 1) % 5;
+      mode->shiftRed = (mode->shiftRed + 1) % SM_COUNT;
       break;
+
     case SDLK_RIGHTBRACKET:
-      mode->shiftgreen = (mode->shiftgreen + 1) % 5;
+      mode->shiftGreen = (mode->shiftGreen + 1) % SM_COUNT;
       break;
+
     case SDLK_BACKSLASH:
-      mode->shiftblue = (mode->shiftblue + 1) % 5;
+      mode->shiftBlue = (mode->shiftBlue + 1) % SM_COUNT;
       break;
 
     default:
@@ -1851,6 +2071,7 @@ int ModeAlter(int thiskey, moment_t *moments, int now) {
 void ParmAlter(int thiskey, moment_t *moments, int now) {
   moment_t *moment = &moments[now];
   parms_t *parms = &moment->coefs;
+  modes_t *modes = &moment->mode;
 
   switch(thiskey) {
     case SDLK_z:
@@ -1890,7 +2111,21 @@ void ParmAlter(int thiskey, moment_t *moments, int now) {
       break;
 
     case SDLK_p:
-      parms->colorCycleMode = (parms->colorCycleMode + 1) % 5;
+      parms->randMod = parms->randMod - max(1, parms->randMod / 50);
+      if (parms->randMod < 1) {
+        parms->randMod = 1;
+      }
+      break;
+
+    case SDLK_LEFTBRACKET:
+      parms->randMod = INITIAL_RAND_MOD;
+      break;
+
+    case SDLK_RIGHTBRACKET:
+      parms->randMod = parms->randMod + max(1, parms->randMod / 50);
+      if (parms->randMod > 20000) {
+        parms->randMod = 20000;
+      }
       break;
 
     case SDLK_v:
@@ -1923,7 +2158,7 @@ void ParmAlter(int thiskey, moment_t *moments, int now) {
       break;
 
     case SDLK_SEMICOLON:
-      parms->randMod = (parms->randMod + 1) % 10;
+      parms->colorCycleMode = (parms->colorCycleMode + 1) % CM_COUNT;
       break;
 
     case SDLK_r:
@@ -1939,19 +2174,23 @@ void ParmAlter(int thiskey, moment_t *moments, int now) {
       break;
 
     case SDLK_UP:
-      parms->scrollerDir = UP;
+      parms->scrollerDir = DIR_UP;
+      modes->scroller = YES;
       break;
 
     case SDLK_DOWN:
-      parms->scrollerDir = DOWN;
+      parms->scrollerDir = DIR_DOWN;
+      modes->scroller = YES;
       break;
 
     case SDLK_LEFT:
-      parms->scrollerDir = LEFT;
+      parms->scrollerDir = DIR_LEFT;
+      modes->scroller = YES;
       break;
 
     case SDLK_RIGHT:
-      parms->scrollerDir = RIGHT;
+      parms->scrollerDir = DIR_RIGHT;
+      modes->scroller = YES;
       break;
 
     case SDLK_u:
@@ -2019,15 +2258,23 @@ void VerticalBars(color_t color, unsigned char *buffer) {
 
 void RandomDots(color_t color, unsigned int rFreq, unsigned char *buffer) {
   int x,y;
-  if (rFreq == 0) {
-    return;
-  }
 
-  if ((rand() % rFreq) == 0) {
-    x = rand() % TENSOR_WIDTH_EFF;
-    y = rand() % TENSOR_HEIGHT_EFF;
-    SetPixel(x,y,color, buffer);
+  for (x = 0; x < TENSOR_WIDTH_EFF; x++) {
+    for (y = 0; y < TENSOR_HEIGHT_EFF; y++) {
+      if (!(rand() % rFreq)) {
+        SetPixel(x, y, color, buffer);
+      }
+    }
   }
+  //~ if (rFreq == 0) {
+    //~ return;
+  //~ }
+
+  //~ if ((rand() % rFreq) == 0) {
+    //~ x = rand() % TENSOR_WIDTH_EFF;
+    //~ y = rand() % TENSOR_HEIGHT_EFF;
+    //~ SetPixel(x,y,color, buffer);
+  //~ }
 
 }
 
@@ -2035,100 +2282,51 @@ void RandomDots(color_t color, unsigned int rFreq, unsigned char *buffer) {
 
 //void ColorCycle(color_t originalColor, colorCycles_e cycleMode, int rainbowInc, int *cycleSaver) {
 void ColorCycle(parms_t *parms, int fb_mode) {
-  color_t colorTemp = black;
-  int inpos;
-  int inposo;
-  colorCycles_e cycleMode = parms->colorCycleMode;
+  color_t colorTemp = cBlack;
+  int inpos, inposo;
+  colorCycleModes_e cycleMode = parms->colorCycleMode;
   int *cycleSaver;
-  //color_t ct2;
   int rainbowInc = parms->rainbowInc;
 
+  // Position in the cycle must be saved in the moment to ensure reload is
+  // identical to save.
   if (fb_mode == FOREGROUND) {
-    //ct2 = parms->fg;
-    cycleSaver = &parms->cycleF;
+    cycleSaver = &parms->cycleSaveForegound;
   } else {
-    //ct2 = parms->bg;
-    cycleSaver = &parms->cycleB;
+    cycleSaver = &parms->cycleSaveBackground;
   }
 
+  // If the mode changed, we should reset our position in the cycle.
   switch(cycleMode) {
-    case RGB:
-      *cycleSaver = (*cycleSaver + 1) % 3;
-      switch(*cycleSaver) {
-        case 0:
-          colorTemp = red;
-          break;
-
-        case 1:
-          colorTemp = green;
-          break;
-
-        case 2:
-          colorTemp = blue;
-          break;
-
-        default:
-          break;
-      }
+    case CM_RGB:
+      *cycleSaver = (*cycleSaver + 1) % paletteRGB.size;
+      colorTemp = namedPalette[paletteRGB.palette[*cycleSaver]].color;
       break;
 
-    case CMY:
-      *cycleSaver = (*cycleSaver + 1) % 3;
-      switch(*cycleSaver) {
-        case 0:
-          colorTemp = cyan;
-          break;
-
-        case 1:
-          colorTemp = magenta;
-          break;
-
-        case 2:
-          colorTemp = yellow;
-          break;
-
-        default:
-          break;
-      }
+    case CM_CMY:
+      *cycleSaver = (*cycleSaver + 1) % paletteCMY.size;
+      colorTemp = namedPalette[paletteCMY.palette[*cycleSaver]].color;
       break;
 
-    case RYGCBM:
-     *cycleSaver = (*cycleSaver + 1) % 6;
-      switch(*cycleSaver) {
-        case 0:
-          colorTemp = red;
-          break;
-
-        case 1:
-          colorTemp = yellow;
-          break;
-
-        case 2:
-          colorTemp = green;
-          break;
-
-        case 3:
-          colorTemp = cyan;
-          break;
-
-        case 4:
-          colorTemp = blue;
-          break;
-
-        case 5:
-          colorTemp = magenta;
-          break;
-
-        default:
-          break;
-      }
+    case CM_SECONDARY:
+      *cycleSaver = (*cycleSaver + 1) % paletteSec.size;
+      colorTemp = namedPalette[paletteSec.palette[*cycleSaver]].color;
       break;
 
-    case RAINBOW:
-      *cycleSaver = (*cycleSaver + rainbowInc) % 1536;
+    case CM_TERTIARY:
+      *cycleSaver = (*cycleSaver + 1) % paletteTer.size;
+      colorTemp = namedPalette[paletteTer.palette[*cycleSaver]].color;
+      break;
+
+    case CM_GRAY:
+      *cycleSaver = (*cycleSaver + 1) % paletteGry.size;
+      colorTemp = namedPalette[paletteGry.palette[*cycleSaver]].color;
+      break;
+
+    case CM_RAINBOW:
+      *cycleSaver = (*cycleSaver + rainbowInc) % (256 * 6);
       inposo = *cycleSaver % 256;
       inpos = *cycleSaver / 256;
-      //printf("Csave: %i, inposo: %i, inpos: %i\n", *cycleSaver, inposo, inpos);
       switch(inpos) {
         case 0: // R -> Y
           colorTemp.r = 255;
@@ -2171,10 +2369,13 @@ void ColorCycle(parms_t *parms, int fb_mode) {
       }
       break;
 
-    case RANDOM:
+    case CM_RANDOM:
       colorTemp.r = rand() % 255;
       colorTemp.g = rand() % 255;
       colorTemp.b = rand() % 255;
+      break;
+
+    default:
       break;
   }
 
@@ -2191,37 +2392,14 @@ void ColorCycle(parms_t *parms, int fb_mode) {
 void InitInfoDisplay(void) {
   int i;
   for (i = 0; i < DISPLAY_TEXT_SIZE; i++) {
-    WriteLine(displayText[i].text, displayText[i].line, displayText[i].col, white);
+    WriteLine(displayText[i].text, displayText[i].line, displayText[i].col, displayText[i].color);
   }
 }
 
-void WriteBool(int value, int row, int col) {
-  if (value) {
-    WriteLine("YES", row, col, yellow);
-  } else {
-    WriteLine(" NO", row, col, yellow);
-  }
-}
-
-void WriteEnum(int value, char **enumText, int row, int col, int offset) {
-  WriteLineAdjusted(enumText[value], row, col, offset, yellow);
-}
-
-void WriteInt(int value, int row, int col, int width) {
-  char text[100];
-  snprintf(text, sizeof(text), "%*i", width, value);
-  WriteLine(text, row, col, yellow);
-}
-
-void WriteFloat(float value, int row, int col, int width, int precision) {
-  char text[100];
-  snprintf(text, sizeof(text), "%*.*f", width, precision, value);
-  WriteLine(text, row, col, yellow);
-}
-
+// Update the values of the text on the display window.
 void UpdateInfoDisplay(moment_t *moment, int now) {
 
-  char text[1024], mybuff[102];
+  char text[102], mybuff[102];
   int length;
   parms_t *parms = &moment->coefs;
   modes_t *mode = &moment->mode;
@@ -2233,88 +2411,103 @@ void UpdateInfoDisplay(moment_t *moment, int now) {
   WriteBool(mode->bouncer, 24, 1);
   WriteBool(mode->fadeout, 25, 1);
   WriteBool(mode->diffuse, 26, 1);
-  WriteBool(mode->textScroller, 27, 1);
+  WriteBool(mode->textSeed, 27, 1);
   WriteBool(mode->roller, 28, 1);
   WriteBool(mode->scroller, 29, 1);
   WriteBool(mode->randDots, 34, 1);
   WriteBool(mode->cycleForeground, 35, 1);
   WriteBool(mode->cycleBackground, 36, 1);
-  WriteBool(randomMode, 37, 1);
-  WriteEnum(mode->fade_mode, fadeModeText, 38, 1, 0);
-  WriteBool(mode->rotozoom, 40, 1);
-  WriteBool(mode->rotozoom2, 42, 1);
+  WriteBool(cycleMomentsMode, 37, 1);
+  WriteString(fadeModeText[mode->fadeMode], 38, 1, 3);
+  WriteBool(mode->postRotateZoom, 40, 1);
+  WriteBool(mode->preRotateZoom, 42, 1);
   WriteBool(mode->alias, 43, 1);
   WriteBool(mode->multiply, 44, 1);
   WriteBool(mode->sidebar, 45, 1);
   WriteBool(mode->clearRed, 46, 1);
   WriteBool(mode->clearGreen, 47, 1);
   WriteBool(mode->clearBlue, 48, 1);
-  WriteBool(mode->image, 49, 1);
+  WriteBool(mode->postImage, 49, 1);
 
   // Second column
-  WriteFloat(parms->floatinc, 3, 3, 14, 6);
-  WriteFloat(parms->diffusion_coef, 5, 3, 14, 6);
-  WriteFloat(parms->expand, 6, 3, 14, 6);
-  WriteInt(parms->fadeout_dec, 7, 3, 14);
-  WriteFloat(parms->rotation2, 8, 3, 14, 6);
-  WriteInt(parms->rainbowInc, 9, 3, 14);
-  WriteFloat(parms->rotation, 10, 3, 14, 6);
-  WriteFloat(parms->colorMultiplier, 11, 3, 14, 6);
-  WriteFloat(parms->rotationDelta, 12, 3, 14, 6);
-  WriteInt(parms->randMod, 13, 3, 14);
-  WriteEnum(parms->colorCycleMode, colorCycleText, 14, 3, 3);
-  WriteEnum(parms->scrollerDir, dirText, 15, 3, 9);
-  WriteInt(parms->delay, 16, 3, 14);
-  WriteEnum(parms->foreground, paletteText, 21, 3, 7);
-  WriteEnum(parms->background, paletteText, 22, 3, 7);
-  WriteInt(now, 27, 3, 14);
-  WriteInt(parms->textRow, 37, 3, 14);
-  WriteEnum(mode->stagger, staggerText, 38, 3, 3);
+  WriteFloat(parms->floatinc, 2, 3, 14, 6);
+  WriteFloat(parms->diffusion_coef, 4, 3, 14, 6);
+  WriteFloat(parms->expand, 5, 3, 14, 6);
+  WriteInt(parms->fadeout_dec, 6, 3, 14);
+  WriteFloat(parms->rotation2, 7, 3, 14, 6);
+  WriteInt(parms->rainbowInc, 8, 3, 14);
+  WriteFloat(parms->rotation, 9, 3, 14, 6);
+  WriteFloat(parms->colorMultiplier, 10, 3, 14, 6);
+  WriteFloat(parms->rotationDelta, 11, 3, 14, 6);
+  WriteFloat((1.0 / parms->randMod), 12, 3, 14, 6);
+  WriteString(colorCycleText[parms->colorCycleMode], 13, 3, 14);
+  WriteString(dirText[parms->scrollerDir], 14, 3, 14);
+  WriteInt(parms->delay, 15, 3, 14);
+  WriteString(namedPalette[parms->foreground].name, 20, 3, 14);
+  WriteString(namedPalette[parms->background].name, 21, 3, 14);
+  WriteInt(now, 26, 3, 14);
+  WriteBool(mode->fontDirection, 35, 4);
+  WriteBool(mode->fontFlip, 36, 4);
+  WriteInt(parms->textOffset, 37, 3, 14);
+  WriteString(staggerText[mode->textStagger], 38, 3, 14);
   WriteInt((int) strlen(scrollText->textBuffer), 39, 3, 14);
-  WriteEnum(mode->shiftred, shiftText, 44, 3, 9);
-  WriteEnum(mode->shiftgreen, shiftText, 45, 3, 9);
-  WriteEnum(mode->shiftblue, shiftText, 46, 3, 9);
-  WriteEnum(mode->shiftcyan, shiftText, 47, 3, 9);
-  WriteEnum(mode->shiftyellow, shiftText, 48, 3, 9);
-  WriteEnum(mode->shiftmagenta, shiftText, 49, 3, 9);
+  WriteString(shiftText[mode->shiftRed], 44, 3, 14);
+  WriteString(shiftText[mode->shiftGreen], 45, 3, 14);
+  WriteString(shiftText[mode->shiftBlue], 46, 3, 14);
+  WriteString(shiftText[mode->shiftCyan], 47, 3, 14);
+  WriteString(shiftText[mode->shiftYellow], 48, 3, 14);
+  WriteString(shiftText[mode->shiftMagenta], 49, 3, 14);
 
   // Show the last 100 bytes of the text buffer.
   length = strlen(scrollText->textBuffer);
   strncpy(mybuff, scrollText->textBuffer + (length > 100 ? length - 100 : 0), 101);
+  // The extra snprintf takes care of overwriting longer lines.
   snprintf(text, sizeof(text), "%-100s", mybuff );
-  WriteLine(text, 52, 0, yellow);
+  WriteLine(text, 52, 0, PARAMETER_COLOR);
 
   UpdateAll();
 }
 
+void WriteBool(int value, int row, int col) {
+  if (value) {
+    WriteLine("YES", row, col, PARAMETER_COLOR);
+  } else {
+    WriteLine(" NO", row, col, PARAMETER_COLOR);
+  }
+}
+
+void WriteInt(int value, int row, int col, int width) {
+  char text[100];
+  snprintf(text, sizeof(text), "%*i", width, value);
+  WriteLine(text, row, col, PARAMETER_COLOR);
+}
+
+void WriteFloat(float value, int row, int col, int width, int precision) {
+  char text[100];
+  snprintf(text, sizeof(text), "%*.*f", width, precision, value);
+  WriteLine(text, row, col, PARAMETER_COLOR);
+}
+
+void WriteString(const char *text, int line, int col, int width) {
+  char temp[200];
+  snprintf(temp, sizeof(temp), "%*.*s", width, width, text);
+  WriteLine(temp, line, col, PARAMETER_COLOR);
+}
 
 // Writes a line of text to the selected line and column of the
 // output window with the selected color.
-void WriteLineAdjusted(char * thisText, int line, int col, int offset, color_t color) {
+void WriteLine(char * thisText, int line, int col, color_t color) {
 
   // Vars
   const SDL_Color fontColor = {color.r, color.g, color.b};
   const SDL_Color bgColor = {0, 0, 0};
-  const int colstart[4] = {0, 275, 375, 675};
+  const int colstart[] = {0, 275, 375, 675, 763};
   SDL_Surface *textSurface;
   SDL_Texture *textTexture;
   SDL_Rect rect;
-  static int testWidth = 0;
-
-  // On initial startup, measure the font letter width so offsets will work.
-  if (!testWidth) {
-    textSurface = TTF_RenderText_Shaded(screenFont, "X", fontColor, bgColor);
-    if (!textSurface) {
-      fprintf(stderr, "Unable to create initial font size: %s\n", SDL_GetError());
-      return;
-    }
-    testWidth = textSurface->w;
-    SDL_FreeSurface(textSurface);
-    printf("Test width: %i\n", testWidth);
-  }
 
   // Set the position of the output text.
-  rect.x = colstart[col] + (offset * testWidth);
+  rect.x = colstart[col];
   rect.y = line * (PREVIEW_FONT_HEIGHT);
 
   // Render the text to a surface.
@@ -2339,11 +2532,6 @@ void WriteLineAdjusted(char * thisText, int line, int col, int offset, color_t c
   } else {
     fprintf(stderr, "Failed to create surface for \"%s\"!", thisText);
   }
-}
-
-// Prototype with no offset.
-void WriteLine(char * thisText, int line, int col, color_t color) {
-  WriteLineAdjusted(thisText, line, col, 0, color);
 }
 
 void UpdateAll(void) {
@@ -2385,7 +2573,6 @@ void DrawBox(int x, int y, int w, int h, color_t color) {
     (Uint8) color.r, (Uint8) color.g, (Uint8) color.b, (Uint8) color.a);
 }
 
-
 // Draw an image to the output with appropriate rotation and expansion.
 // Rotation is acheived using SDL_gfx primitive rotozoom.
 void DrawImage(double angle, double expansion, int aliasmode, unsigned char *fb_dst) {
@@ -2393,7 +2580,7 @@ void DrawImage(double angle, double expansion, int aliasmode, unsigned char *fb_
   SDL_Rect offset;
 
   // Rotate / scale it.
-  rotatedImage = rotozoomSurface (imageSeed, angle, expansion, (aliasmode == YES) ? 1 : 0);
+  rotatedImage = rotozoomSurface (imageSeed, angle, expansion, aliasmode ? 1 : 0);
   if (!rotatedImage) {
     fprintf(stderr, "Error rotating image: %s\n", SDL_GetError());
     return;
@@ -2409,7 +2596,6 @@ void DrawImage(double angle, double expansion, int aliasmode, unsigned char *fb_
   SDL_FreeSurface(rotatedImage);
 }
 
-
 // Draw the borders around the preview output.
 void DrawPreviewBorder(void) {
   int w, h, w2, h2;
@@ -2419,10 +2605,10 @@ void DrawPreviewBorder(void) {
   h = (TENSOR_HEIGHT_EFF * PREVIEW_PIXEL_HEIGHT) + (PREVIEW_BORDER_THICKNESS * 2);
 
   // Erase the old preview.
-  DrawBox(0, 0, h, w, black);
+  DrawBox(0, 0, h, w, cBlack);
 
   // Draw the new border.
-  DrawRectangle(0, 0, w, h, white);
+  DrawRectangle(0, 0, w, h, cWhite);
 
   // Draw the panel indicators
   w2 = (TENSOR_WIDTH_EFF * PREVIEW_PIXEL_WIDTH) + 1;
@@ -2431,24 +2617,23 @@ void DrawPreviewBorder(void) {
   if (tensor_landscape_p) {
     // Landscape - Horizontal indicators.
     DrawRectangle(PREVIEW_BORDER_THICKNESS - 1, 0 * (h2 / 3) + PREVIEW_BORDER_THICKNESS - 1,
-                  w2, (h2 / 3) + 1, gray);
+                  w2, (h2 / 3) + 1, cGray);
     DrawRectangle(PREVIEW_BORDER_THICKNESS - 1, 1 * (h2 / 3) + PREVIEW_BORDER_THICKNESS - 1,
-                  w2, (h2 / 3) + 1, gray);
+                  w2, (h2 / 3) + 1, cGray);
     DrawRectangle(PREVIEW_BORDER_THICKNESS - 1, 2 * (h2 / 3) + PREVIEW_BORDER_THICKNESS - 1,
-                  w2, (h2 / 3) + 1, gray);
+                  w2, (h2 / 3) + 1, cGray);
   } else {
     // Portrait - Vertical indicators
     DrawRectangle(0 * (w2 / 3) + PREVIEW_BORDER_THICKNESS - 1, PREVIEW_BORDER_THICKNESS - 1,
-                  (w2 / 3) + 1, h2, gray);
+                  (w2 / 3) + 1, h2, cGray);
     DrawRectangle(1 * (w2 / 3) + PREVIEW_BORDER_THICKNESS - 1, PREVIEW_BORDER_THICKNESS - 1,
-                  (w2 / 3) + 1, h2, gray);
+                  (w2 / 3) + 1, h2, cGray);
     DrawRectangle(2 * (w2 / 3) + PREVIEW_BORDER_THICKNESS - 1, PREVIEW_BORDER_THICKNESS - 1,
-                  (w2 / 3) + 1, h2, gray);
+                  (w2 / 3) + 1, h2, cGray);
   }
 
   SDL_RenderPresent(mwRenderer);
 }
-
 
 // Or not.
 void CellFun(moment_t *moment) {
@@ -2467,7 +2652,6 @@ void CellFun(moment_t *moment) {
     }
   }
 }
-
 
 void SaveMoments(SDL_KeyboardEvent *key, moment_t *moments, int now) {
   int thiskey = key->keysym.sym;
@@ -2528,25 +2712,25 @@ void DrawSideBar(moment_t *moment) {
   int i;
 
   switch (moment->coefs.scrollerDir) {
-    case LEFT:
+    case DIR_LEFT:
       for (i = 0; i < TENSOR_HEIGHT_EFF; i++) {
               SetPixel(TENSOR_WIDTH_EFF - 1, i, moment->coefs.fg, moment->fb);
             }
             break;
 
-    case RIGHT:
+    case DIR_RIGHT:
       for (i = 0; i < TENSOR_HEIGHT_EFF; i++) {
               SetPixel(0, i, moment->coefs.fg, moment->fb);
             }
             break;
 
-    case UP:
+    case DIR_UP:
       for (i = 0; i < TENSOR_WIDTH_EFF; i++) {
               SetPixel(i, TENSOR_HEIGHT_EFF - 1, moment->coefs.fg, moment->fb);
             }
             break;
 
-    case DOWN:
+    case DIR_DOWN:
       for (i = 0; i < TENSOR_WIDTH_EFF; i++) {
               SetPixel(i, 0, moment->coefs.fg, moment->fb);
             }
@@ -2594,4 +2778,5 @@ int max(int a, int b) {
     return b;
   }
 }
+
 
