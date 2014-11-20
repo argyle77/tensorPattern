@@ -57,3 +57,5 @@ Version 4.1:
   Dead-end experiments with GTK / Glade
   Do not continue the project from this point.
 
+Version 5.0:
+  Skipped dead-end branches 4.0, 4.1.  Added mouse support.

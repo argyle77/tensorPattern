@@ -7,10 +7,10 @@ project(tensorPattern)
 
 # Let's set a version number.
 # This file must be manually changed to effect version change.
-set (VERSION_MAJOR 3)
-set (VERSION_MINOR 9)
-set (VERSION_PATCH 2)
-set (VERSION_PRERELEASE a)
+set (VERSION_MAJOR 5)
+set (VERSION_MINOR 0)
+set (VERSION_PATCH 0)
+set (VERSION_PRERELEASE)
 
 if ("${VERSION_PRERELEASE}" STREQUAL "")
   message(STATUS "Configuring build version v" ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH})
@@ -36,5 +36,7 @@ add_subdirectory (src)
 # Font support.
 file(COPY fonts/DroidSansMono.ttf DESTINATION ${PROJECT_BINARY_DIR})
 file(RENAME ${PROJECT_BINARY_DIR}/DroidSansMono.ttf ${PROJECT_BINARY_DIR}/font.ttf)
+
+# Aux files
 file(COPY images/Fbyte-01.jpg DESTINATION ${PROJECT_BINARY_DIR})
 
