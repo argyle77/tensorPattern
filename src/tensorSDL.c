@@ -36,28 +36,33 @@
 #define DEF_IMAGE "Fbyte-01.jpg"
 
 // Preview window definitions
-#define PREVIEW_PIXEL_WIDTH 10
-#define PREVIEW_PIXEL_HEIGHT 10
+#define WINDOW_WIDTH 1024
+#define WINDOW_HEIGHT 768
+#define PREVIEW_PIXEL_SIZE 10
 #define PREVIEW_BORDER_THICKNESS 10
-#define PREVIEW_FONT_SIZE 14
-#define PREVIEW_FONT_HEIGHT 14
-#define TENSOR_PREVIEW_WIDTH (TENSOR_WIDTH * PREVIEW_PIXEL_WIDTH)
-#define TENSOR_PREVIEW_HEIGHT (TENSOR_WIDTH * PREVIEW_PIXEL_HEIGHT)
 
+#define PREVIEW_A_POSITION_X 0
+#define PREVIEW_A_POSITION_Y 0
+#define PREVIEW_B_POSITION_X (WINDOW_WIDTH - (TENSOR_WIDTH * PREVIEW_PIXEL_SIZE) - (PREVIEW_BORDER_THICKNESS * 2))
+#define PREVIEW_B_POSITION_Y 0
+#define DISPLAY_FONT_SIZE 14
+#define DISPLAY_TEXT_HEIGHT 14
 #define TEXT_BUFFER_SIZE 2048
 
-// Initial Values
 #define MOMENT_COUNT 10
+
+// Initial Values
 #define INITIAL_COLOR_MULTIPLIER 1.0
 #define INITIAL_DIFF_COEF 0.002
-#define INITIAL_FADEOUT_DEC 1
+#define INITIAL_FADEOUT_DEC -1
 #define INITIAL_RAND_MOD 100
 #define INITIAL_RAINBOW_INC 8
 #define INITIAL_EXPAND 1
 #define INITIAL_FLOAT_INC 0.1
-#define INITIAL_ROTATION_DELTA 1.0
-#define INITIAL_ROTATION_ANGLE 0
-#define INITIAL_ROTATION_ANGLE2 10
+#define INITIAL_POSTROT_INC 0
+#define INITIAL_POSTROT_ANGLE 0
+#define INITIAL_PREROT_ANGLE 10
+#define INITIAL_DELAY 60
 
 // Color plane flags - I'm unsatified with the way the cym color planes worked
 // out.  I should be using a different color space or something.
@@ -119,7 +124,14 @@ const color_t cGray = CD_GRAY;
 const color_t cDkGray = CD_DKGRAY;
 const color_t cBlack = CD_BLACK;
 
-#define PARAMETER_COLOR cAzure
+#define DISPLAY_COLOR_PARMS cAzure
+#define DISPLAY_COLOR_PARMSBG cBlack
+#define DISPLAY_COLOR_TITLES cYellow
+#define DISPLAY_COLOR_TITLESBG cBlack
+#define DISPLAY_COLOR_TEXTS cWhite
+#define DISPLAY_COLOR_TEXTSBG cBlack
+#define DISPLAY_COLOR_TEXTS_HL cBlack
+#define DISPLAY_COLOR_TEXTSBG_HL cWhite
 
 // Named color palette structures and constants
 typedef struct palette_t {
@@ -129,6 +141,7 @@ typedef struct palette_t {
 
 // If you change this, change palette too.
 typedef enum color_e {
+  CE_INVALID = -1,
   CE_RED = 0, CE_ORANGE, CE_YELLOW, CE_CHARTREUSE, CE_GREEN, CE_AQUA, CE_CYAN,
   CE_AZURE, CE_BLUE, CE_VIOLET, CE_MAGENTA, CE_ROSE, CE_WHITE, CE_LTGRAY,
   CE_GRAY, CE_DKGRAY, CE_BLACK,
@@ -161,6 +174,7 @@ const palette_t namedPalette[CE_COUNT] = {
 
 // Scroller directions
 typedef enum dir_e {
+  DIR_INVALID = -1,
   DIR_UP = 0, DIR_LEFT, DIR_DOWN, DIR_RIGHT,
   DIR_COUNT // Last.
 } dir_e;
@@ -168,6 +182,7 @@ const char *dirText[] = { "Up", "Left", "Down", "Right" };
 
 // Fade mode enumerations.
 typedef enum fadeModes_e{
+  FM_INVALID = -1,
   FM_LIMIT = 0, FM_MODULAR,
   FM_COUNT // Last.
 } fadeModes_e;
@@ -175,6 +190,7 @@ const char *fadeModeText[] = { "Limited", "Modular" };
 
 // Color plane shift modes.
 typedef enum shiftModes_e {
+  SM_INVALID = -1,
   SM_HOLD = 0, SM_UP, SM_LEFT, SM_DOWN, SM_RIGHT,
   SM_COUNT // Last.
 } shiftModes_e;
@@ -182,14 +198,16 @@ const char *shiftText[] = { "Hold", "Up", "Left", "Down", "Right" };
 
 // Text background modes
 typedef enum textStaggerMode_e {
-  TS_8ROW, TS_9ROWSTAGGER, TS_10ROWBORDER, TS_FULLBG,
+  TS_INVALID = -1,
+  TS_8ROW = 0, TS_9ROWSTAGGER, TS_10ROWBORDER, TS_FULLBG,
   TS_COUNT // Last.
 } textStaggerMode_e;
 char *staggerText[] = { "8 Row", "9RowStagger", "10RowBorder", "FullBG" };
 
 // Color palette cycle modes
 typedef enum colorCycleModes_e{
-  CM_RGB, CM_CMY, CM_SECONDARY, CM_TERTIARY, CM_GRAY, CM_RAINBOW, CM_RANDOM,
+  CM_INVALID = -1,
+  CM_RGB = 0, CM_CMY, CM_SECONDARY, CM_TERTIARY, CM_GRAY, CM_RAINBOW, CM_RANDOM,
   CM_COUNT // Last.
 } colorCycleModes_e;
 const char *colorCycleText[] = { "R-G-B", "C-M-Y", "Secondary", "Tertiary", "Gray", "Rainbow", "Random" };
@@ -270,9 +288,9 @@ typedef struct parms_t{
   int rainbowInc;
   float expand;
   float floatinc;
-  float rotation;
-  float rotation2;
-  float rotationDelta;
+  float postRotationAngle;
+  float preRotationAngle;
+  float postRotationIncr;
   float colorMultiplier;
   int cycleSaveForegound;
   int cycleSaveBackground;
@@ -296,86 +314,186 @@ typedef struct moment_t{
   unsigned char fb[TENSOR_BYTES];  // Tensor frame buffer
 } moment_t;
 
-// Display menu items
+// User Commands
+typedef enum command_e {
+  COM_INVALID = -1, COM_NONE = 0,
+  COM_CELL = 1, COM_BOUNCE, COM_FADE, COM_DIFFUSE, COM_TEXT, COM_ROLL,
+  COM_SCROLL, COM_HBAR, COM_VBAR, COM_FGALL, COM_BGALL, COM_RDOT, COM_FGCYCLE,
+  COM_BGCYCLE, COM_CYCLESET, COM_FADEMODE, COM_TEXTRESET, COM_POSTROTATE,
+  COM_MODEOFF, COM_PREROTATE, COM_AA, COM_MULTIPLY, COM_SIDEBAR, COM_NORED,
+  COM_NOGREEN, COM_NOBLUE, COM_IMAGE, COM_STEP_INC, COM_STEP_DEC, COM_STEP_RST,
+  COM_DIFFUSE_INC, COM_DIFFUSE_DEC, COM_DIFFUSE_RST, COM_EXPAND_INC,
+  COM_EXPAND_DEC, COM_EXPAND_RST, COM_FADE_INC, COM_FADE_DEC, COM_FADE_RST,
+  COM_PREROT_INC, COM_PREROT_DEC, COM_PREROT_RST, COM_RAINDBOW_INC,
+  COM_RAINDBOW_DEC, COM_RAINDBOW_RST, COM_POSTROT_INC, COM_POSTROT_DEC,
+  COM_POSTROT_RST, COM_MULT_INC, COM_MULT_DEC, COM_MULT_RST, COM_POSTSPEED_INC,
+  COM_POSTSPEED_DEC, COM_POSTSPEED_RST, COM_RANDOM_INC, COM_RANDOM_DEC,
+  COM_RANDOM_RST, COM_CYCLE_MODE, COM_CYCLE_MODE_DOWN,
+  COM_SCROLL_UP, COM_SCROLL_DOWN, COM_SCROLL_LEFT, COM_SCROLL_RIGHT, COM_SCROLL_DOWNC, COM_SCROLL_LEFTC,
+  COM_SCROLL_RIGHTC, COM_SCROLL_UPC, COM_DELAY_INC, COM_DELAY_DEC,
+  COM_DELAY_RST, COM_FG_INC, COM_FG_DEC, COM_BG_INC, COM_BG_DEC, COM_BACKSPACE,
+  COM_DELETE, COM_TEXT_REVERSE, COM_TEXT_FLIP, COM_TEXTO_INC, COM_TEXTO_DEC,
+  COM_TEXT_MODE_UP, COM_TEXT_MODE_DOWN, COM_RP_UP, COM_RP_DOWN, COM_GP_UP, COM_GP_DOWN, COM_BP_UP, COM_BP_DOWN,
+  COM_CP_UP, COM_CP_DOWN, COM_YP_UP, COM_YP_DOWN, COM_MP_UP, COM_MP_DOWN, COM_EXIT,
+  COM_ORIENTATION, COM_RETURN, COM_SCROLL_CYCLE_UP, COM_SCROLL_CYCLE_DOWN, COM_LOAD0, COM_LOAD1,
+  COM_LOAD2, COM_LOAD3, COM_LOAD4, COM_LOAD5, COM_LOAD6, COM_LOAD7, COM_LOAD8,
+  COM_LOAD9, COM_LOADSET0, COM_LOADSET1, COM_LOADSET2, COM_LOADSET3,
+  COM_LOADSET4, COM_LOADSET5, COM_LOADSET6, COM_LOADSET7, COM_LOADSET8,
+  COM_LOADSET9, COM_COPYSET0, COM_COPYSET1, COM_COPYSET2, COM_COPYSET3,
+  COM_COPYSET4, COM_COPYSET5, COM_COPYSET6, COM_COPYSET7, COM_COPYSET8,
+  COM_COPYSET9,
+  COM_COUNT // Last
+} command_e;
+
+//
+typedef struct keyCommand_t {
+  SDL_Keymod mod;
+  SDL_Keycode key;
+  command_e command;
+} keyCommand_t;
+
+// Single key commands
+typedef enum mouseCommand_e {
+  MOUSE_INVALID = -1,
+  MOUSE_CLICK = 0, MOUSE_WHEEL_UP, MOUSE_WHEEL_DOWN,
+  MOUSE_COUNT // Last
+} mouseCommand_e;
+
+typedef struct command_t {
+  int line;
+  int col;
+  char *text;
+  keyCommand_t commands[MOUSE_COUNT];
+} command_t;
+
+const command_t mouseCommands[] = {
+  {23, 0, "Cell pattern", {{KMOD_CTRL, SDLK_q, COM_CELL}}},
+  {24, 0, "Bouncer", {{KMOD_CTRL, SDLK_w, COM_BOUNCE}}},
+  {25, 0, "Fader", {{KMOD_CTRL, SDLK_e,  COM_FADE}}},
+  {26, 0, "Diffuser", {{KMOD_CTRL, SDLK_r, COM_DIFFUSE}}},
+  {27, 0, "Text seed", {{KMOD_CTRL, SDLK_t, COM_TEXT}}},
+  {28, 0, "Scroll rollover", {{KMOD_CTRL, SDLK_y, COM_ROLL}}},
+  {29, 0, "Scroller", {{KMOD_CTRL, SDLK_u, COM_SCROLL}}},
+  {30, 0, "Horizontal bars!", {{KMOD_CTRL, SDLK_i, COM_HBAR}}},
+  {31, 0, "Vertical bars!", {{KMOD_CTRL, SDLK_o, COM_VBAR}}},
+  {32, 0, "Foreground color all!", {{KMOD_CTRL, SDLK_p, COM_FGALL}}},
+  {33, 0, "Background color all!", {{KMOD_CTRL, SDLK_a, COM_BGALL}}},
+  {34, 0, "Random dot seed", {{KMOD_CTRL, SDLK_s, COM_RDOT}}},
+  {35, 0, "FG cycle", {{KMOD_CTRL, SDLK_d, COM_FGCYCLE}}},
+  {36, 0, "BG cycle", {{KMOD_CTRL, SDLK_f, COM_BGCYCLE}}},
+  {37, 0, "Cycle moments", {{KMOD_CTRL, SDLK_g, COM_CYCLESET}}},
+  {38, 0, "Fader mode", {{KMOD_CTRL, SDLK_h, COM_FADEMODE}}},
+  {39, 0, "Reset text to start", {{KMOD_CTRL, SDLK_j, COM_TEXTRESET}}},
+  {40, 0, "Post-rotate/zoom", {{KMOD_CTRL, SDLK_k, COM_POSTROTATE}}},
+  {41, 0, "All modes off", {{KMOD_CTRL, SDLK_l, COM_MODEOFF}}},
+  {42, 0, "Pre-rotate/zoom", {{KMOD_CTRL, SDLK_z, COM_PREROTATE}}},
+  {43, 0, "Rotate/zoom anti-alias", {{KMOD_CTRL, SDLK_x, COM_AA}}},
+  {44, 0, "Multiplier", {{KMOD_CTRL, SDLK_c, COM_MULTIPLY}}},
+  {45, 0, "Sidebar seed", {{KMOD_CTRL, SDLK_n, COM_SIDEBAR}}},
+  {46, 0, "Supress red", {{KMOD_CTRL, SDLK_m, COM_NORED}}},
+  {47, 0, "Supress green", {{KMOD_CTRL, SDLK_COMMA, COM_NOGREEN}}},
+  {48, 0, "Supress blue", {{KMOD_CTRL, SDLK_PERIOD, COM_NOBLUE}}},
+  {49, 0, "Image overlay", {{KMOD_CTRL | KMOD_ALT, SDLK_p, COM_IMAGE}}},
+  {13, 2, "Color cycle mode", {{KMOD_ALT, SDLK_SEMICOLON, COM_CYCLE_MODE}, {}, {0, 0, COM_CYCLE_MODE_DOWN}}},
+  {14, 2, "(<alt>) <arrows> - Scroll direction", {{0, 0, COM_SCROLL_CYCLE_UP}, {}, {0, 0, COM_SCROLL_CYCLE_DOWN}}},
+  {33, 2, "<backspace> - Delete last letter.", {{KMOD_NONE, SDLK_BACKSPACE, COM_BACKSPACE}}},
+  {34, 2, "Erase all text.", {{KMOD_NONE, SDLK_DELETE, COM_DELETE}}},
+  {35, 2, "Reverse text.", {{KMOD_CTRL, SDLK_QUOTE, COM_TEXT_REVERSE}}},
+  {36, 2, "Flip text.", {{KMOD_CTRL, SDLK_SEMICOLON, COM_TEXT_FLIP}}},
+  {38, 2, "Text mode:", {{KMOD_CTRL, SDLK_b, COM_TEXT_MODE_UP}, {}, {0, 0, COM_TEXT_MODE_DOWN}}},
+  {44, 2, "Red plane:", {{KMOD_CTRL, SDLK_LEFTBRACKET, COM_RP_UP}, {}, {0, 0, COM_RP_DOWN}}},
+  {45, 2, "Green plane:", {{KMOD_CTRL, SDLK_RIGHTBRACKET, COM_GP_UP}, {}, {0, 0, COM_GP_DOWN}}},
+  {46, 2, "Blue plane:", {{KMOD_CTRL, SDLK_BACKSLASH, COM_BP_UP}, {}, {0, 0, COM_BP_DOWN}}},
+  {47, 2, "Cyan plane:", {{KMOD_CTRL | KMOD_ALT, SDLK_LEFTBRACKET, COM_CP_UP}, {}, {0, 0, COM_CP_DOWN}}},
+  {48, 2, "Yellow plane:", {{KMOD_CTRL | KMOD_ALT, SDLK_RIGHTBRACKET, COM_YP_UP}, {}, {0, 0, COM_YP_DOWN}}},
+  {49, 2, "Magenta plane:", {{KMOD_CTRL | KMOD_ALT, SDLK_BACKSLASH, COM_MP_UP}, {}, {0, 0, COM_MP_DOWN}}},
+  {51, 2, "Quit.", {{KMOD_NONE, SDLK_ESCAPE, COM_EXIT}}},
+  {2, 2, "Float step size", {{KMOD_ALT, SDLK_COMMA, COM_STEP_RST}, {KMOD_ALT, SDLK_m, COM_STEP_INC}, {KMOD_ALT, SDLK_PERIOD, COM_STEP_DEC}}},
+  {4, 2, "Diffusion", {{KMOD_ALT, SDLK_w, COM_DIFFUSE_RST}, {KMOD_ALT, SDLK_q, COM_DIFFUSE_INC}, {KMOD_ALT, SDLK_e, COM_DIFFUSE_DEC}}},
+  {5, 2, "Expansion", {{KMOD_ALT, SDLK_s, COM_EXPAND_RST}, {KMOD_ALT, SDLK_a, COM_EXPAND_INC}, {KMOD_ALT, SDLK_d, COM_EXPAND_DEC}}},
+  {6, 2, "Fade amount", {{KMOD_ALT, SDLK_x, COM_FADE_RST}, {KMOD_ALT, SDLK_z, COM_FADE_INC}, {KMOD_ALT, SDLK_c, COM_FADE_DEC}}},
+  {7, 2, "Pre rotation angle", {{KMOD_ALT, SDLK_t, COM_PREROT_RST}, {KMOD_ALT, SDLK_r, COM_PREROT_INC}, {KMOD_ALT, SDLK_y, COM_PREROT_DEC}}},
+  {8, 2, "Rainbow Speed", {{KMOD_ALT, SDLK_g, COM_RAINDBOW_RST}, {KMOD_ALT, SDLK_f, COM_RAINDBOW_INC}, {KMOD_ALT, SDLK_h, COM_RAINDBOW_DEC}}},
+  {9, 2, "Post rotation angle", {{KMOD_ALT, SDLK_b, COM_POSTROT_RST}, {KMOD_ALT, SDLK_v, COM_POSTROT_INC}, {KMOD_ALT, SDLK_n, COM_POSTROT_DEC}}},
+  {10, 2, "Multiplier", {{KMOD_ALT, SDLK_i, COM_MULT_RST}, {KMOD_ALT, SDLK_u, COM_MULT_INC}, {KMOD_ALT, SDLK_o, COM_MULT_DEC}}},
+  {11, 2, "Post rotation incr", {{KMOD_ALT, SDLK_k, COM_POSTSPEED_RST}, {KMOD_ALT, SDLK_j, COM_POSTSPEED_INC}, {KMOD_ALT, SDLK_l, COM_POSTSPEED_DEC}}},
+  {12, 2, "Dot randomness", {{KMOD_ALT, SDLK_LEFTBRACKET, COM_RANDOM_RST}, {KMOD_ALT, SDLK_p, COM_RANDOM_DEC}, {KMOD_ALT, SDLK_RIGHTBRACKET, COM_RANDOM_INC}}},
+  {15, 2, "Frame delay(ms)", {{KMOD_ALT | KMOD_CTRL, SDLK_i, COM_DELAY_RST}, {KMOD_ALT | KMOD_CTRL, SDLK_u, COM_DELAY_INC}, {KMOD_ALT | KMOD_CTRL, SDLK_o, COM_DELAY_DEC}}},
+  {20, 2, "foreground:", {{KMOD_ALT | KMOD_CTRL, SDLK_q, COM_FG_INC}, {}, {KMOD_ALT | KMOD_CTRL, SDLK_w, COM_FG_DEC}}},
+  {21, 2, "background:", {{KMOD_ALT | KMOD_CTRL, SDLK_a, COM_BG_INC}, {}, {KMOD_ALT | KMOD_CTRL, SDLK_s, COM_BG_DEC}}},
+  {37, 2, "Offset:", {{KMOD_ALT | KMOD_CTRL, SDLK_z, COM_TEXTO_INC}, {}, {KMOD_ALT | KMOD_CTRL, SDLK_x, COM_TEXTO_DEC}}},
+};
+#define DISPLAY_COMMAND_SIZE (sizeof(mouseCommands) / sizeof(command_t))
+
+const command_t otherCommands[] = {
+  {-1, 0, "Orientation", {{KMOD_CTRL, SDLK_v, COM_ORIENTATION}}},
+  {-1, 2, "Scroll Up", {{KMOD_NONE, SDLK_UP, COM_SCROLL_UP}}},
+  {-1, 2, "Scroll Down", {{KMOD_NONE, SDLK_DOWN, COM_SCROLL_DOWN}}},
+  {-1, 2, "Scroll Left", {{KMOD_NONE, SDLK_LEFT, COM_SCROLL_LEFT}}},
+  {-1, 2, "Scroll Right", {{KMOD_NONE, SDLK_RIGHT, COM_SCROLL_RIGHT}}},
+  {-1, 2, "Activate & Scroll Up", {{KMOD_ALT, SDLK_UP, COM_SCROLL_UPC}}},
+  {-1, 2, "Activate & Scroll Down", {{KMOD_ALT, SDLK_DOWN, COM_SCROLL_DOWNC}}},
+  {-1, 2, "Activate & Scroll Left", {{KMOD_ALT, SDLK_LEFT, COM_SCROLL_LEFTC}}},
+  {-1, 2, "Activate & Scroll Right", {{KMOD_ALT, SDLK_RIGHT, COM_SCROLL_RIGHTC}}},
+  {-1, 0, "Load image buffer 0", {{KMOD_ALT,  SDLK_0, COM_LOAD0 }}},
+  {-1, 0, "Load image buffer 1", {{KMOD_ALT,  SDLK_1, COM_LOAD1 }}},
+  {-1, 0, "Load image buffer 2", {{KMOD_ALT,  SDLK_2, COM_LOAD2 }}},
+  {-1, 0, "Load image buffer 3", {{KMOD_ALT,  SDLK_3, COM_LOAD3 }}},
+  {-1, 0, "Load image buffer 4", {{KMOD_ALT,  SDLK_4, COM_LOAD4 }}},
+  {-1, 0, "Load image buffer 5", {{KMOD_ALT,  SDLK_5, COM_LOAD5 }}},
+  {-1, 0, "Load image buffer 6", {{KMOD_ALT,  SDLK_6, COM_LOAD6 }}},
+  {-1, 0, "Load image buffer 7", {{KMOD_ALT,  SDLK_7, COM_LOAD7 }}},
+  {-1, 0, "Load image buffer 8", {{KMOD_ALT,  SDLK_8, COM_LOAD8 }}},
+  {-1, 0, "Load image buffer 9", {{KMOD_ALT,  SDLK_9, COM_LOAD9 }}},
+  {-1, 0, "Load pattern set 0", {{KMOD_CTRL,  SDLK_0, COM_LOADSET0 }}},
+  {-1, 0, "Load pattern set 1", {{KMOD_CTRL,  SDLK_1, COM_LOADSET1 }}},
+  {-1, 0, "Load pattern set 2", {{KMOD_CTRL,  SDLK_2, COM_LOADSET2 }}},
+  {-1, 0, "Load pattern set 3", {{KMOD_CTRL,  SDLK_3, COM_LOADSET3 }}},
+  {-1, 0, "Load pattern set 4", {{KMOD_CTRL,  SDLK_4, COM_LOADSET4 }}},
+  {-1, 0, "Load pattern set 5", {{KMOD_CTRL,  SDLK_5, COM_LOADSET5 }}},
+  {-1, 0, "Load pattern set 6", {{KMOD_CTRL,  SDLK_6, COM_LOADSET6 }}},
+  {-1, 0, "Load pattern set 7", {{KMOD_CTRL,  SDLK_7, COM_LOADSET7 }}},
+  {-1, 0, "Load pattern set 8", {{KMOD_CTRL,  SDLK_8, COM_LOADSET8 }}},
+  {-1, 0, "Load pattern set 9", {{KMOD_CTRL,  SDLK_9, COM_LOADSET9 }}},
+  {-1, 0, "Copy to set 0", {{KMOD_CTRL | KMOD_ALT,  SDLK_0, COM_COPYSET0 }}},
+  {-1, 0, "Copy to set 1", {{KMOD_CTRL | KMOD_ALT,  SDLK_1, COM_COPYSET1 }}},
+  {-1, 0, "Copy to set 2", {{KMOD_CTRL | KMOD_ALT,  SDLK_2, COM_COPYSET2 }}},
+  {-1, 0, "Copy to set 3", {{KMOD_CTRL | KMOD_ALT,  SDLK_3, COM_COPYSET3 }}},
+  {-1, 0, "Copy to set 4", {{KMOD_CTRL | KMOD_ALT,  SDLK_4, COM_COPYSET4 }}},
+  {-1, 0, "Copy to set 5", {{KMOD_CTRL | KMOD_ALT,  SDLK_5, COM_COPYSET5 }}},
+  {-1, 0, "Copy to set 6", {{KMOD_CTRL | KMOD_ALT,  SDLK_6, COM_COPYSET6 }}},
+  {-1, 0, "Copy to set 7", {{KMOD_CTRL | KMOD_ALT,  SDLK_7, COM_COPYSET7 }}},
+  {-1, 0, "Copy to set 8", {{KMOD_CTRL | KMOD_ALT,  SDLK_8, COM_COPYSET8 }}},
+  {-1, 0, "Copy to set 9", {{KMOD_CTRL | KMOD_ALT,  SDLK_9, COM_COPYSET9 }}},
+};
+#define OTHER_COMMAND_SIZE (sizeof(otherCommands) / sizeof(command_t))
+
+// Display titles
 typedef struct displayText_t {
   int line;
   int col;
-  color_t color;
   char *text;
 } displayText_t;
 
-const displayText_t displayText[] = {
-  {21, 0, CD_YELLOW,  "Modes:                       FPS:"},
-  {23, 0, CD_LTGRAY, "<ctrl> q - Cell pattern"},
-  {24, 0, CD_LTGRAY, "<ctrl> w - Bouncer"},
-  {25, 0, CD_LTGRAY, "<ctrl> e - Fader"},
-  {26, 0, CD_LTGRAY, "<ctrl> r - Diffuser"},
-  {27, 0, CD_LTGRAY, "<ctrl> t - Text seed"},
-  {28, 0, CD_LTGRAY, "<ctrl> y - Scroll rollover"},
-  {29, 0, CD_LTGRAY, "<ctrl> u - Scroller"},
-  {30, 0, CD_LTGRAY, "<ctrl> i - Horizontal bars!"},
-  {31, 0, CD_LTGRAY, "<ctrl> o - Vertical bars!"},
-  {32, 0, CD_LTGRAY, "<crtl> p - Foreground color all!"},
-  {33, 0, CD_LTGRAY, "<crtl> a - Background color all!"},
-  {34, 0, CD_LTGRAY, "<ctrl> s - Random dot seed"},
-  {35, 0, CD_LTGRAY, "<ctrl> d - FG cycle"},
-  {36, 0, CD_LTGRAY, "<ctrl> f - BG cycle"},
-  {37, 0, CD_LTGRAY, "<ctrl> g - Cycle moments"},
-  {38, 0, CD_LTGRAY, "<ctrl> h - Fader mode"},
-  {39, 0, CD_LTGRAY, "<ctrl> j - Reset text to start"},
-  {40, 0, CD_LTGRAY, "<ctrl> k - Post-rotate/zoom"},
-  {41, 0, CD_LTGRAY, "<ctrl> l - All modes off"},
-  {42, 0, CD_LTGRAY, "<ctrl> z - Pre-rotate/zoom"},
-  {43, 0, CD_LTGRAY, "<ctrl> x - Rotate/zoom anti-alias"},
-  {44, 0, CD_LTGRAY, "<ctrl> c - Multiplier"},
-  {45, 0, CD_LTGRAY, "<ctrl> n - Sidebar seed"},
-  {46, 0, CD_LTGRAY, "<ctrl> m - Supress red"},
-  {47, 0, CD_LTGRAY, "<ctrl> , - Supress green"},
-  {48, 0, CD_LTGRAY, "<ctrl> . - Supress blue"},
-  {49, 0, CD_LTGRAY, "<ctrl> <alt> p - Image overlay"},
-  {51, 0, CD_YELLOW,  "Text buffer:"},
-  {0, 2,  CD_YELLOW,  "Coeffs: (3 keys = increment / reset / decrement)"},
-  {2, 2, CD_LTGRAY, "<alt> m  ,  . - Float step size"},
-  {4, 2, CD_LTGRAY, "<alt> q  w  e - Diffusion"},
-  {5, 2, CD_LTGRAY, "<alt> a  s  d - Expansion"},
-  {6, 2, CD_LTGRAY, "<alt> z  x  c - Fade amount"},
-  {7, 2, CD_LTGRAY, "<alt> r  t  y - Pre rotation angle"},
-  {8, 2, CD_LTGRAY, "<alt> f  g  h - Rainbow Speed"},
-  {9, 2, CD_LTGRAY, "<alt> v  b  n - Post rotation angle"},
-  {10, 2, CD_LTGRAY, "<alt> u  i  o - Multiplier"},
-  {11, 2, CD_LTGRAY, "<alt> j  k  l - Post rotation incr"},
-  {12, 2, CD_LTGRAY, "<alt> p  [  ] - Dot randomness"},
-  {13, 2, CD_LTGRAY, "<alt> ;       - Color cycle mode"},
-  {14, 2, CD_LTGRAY, "(<alt>) <arrows> - Scroll direction"},
-  {15, 2, CD_LTGRAY, "<ctrl> <alt> u i o - Frame delay(ms)"},
-  {18, 2, CD_YELLOW, "Colors:"},
-  {20, 2, CD_LTGRAY, "<ctrl> <alt> q w - foreground:"},
-  {21, 2, CD_LTGRAY, "<ctrl> <alt> a s - background:"},
-  {24, 2, CD_YELLOW, "Moments:"},
-  {26, 2, CD_LTGRAY, "<ctrl> 0-9 - Load Moment.    Current:"},
-  {27, 2, CD_LTGRAY, "<ctrl> <alt> 0-9 - Copy moment over current."},
-  {28, 2, CD_LTGRAY, "<alt> 0-9 - Load another moment's image buffer."},
-  {31, 2, CD_YELLOW, "Text entry:"},
-  {32, 2, CD_LTGRAY, "<Unmodified keys> - Add text."},
-  {33, 2, CD_LTGRAY, "<backspace> - Delete last letter."},
-  {34, 2, CD_LTGRAY, "<delete> - Erase all text."},
-  {35, 2, CD_LTGRAY, "<ctrl> ' - Reverse text."},
-  {36, 2, CD_LTGRAY, "<ctrl> ; - Flip text."},
-  {37, 2, CD_LTGRAY, "<crtl> <alt> z x - Offset:"},
-  {38, 2, CD_LTGRAY, "<ctrl> b - Text mode:"},
-  {39, 2, CD_LTGRAY, "Text buffer size:"},
-  {42, 2, CD_YELLOW, "More modes:"},
-  {44, 2, CD_LTGRAY, "<ctrl> [ - Red plane:"},
-  {45, 2, CD_LTGRAY, "<ctrl> ] - Green plane:"},
-  {46, 2, CD_LTGRAY, "<ctrl> \\ - Blue plane:"},
-  {47, 2, CD_LTGRAY, "<ctrl> <alt> [ - Cyan plane:"},
-  {48, 2, CD_LTGRAY, "<ctrl> <alt> ] - Yellow plane:"},
-  {49, 2, CD_LTGRAY, "<ctrl> <alt> \\ - Magenta plane:"},
-  {51, 2, CD_YELLOW, "<esc> - Quit."}
+displayText_t otherText[] = {
+  {39, 2, "Text buffer size:"},
+  {32, 2, "<Unmodified keys> - Add text."},
+  {28, 2, "<alt> 0-9 - Load image buffer from set #"},
+  {26, 2, "<ctrl> 0-9 - Load set #.  Current:"},
+  {27, 2, "<ctrl> <alt> 0-9 - Copy to set #"}
 };
-#define DISPLAY_TEXT_SIZE (sizeof(displayText) / sizeof(displayText_t))
+#define OTHER_TEXT_SIZE (sizeof(otherText) / sizeof(displayText_t))
 
-
+displayText_t headerText[] = {
+  {21, 0,  "Modes:                       FPS:"},
+  {51, 0,  "Text buffer:"},
+  {0, 2,   "Coeffs: (3 keys = increment / reset / decrement)"},
+  {18, 2, "Colors:"},
+  {24, 2, "Pattern Sets:"},
+  {31, 2, "Text entry:"},
+  {42, 2, "More modes:"}
+};
+#define HEAD_TEXT_SIZE (sizeof(headerText) / sizeof(displayText_t))
 
 // Globals - We do love our globals.
 TTF_Font *screenFont;
@@ -383,17 +501,13 @@ SDL_Window *mainWindow = NULL;
 SDL_Renderer *mwRenderer = NULL;
 SDL_Surface *previewSurface = NULL;
 SDL_Surface *imageSeed = NULL;
-int TENSOR_WIDTH_EFF, TENSOR_HEIGHT_EFF;
+int tensorWidth, tensorHeight;
 int cycleMomentsMode = NO;  // cycleMomentsMode mode is a global (for now).
 moment_t moments[MOMENT_COUNT];
 int now;
-moment_t *currentMoment;
-modes_t *currentMode;
-parms_t *currentParms;
-text_info_t *currentText;
-unsigned char *currentFB;
 float global_intensity_limit;
 int frames, fps;
+const int colstart[] = {0, 275, 375, 675, 763, WINDOW_WIDTH};
 
 // Prototypes
 void MainLoop(void);
@@ -402,7 +516,7 @@ Uint32 TriggerProcessing(Uint32 interval, void *param);
 Uint32 FrameCounter(Uint32 interval, void *param);
 void SetPixel(int x, int y, color_t color, unsigned char *fb);
 color_t GetPixel(int x, int y, unsigned char *buffer);
-void FadeAll(int dec, fadeModes_e fadeMode, unsigned char *buffer);
+void FadeAll(int inc, fadeModes_e fadeMode, unsigned char *buffer);
 void Scroll (dir_e direction, int rollovermode, unsigned char *fb, unsigned char plane);
 void WriteSlice(moment_t *moment);
 void CellFun(moment_t *moment);
@@ -410,10 +524,6 @@ void DrawSideBar(moment_t *moment);
 void Diffuse(float diffusion_coeff, unsigned char *buffer);
 void HorizontalBars(color_t color, unsigned char *buffer);
 void VerticalBars(color_t color, unsigned char *buffer);
-int HandleInput(SDL_Event *key_event);
-int ColorAlter(int thiskey, moment_t *moments,int now);
-int ModeAlter(int thiskey, moment_t *moments, int now);
-void ParmAlter(int thiskey, moment_t *moments, int now);
 void SaveMoments(SDL_KeyboardEvent *key, moment_t *moments, int now);
 void LoadMoments(SDL_KeyboardEvent *key, moment_t *moments, char *fn);
 void RandomDots(color_t color, unsigned int rFreq, unsigned char *buffer);
@@ -423,12 +533,12 @@ void SetDims(void);
 void Update(float intensity_limit, moment_t *moment);
 void UpdateAll(void);
 void UpdateTensor(unsigned char *buffer);
-void DrawPreviewBorder(void);
-void UpdatePreview(unsigned char *buffer);
+void DrawPreviewBorder(int x, int y);
+void UpdatePreview(int xOffset, int yOffset, unsigned char *buffer);
 void InitInfoDisplay(void);
 void UpdateInfoDisplay(moment_t *moment, int now);
 void ClearAll(void);
-void WriteLine(char * thisText, int line, int col, color_t color);
+void WriteLine(char * thisText, int line, int col, color_t color, color_t bgColor);
 void WriteBool(int value, int row, int col);
 void WriteInt(int value, int row, int col, int width);
 void WriteFloat(float value, int row, int col, int width, int precision);
@@ -447,7 +557,10 @@ void SetPixelByPlane(int x, int y, color_t color, unsigned char plane, unsigned 
 void DrawImage(double angle, double expansion, int aliasmode, unsigned char *fb_dst);
 int min(int a, int b);
 int max(int a, int b);
-
+unsigned char SameRectangle(SDL_Rect a, SDL_Rect b);
+void WriteCommand(int index, const command_t *commands, color_t fg, color_t bg);
+int HandleCommand(command_e command);
+int HandleKey(SDL_Keycode key, SDL_Keymod mod);
 
 // Main
 int main(int argc, char *argv[]) {
@@ -460,12 +573,6 @@ int main(int argc, char *argv[]) {
 
   // Some inits
   now = 0;
-  currentMoment = &moments[now];
-  currentMode = &currentMoment->mode;
-  currentParms = &currentMoment->coefs;
-  currentText = &currentMoment->text;
-  currentFB = currentMoment->fb;
-
   frames = 0;
   fps = 0;
 
@@ -491,7 +598,7 @@ int main(int argc, char *argv[]) {
   atexit(SDL_Quit);  // Register the SDL cleanup function.
 
   // Initialize the SDL window and renderer.
-  SDL_CreateWindowAndRenderer(900, 768, SDL_WINDOW_RESIZABLE, &mainWindow, &mwRenderer);
+  SDL_CreateWindowAndRenderer(WINDOW_WIDTH, WINDOW_HEIGHT, SDL_WINDOW_RESIZABLE, &mainWindow, &mwRenderer);
   if ((!mainWindow) || (!mwRenderer)) {
     fprintf(stderr, "Unable to create main window or renderer: %s\n", SDL_GetError());
     exit(EXIT_FAILURE);
@@ -499,7 +606,7 @@ int main(int argc, char *argv[]) {
 
   // Window scaling hints:
   SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");
-  SDL_RenderSetLogicalSize(mwRenderer, 900, 768);
+  SDL_RenderSetLogicalSize(mwRenderer, WINDOW_WIDTH, WINDOW_HEIGHT);
 
   // Set the window title
   snprintf(caption_temp, sizeof(caption_temp), "Tensor Control - Output: %i%%", (int) (global_intensity_limit * 100));
@@ -516,14 +623,15 @@ int main(int argc, char *argv[]) {
   SetDims();
 
   // Draw a border around the preview
-  DrawPreviewBorder();
+  DrawPreviewBorder(PREVIEW_A_POSITION_X, PREVIEW_A_POSITION_Y);
+  //~ DrawPreviewBorder(PREVIEW_B_POSITION_X, PREVIEW_B_POSITION_Y);
 
   // Load the font.  Should be a fixed width font.
   if(TTF_Init() < 0) {
     printf("Couldn't initialize TTF: %s\n", TTF_GetError());
     exit(EXIT_FAILURE);
   } else {
-    screenFont = TTF_OpenFont("font.ttf", PREVIEW_FONT_SIZE);
+    screenFont = TTF_OpenFont("font.ttf", DISPLAY_FONT_SIZE);
     if(!screenFont) {
       fprintf(stderr, "TTF_OpenFont: %s\n", TTF_GetError());
       exit(EXIT_FAILURE);
@@ -538,88 +646,88 @@ int main(int argc, char *argv[]) {
 #endif
 
   // Set up moment 0.
-  currentMode->alias = NO;
-  currentMode->bouncer = NO;
-  currentMode->cellAutoFun = NO;
-  currentMode->clearAll = NO;
-  currentMode->colorAll = NO;
-  currentMode->cycleBackground = NO;
-  currentMode->cycleForeground = YES;
-  currentMode->diffuse = NO;
-  currentMode->fadeMode = FM_LIMIT;
-  currentMode->fadeout = NO;
-  currentMode->horizontalBars = NO;
-  currentMode->multiply = NO;
-  currentMode->randDots = NO;
-  currentMode->roller = NO;
-  currentMode->postRotateZoom = NO;
-  currentMode->preRotateZoom = NO;
-  currentMode->scroller = YES;
-  currentMode->textSeed = YES;
-  currentMode->verticalBars = NO;
-  currentMode->textStagger = TS_FULLBG;
-  currentMode->sidebar = NO;
-  currentMode->clearBlue = NO;
-  currentMode->clearGreen = NO;
-  currentMode->clearRed = NO;
-  currentMode->shiftRed = SM_HOLD;
-  currentMode->shiftGreen = SM_HOLD;
-  currentMode->shiftBlue = SM_HOLD;
-  currentMode->shiftCyan = SM_HOLD;
-  currentMode->shiftMagenta = SM_HOLD;
-  currentMode->shiftYellow = SM_HOLD;
-  currentMode->postImage = NO;
-  currentMode->fontFlip = NO;
-  currentMode->fontDirection = FORWARDS;
+  moments[now].mode.alias = NO;
+  moments[now].mode.bouncer = NO;
+  moments[now].mode.cellAutoFun = NO;
+  moments[now].mode.clearAll = NO;
+  moments[now].mode.colorAll = NO;
+  moments[now].mode.cycleBackground = NO;
+  moments[now].mode.cycleForeground = YES;
+  moments[now].mode.diffuse = NO;
+  moments[now].mode.fadeMode = FM_LIMIT;
+  moments[now].mode.fadeout = NO;
+  moments[now].mode.horizontalBars = NO;
+  moments[now].mode.multiply = NO;
+  moments[now].mode.randDots = NO;
+  moments[now].mode.roller = NO;
+  moments[now].mode.postRotateZoom = NO;
+  moments[now].mode.preRotateZoom = NO;
+  moments[now].mode.scroller = YES;
+  moments[now].mode.textSeed = YES;
+  moments[now].mode.verticalBars = NO;
+  moments[now].mode.textStagger = TS_FULLBG;
+  moments[now].mode.sidebar = NO;
+  moments[now].mode.clearBlue = NO;
+  moments[now].mode.clearGreen = NO;
+  moments[now].mode.clearRed = NO;
+  moments[now].mode.shiftRed = SM_HOLD;
+  moments[now].mode.shiftGreen = SM_HOLD;
+  moments[now].mode.shiftBlue = SM_HOLD;
+  moments[now].mode.shiftCyan = SM_HOLD;
+  moments[now].mode.shiftMagenta = SM_HOLD;
+  moments[now].mode.shiftYellow = SM_HOLD;
+  moments[now].mode.postImage = NO;
+  moments[now].mode.fontFlip = NO;
+  moments[now].mode.fontDirection = FORWARDS;
 
-  currentParms->background = CE_BLACK;
-  currentParms->bg = namedPalette[currentParms->background].color;
-  currentParms->colorCycleMode = CM_RAINBOW;
-  currentParms->colorMultiplier = INITIAL_COLOR_MULTIPLIER;
-  currentParms->cycleSaveForegound = 0;
-  currentParms->cycleSaveBackground = 0;
-  currentParms->diffusion_coef = INITIAL_DIFF_COEF;
-  currentParms->expand = INITIAL_EXPAND;
-  currentParms->fadeout_dec = INITIAL_FADEOUT_DEC;
-  currentParms->floatinc = INITIAL_FLOAT_INC;
-  currentParms->foreground = CE_RED;
-  currentParms->fg = namedPalette[currentParms->foreground].color;
-  currentParms->rainbowInc = INITIAL_RAINBOW_INC;
-  currentParms->randMod = INITIAL_RAND_MOD;
-  currentParms->rotation = INITIAL_ROTATION_ANGLE;
-  currentParms->rotation2 = INITIAL_ROTATION_ANGLE2;
-  currentParms->rotationDelta = INITIAL_ROTATION_DELTA;
-  currentParms->scrollerDir = DIR_LEFT;
-  currentParms->cellAutoCount = 0;
-  currentParms->textOffset = TENSOR_HEIGHT_EFF / 3 - 1;
-  currentParms->delay = 60;
+  moments[now].coefs.background = CE_BLACK;
+  moments[now].coefs.bg = namedPalette[moments[now].coefs.background].color;
+  moments[now].coefs.colorCycleMode = CM_RAINBOW;
+  moments[now].coefs.colorMultiplier = INITIAL_COLOR_MULTIPLIER;
+  moments[now].coefs.cycleSaveForegound = 0;
+  moments[now].coefs.cycleSaveBackground = 0;
+  moments[now].coefs.diffusion_coef = INITIAL_DIFF_COEF;
+  moments[now].coefs.expand = INITIAL_EXPAND;
+  moments[now].coefs.fadeout_dec = INITIAL_FADEOUT_DEC;
+  moments[now].coefs.floatinc = INITIAL_FLOAT_INC;
+  moments[now].coefs.foreground = CE_RED;
+  moments[now].coefs.fg = namedPalette[moments[now].coefs.foreground].color;
+  moments[now].coefs.rainbowInc = INITIAL_RAINBOW_INC;
+  moments[now].coefs.randMod = INITIAL_RAND_MOD;
+  moments[now].coefs.postRotationAngle = INITIAL_POSTROT_ANGLE;
+  moments[now].coefs.preRotationAngle = INITIAL_PREROT_ANGLE;
+  moments[now].coefs.postRotationIncr = INITIAL_POSTROT_INC;
+  moments[now].coefs.scrollerDir = DIR_LEFT;
+  moments[now].coefs.cellAutoCount = 0;
+  moments[now].coefs.textOffset = tensorHeight / 3 - 1;
+  moments[now].coefs.delay = INITIAL_DELAY;
 
-  snprintf(currentText->textBuffer, TEXT_BUFFER_SIZE, "Frostbyte was an engineer. ");
-  currentText->tindex = strlen(currentText->textBuffer);
-  currentText->imaginaryIndex = -1;
-  currentText->lastDirection = DIR_LEFT;
-  currentText->textBufferRand[0] = 'a';  // Initializing value.
+  snprintf(moments[now].text.textBuffer, TEXT_BUFFER_SIZE, "Frostbyte was an engineer. ");
+  moments[now].text.tindex = strlen(moments[now].text.textBuffer);
+  moments[now].text.imaginaryIndex = -1;
+  moments[now].text.lastDirection = DIR_LEFT;
+  moments[now].text.textBufferRand[0] = 'a';  // Initializing value.
 
-  ColorAll(cBlack, currentFB);
+  ColorAll(cBlack, moments[now].fb);
 
   // There is a secret hidden bug in the moment copying or changing or disk read / write
   // that I haven't found yet...
   for (i = 1; i < MOMENT_COUNT; i++) {
-    memcpy(&moments[i], currentMoment, sizeof(moment_t));
+    memcpy(&moments[i], &moments[now], sizeof(moment_t));
   }
 
   // Attempt to load a file...
   LoadMoments(NULL, &moments[0], "1.now");
 
   // Bam!
-  ColorAll(cBlack, currentFB);
-  Update(global_intensity_limit, currentMoment);
+  ColorAll(cBlack, moments[now].fb);
+  Update(global_intensity_limit, &moments[now]);
 
   // Add the text.
   InitInfoDisplay();
 
   // Init the processing timer.
-  if (SDL_AddTimer(currentParms->delay, TriggerProcessing, NULL) == 0) {
+  if (SDL_AddTimer(moments[now].coefs.delay, TriggerProcessing, NULL) == 0) {
     printf("Process Timer problem!\n");
     exit(0);
   }
@@ -632,6 +740,14 @@ int main(int argc, char *argv[]) {
 
   unsigned char doprocess = NO;
 
+  int x, y;
+  int thisI = -1;
+  int lastI = -1;
+  int mouseDownOn = -1;
+  SDL_Rect box, boxOld;
+  box.x = box.y = box.w = box.h = 0;
+  boxOld = box;
+
   // Program loop...
   FOREVER {
 
@@ -639,9 +755,75 @@ int main(int argc, char *argv[]) {
     while (SDL_PollEvent(&event)) {
       switch(event.type) {
         case SDL_KEYDOWN:
-          if (!HandleInput(&event)) {
-            exitProgram = 1;
+          exitProgram = HandleKey(event.key.keysym.sym, event.key.keysym.mod);
+          break;
+
+        case SDL_MOUSEMOTION:
+          x = event.motion.x;
+          y = event.motion.y;
+          //~ printf("Mouse location: %i, %i\n", x, y);
+          thisI = -1;
+          for (i = 0; i < DISPLAY_COMMAND_SIZE; i++) {
+            box.x = colstart[mouseCommands[i].col];
+            box.y = mouseCommands[i].line * DISPLAY_TEXT_HEIGHT;
+            box.w = colstart[mouseCommands[i].col + 1] - box.x;
+            box.h = (mouseCommands[i].line + 1) * DISPLAY_TEXT_HEIGHT - box.y + 1;
+            if ((y >= box.y) && (y < box.y + box.h)) {
+              if ((x >= box.x) && (x < box.x + box.w)) {
+                thisI = i;
+                if (!SameRectangle(box, boxOld) || lastI == -1) {
+                  //~ printf("In line: %s\n", mouseCommands[i].text);
+                  DrawBox(box.x, box.y, box.w, box.h, DISPLAY_COLOR_TEXTSBG_HL);
+                  WriteCommand(i, mouseCommands, DISPLAY_COLOR_TEXTS_HL, DISPLAY_COLOR_TEXTSBG_HL);
+                  if (lastI != -1) {
+                    DrawBox(boxOld.x, boxOld.y, boxOld.w, boxOld.h, DISPLAY_COLOR_TEXTSBG);
+                    WriteCommand(lastI, mouseCommands, DISPLAY_COLOR_TEXTS, DISPLAY_COLOR_TEXTSBG);
+                  }
+                  boxOld = box;
+                  lastI = i;
+                  break; // Breaks the for loop.  No need to check anymore.
+                }
+              }
+            }
           }
+          if (thisI == -1) {
+            if (lastI != -1) {
+              DrawBox(boxOld.x, boxOld.y, boxOld.w, boxOld.h, DISPLAY_COLOR_TEXTSBG);
+              WriteCommand(lastI, mouseCommands, DISPLAY_COLOR_TEXTS, DISPLAY_COLOR_TEXTSBG);
+              lastI = -1;
+            }
+          }
+          break;
+
+        case SDL_MOUSEWHEEL:
+          if (thisI != -1) {
+            // If there are no mouse wheel commands for this item, consider it a click.
+            if (event.wheel.y < 0) {
+              if (mouseCommands[thisI].commands[MOUSE_WHEEL_DOWN].command == COM_NONE) {
+                exitProgram = HandleCommand(mouseCommands[thisI].commands[MOUSE_CLICK].command);
+              } else {
+                exitProgram = HandleCommand(mouseCommands[thisI].commands[MOUSE_WHEEL_DOWN].command);
+              }
+            } else {
+              if (mouseCommands[thisI].commands[MOUSE_WHEEL_UP].command == COM_NONE) {
+                exitProgram = HandleCommand(mouseCommands[thisI].commands[MOUSE_CLICK].command);
+              } else {
+                exitProgram = HandleCommand(mouseCommands[thisI].commands[MOUSE_WHEEL_UP].command);
+              }
+            }
+            //~ printf("Mouse wheel: %i in %s\n", event.wheel.y, mouseCommands[thisI].text);
+          }
+          break;
+
+        case SDL_MOUSEBUTTONUP:
+          if ((thisI != -1) && (thisI == mouseDownOn)) {
+            //~ printf("Mouse click in %s.\n", mouseCommands[thisI].text);
+            exitProgram = HandleCommand(mouseCommands[thisI].commands[MOUSE_CLICK].command);
+          }
+          break;
+
+        case SDL_MOUSEBUTTONDOWN:
+          mouseDownOn = thisI;
           break;
 
         // User events are either an fps counter update, or calculating and writing a new frame.
@@ -663,17 +845,29 @@ int main(int argc, char *argv[]) {
           exitProgram = 1;
           break;
 
-       case SDL_WINDOWEVENT:
-         if ((event.window.event == SDL_WINDOWEVENT_RESIZED) ||
-             (event.window.event == SDL_WINDOWEVENT_EXPOSED)) {
-           ClearAll();
-           DrawPreviewBorder();
-           InitInfoDisplay();
-         }
-         break;
+        case SDL_WINDOWEVENT:
+          if ((event.window.event == SDL_WINDOWEVENT_RESIZED) ||
+              (event.window.event == SDL_WINDOWEVENT_EXPOSED)) {
+            ClearAll();
+            InitInfoDisplay();
+            DrawPreviewBorder(PREVIEW_A_POSITION_X, PREVIEW_A_POSITION_Y);
+            //~ DrawPreviewBorder(PREVIEW_B_POSITION_X, PREVIEW_B_POSITION_Y);
+          }
+          break;
 
-
+        //~ // Only in SDL >= 2.0.4
+        //~ case SDL_RENDER_DEVICE_RESET:
+          //~
+          //~ printf("Render device reset!\n");
+          //~ break;
+        case SDL_RENDER_TARGETS_RESET:
+          printf("Render targets reset!\n");
+          break;
+        case SDL_KEYUP:
+        case SDL_TEXTINPUT:
+          break;
         default:
+          printf("Unknown SDL event! %i\n", event.type);
           break;
       }
     }
@@ -687,7 +881,7 @@ int main(int argc, char *argv[]) {
       // Large delays make the CPU go way up.  Its because were stuck in a
       // tight loop, polling for events that never occur.  Best to get out of
       // the way...
-      if (currentParms->delay > 30) {
+      if (moments[now].coefs.delay > 30) {
         nanosleep((struct timespec[]) {{0,1000000}}, NULL);  // 1ms.
       }
     }
@@ -719,7 +913,7 @@ Uint32 TriggerProcessing(Uint32 interval, void *param) {
 
   SDL_PushEvent(&event);
 
-  return(currentParms->delay);
+  return(moments[now].coefs.delay);
 }
 
 // Event that triggers the fps to be updated.
@@ -746,10 +940,10 @@ void MainLoop(void) {
   ProcessModes();
 
   // Update the preview and tensor.
-  Update(global_intensity_limit, currentMoment);
+  Update(global_intensity_limit, &moments[now]);
 
   // Update the text display.
-  UpdateInfoDisplay(currentMoment, now);
+  UpdateInfoDisplay(&moments[now], now);
 }
 
 // Time to make a mess of the array.
@@ -767,333 +961,521 @@ void ProcessModes(void) {
 
       now = (now + 1) % MOMENT_COUNT;
       // Re-appoint the pointers.
-      currentMoment = &moments[now];
-      currentMode = &currentMoment->mode;
-      currentParms = &currentMoment->coefs;
-      currentText = &currentMoment->text;
-      currentFB = currentMoment->fb;
+      //~ currentMoment = &moments[now];
+      //~ currentMode = &currentMoment->mode;
+      //~ currentParms = &currentMoment->coefs;
+      //~ currentText = &currentMoment->text;
+      //~ currentFB = currentMoment->fb;
     }
   }
 
   // Change foreground color.
-  if (currentMode->cycleForeground) {
-    ColorCycle(currentParms, FOREGROUND);
+  if (moments[now].mode.cycleForeground) {
+    ColorCycle(&moments[now].coefs, FOREGROUND);
   }
 
   // Change background color.
-  if (currentMode->cycleBackground) {
-    ColorCycle(currentParms, BACKGROUND);
+  if (moments[now].mode.cycleBackground) {
+    ColorCycle(&moments[now].coefs, BACKGROUND);
   }
 
   // Seed the entire array with the foreground color.
-  if (currentMode->colorAll) {
-    ColorAll(currentParms->fg, currentFB);
-    currentMode->colorAll = NO;
+  if (moments[now].mode.colorAll) {
+    ColorAll(moments[now].coefs.fg, moments[now].fb);
+    moments[now].mode.colorAll = NO;
   }
 
   // Scroller.
-  if (currentMode->scroller) {
-    Scroll(currentParms->scrollerDir, currentMode->roller, currentFB, PLANE_ALL);
+  if (moments[now].mode.scroller) {
+    Scroll(moments[now].coefs.scrollerDir, moments[now].mode.roller, moments[now].fb, PLANE_ALL);
   }
 
   // Scroll red.
-  if (currentMode->shiftRed) {
-    Scroll(currentMode->shiftRed - 1, currentMode->roller, currentFB, PLANE_RED);
+  if (moments[now].mode.shiftRed) {
+    Scroll(moments[now].mode.shiftRed - 1, moments[now].mode.roller, moments[now].fb, PLANE_RED);
   }
 
   // Scroll green.
-  if (currentMode->shiftGreen) {
-    Scroll(currentMode->shiftGreen - 1, currentMode->roller, currentFB, PLANE_GREEN);
+  if (moments[now].mode.shiftGreen) {
+    Scroll(moments[now].mode.shiftGreen - 1, moments[now].mode.roller, moments[now].fb, PLANE_GREEN);
   }
 
   // Scroll blue.
-  if (currentMode->shiftBlue) {
-    Scroll(currentMode->shiftBlue - 1, currentMode->roller, currentFB, PLANE_BLUE);
+  if (moments[now].mode.shiftBlue) {
+    Scroll(moments[now].mode.shiftBlue - 1, moments[now].mode.roller, moments[now].fb, PLANE_BLUE);
   }
 
   // Scroll blue and green
-  if (currentMode->shiftCyan) {
-      Scroll(currentMode->shiftCyan - 1, currentMode->roller, currentFB, PLANE_CYAN);
+  if (moments[now].mode.shiftCyan) {
+      Scroll(moments[now].mode.shiftCyan - 1, moments[now].mode.roller, moments[now].fb, PLANE_CYAN);
   }
 
   // Scroll red and blue.
-  if (currentMode->shiftMagenta) {
-    Scroll(currentMode->shiftMagenta - 1, currentMode->roller, currentFB, PLANE_MAGENTA);
+  if (moments[now].mode.shiftMagenta) {
+    Scroll(moments[now].mode.shiftMagenta - 1, moments[now].mode.roller, moments[now].fb, PLANE_MAGENTA);
   }
 
   // Scroll green and red.
-  if (currentMode->shiftYellow) {
-    Scroll(currentMode->shiftYellow - 1, currentMode->roller, currentFB, PLANE_YELLOW);
+  if (moments[now].mode.shiftYellow) {
+    Scroll(moments[now].mode.shiftYellow - 1, moments[now].mode.roller, moments[now].fb, PLANE_YELLOW);
   }
 
   // Draw a solid bar up the side we are scrolling from.
-  if (currentMode->sidebar) {
-    DrawSideBar(currentMoment);
+  if (moments[now].mode.sidebar) {
+    DrawSideBar(&moments[now]);
   }
 
   // First stab experimental image drawing.  Needs work.
-  if (currentMode->postImage) {
-    DrawImage(currentParms->rotation, currentParms->expand, currentMode->alias, currentFB);
-    currentParms->rotation = currentParms->rotation + currentParms->rotationDelta;
+  if (moments[now].mode.postImage) {
+    DrawImage(moments[now].coefs.postRotationAngle, moments[now].coefs.expand, moments[now].mode.alias, moments[now].fb);
+    moments[now].coefs.postRotationAngle = moments[now].coefs.postRotationAngle + moments[now].coefs.postRotationIncr;
   }
 
   // I think this just writes a column of text on the right or left.
-  if (currentMode->textSeed) {
+  if (moments[now].mode.textSeed) {
     // Scroll provided by scroller if its on.
-    WriteSlice(currentMoment);
+    WriteSlice(&moments[now]);
   }
 
   // Cellular automata manips?  Not actually cellular auto.  Never finished this.
-  if (currentMode->cellAutoFun) {
+  if (moments[now].mode.cellAutoFun) {
     // Give each pixel a color value.
-    CellFun(currentMoment);
+    CellFun(&moments[now]);
   }
 
   // Bouncy bouncy (ick).
-  if (currentMode->bouncer) {
+  if (moments[now].mode.bouncer) {
     scrDir = (scrDir + 1) % 4;
-    Scroll(scrDir, currentMode->roller, currentFB, PLANE_ALL);
+    Scroll(scrDir, moments[now].mode.roller, moments[now].fb, PLANE_ALL);
   }
 
   // Bam!  Draw some horizontal bars.
-  if (currentMode->horizontalBars) {
-    HorizontalBars(currentParms->fg, currentFB);
-    currentMode->horizontalBars = NO;
+  if (moments[now].mode.horizontalBars) {
+    HorizontalBars(moments[now].coefs.fg, moments[now].fb);
+    moments[now].mode.horizontalBars = NO;
   }
 
   // Bam!
-  if (currentMode->verticalBars) {
-    VerticalBars(currentParms->fg, currentFB);
-    currentMode->verticalBars = NO;
+  if (moments[now].mode.verticalBars) {
+    VerticalBars(moments[now].coefs.fg, moments[now].fb);
+    moments[now].mode.verticalBars = NO;
   }
 
   // Random dots.  Most useful seed ever.
-  if (currentMode->randDots) {
-    RandomDots(currentParms->fg, currentParms->randMod, currentFB);
+  if (moments[now].mode.randDots) {
+    RandomDots(moments[now].coefs.fg, moments[now].coefs.randMod, moments[now].fb);
   }
 
   // Fader
-  if (currentMode->fadeout) {
-    FadeAll(currentParms->fadeout_dec, currentMode->fadeMode, currentFB);
+  if (moments[now].mode.fadeout) {
+    FadeAll(moments[now].coefs.fadeout_dec, moments[now].mode.fadeMode, moments[now].fb);
   }
 
   // Averager
-  if (currentMode->diffuse) {
-    Diffuse(currentParms->diffusion_coef, currentFB);
+  if (moments[now].mode.diffuse) {
+    Diffuse(moments[now].coefs.diffusion_coef, moments[now].fb);
   }
 
   // Clear screen.
-  if (currentMode->clearAll) {
-    ColorAll(currentParms->bg, currentFB);
-    currentMode->clearAll = NO;
+  if (moments[now].mode.clearAll) {
+    ColorAll(moments[now].coefs.bg, moments[now].fb);
+    moments[now].mode.clearAll = NO;
   }
 
   // Multiplier
-  if (currentMode->multiply) {
-    Multiply(currentParms->colorMultiplier, currentFB);
+  if (moments[now].mode.multiply) {
+    Multiply(moments[now].coefs.colorMultiplier, moments[now].fb);
   }
 
   // Experimental Rotozoomer
-  if (currentMode->preRotateZoom) {
-    Rotate(currentParms->rotation2, currentParms->expand, currentMode->alias, currentFB, currentFB);
+  if (moments[now].mode.preRotateZoom) {
+    Rotate(moments[now].coefs.preRotationAngle, moments[now].coefs.expand, moments[now].mode.alias, moments[now].fb, moments[now].fb);
   }
 
   // Zero the red.
-  if (currentMode->clearRed) {
-    ClearRed(currentMoment);
+  if (moments[now].mode.clearRed) {
+    ClearRed(&moments[now]);
   }
 
   // Zero the blue.
-  if (currentMode->clearBlue) {
-    ClearBlue(currentMoment);
+  if (moments[now].mode.clearBlue) {
+    ClearBlue(&moments[now]);
   }
 
   // Zero the green.
-  if (currentMode->clearGreen) {
-    ClearGreen(currentMoment);
+  if (moments[now].mode.clearGreen) {
+    ClearGreen(&moments[now]);
   }
 }
 
 // Key press processing.
-int HandleInput(SDL_Event *key_event) {
+int HandleKey(SDL_Keycode key, SDL_Keymod mod) {
+  text_info_t *text = &moments[now].text;
+  int i, j;
 
-  // <ctrl> <alt>
-  if ((key_event->key.keysym.mod & KMOD_ALT) && (key_event->key.keysym.mod & KMOD_CTRL)) {
-    now = ColorAlter(key_event->key.keysym.sym, &moments[0], now);
-    currentMoment = &moments[now];
-    currentMode = &currentMoment->mode;
-    currentParms = &currentMoment->coefs;
-    currentText = &currentMoment->text;
-    currentFB = currentMoment->fb;
+  // Prolly not necessary.
+  if (key == SDLK_UNKNOWN) return 0;
 
-  // <alt> <shift>
-  } else if ((key_event->key.keysym.mod & KMOD_ALT) && (key_event->key.keysym.mod & KMOD_SHIFT)) {
-    SaveMoments(&key_event->key, &moments[0], now);
+  // To make exact comparisons to mod, left or right equivalents of modifier
+  // keys must both be set if one is set.
+  if (mod & KMOD_CTRL) mod |= KMOD_CTRL;
+  if (mod & KMOD_ALT) mod |= KMOD_ALT;
+  if (mod & KMOD_SHIFT) mod |= KMOD_SHIFT;
 
-  // <ctrl> <shift>
-  } else if ((key_event->key.keysym.mod & KMOD_CTRL) && (key_event->key.keysym.mod & KMOD_SHIFT)) {
-    LoadMoments(&key_event->key, &moments[0], NULL);
-
-  // <ctrl>
-  } else if (key_event->key.keysym.mod & KMOD_CTRL) {
-    now = ModeAlter(key_event->key.keysym.sym, &moments[0], now);
-    currentMoment = &moments[now];
-    currentMode = &currentMoment->mode;
-    currentParms = &currentMoment->coefs;
-    currentText = &currentMoment->text;
-    currentFB = currentMoment->fb;
-  // <alt>
-  } else if (key_event->key.keysym.mod & KMOD_ALT) {
-    ParmAlter(key_event->key.keysym.sym, &moments[0], now);
-
-  // No modifier keys.  Text buffer stuff.
-  } else {
-    // Check for arrows here.
-    switch (key_event->key.keysym.sym) {
-      case SDLK_UP:
-        currentParms->scrollerDir = DIR_UP;
-        break;
-
-      case SDLK_DOWN:
-        currentParms->scrollerDir = DIR_DOWN;
-        break;
-
-      case SDLK_LEFT:
-        currentParms->scrollerDir = DIR_LEFT;
-        break;
-
-      case SDLK_RIGHT:
-        currentParms->scrollerDir = DIR_RIGHT;
-        break;
-      default:
-        break;
+  // Check to see if the key combination activates a command.
+  for ( i = 0 ; i < DISPLAY_COMMAND_SIZE; i++) {
+    for (j = 0; j < MOUSE_COUNT; j++) {
+      if ((mouseCommands[i].commands[j].key == key) && (mouseCommands[i].commands[j].mod == mod)) {
+        return(HandleCommand(mouseCommands[i].commands[j].command));
+      }
     }
-    if (key_event->key.keysym.sym < 0x80 && key_event->key.keysym.sym > 0) {
-      switch(key_event->key.keysym.sym) {
-        case SDLK_ESCAPE:
-          // This will exit the program.
-          return 0;
-          break;
+  }
 
-        case SDLK_BACKSPACE:
-          // Reduce the buffer by 1 character off the end.
-          currentText->tindex--;
-          if (currentText->tindex < 0) {
-            currentText->tindex = 0;
-          }
-          currentText->textBuffer[currentText->tindex] = 0x00;
-          break;
+  // Check other place for commands.
+  for ( i = 0 ; i < OTHER_COMMAND_SIZE; i++) {
+    for (j = 0 ; j < MOUSE_COUNT; j++) {
+      if ((otherCommands[i].commands[j].key == key) && (otherCommands[i].commands[j].mod == mod)) {
+        return(HandleCommand(otherCommands[i].commands[j].command));
+      }
+    }
+  }
 
-        case SDLK_RETURN:
-          // Um, place a carriage return in the buffer?
-          currentText->textBuffer[currentText->tindex] = '\n';
-          currentText->textBuffer[currentText->tindex + 1] = 0x00;
-          currentText->tindex++;
-          if (currentText->tindex >= (sizeof(currentText->textBuffer) - 2)) {
-            currentText->tindex--;
-          }
-          break;
+  // If no command by now, then the key prolly goes in the text buffer.  First,
+  // make sure we are dealing with printable characters:
+  if ((key <= '~' && key >= ' ') && (!(mod & KMOD_ALT)) && (!(mod & KMOD_CTRL))) {
+    if ((mod & KMOD_SHIFT) == KMOD_SHIFT) {
+      // Keys with shift held down.
+      if (key <= SDLK_z && key >= SDLK_a) {
+        // Capitalize for a - z.
+        text->textBuffer[text->tindex] = key - ('a' - 'A');
+      } else {
+        // Lookup the symbols for the rest of the keys.
+        switch (key) {
+          case SDLK_1: text->textBuffer[text->tindex] = '!'; break;
+          case SDLK_2: text->textBuffer[text->tindex] = '@'; break;
+          case SDLK_3: text->textBuffer[text->tindex] = '#'; break;
+          case SDLK_4: text->textBuffer[text->tindex] = '$'; break;
+          case SDLK_5: text->textBuffer[text->tindex] = '%'; break;
+          case SDLK_6: text->textBuffer[text->tindex] = '^'; break;
+          case SDLK_7: text->textBuffer[text->tindex] = '&'; break;
+          case SDLK_8: text->textBuffer[text->tindex] = '*'; break;
+          case SDLK_9: text->textBuffer[text->tindex] = '('; break;
+          case SDLK_0: text->textBuffer[text->tindex] = ')'; break;
+          case SDLK_BACKSLASH: text->textBuffer[text->tindex] = '|'; break;
+          case SDLK_BACKQUOTE: text->textBuffer[text->tindex] = '~'; break;
+          case SDLK_MINUS: text->textBuffer[text->tindex] = '_'; break;
+          case SDLK_EQUALS: text->textBuffer[text->tindex] = '+'; break;
+          case SDLK_LEFTBRACKET: text->textBuffer[text->tindex] = '{'; break;
+          case SDLK_RIGHTBRACKET: text->textBuffer[text->tindex] = '}'; break;
+          case SDLK_SEMICOLON: text->textBuffer[text->tindex] = ':'; break;
+          case SDLK_COMMA: text->textBuffer[text->tindex] = '<'; break;
+          case SDLK_PERIOD: text->textBuffer[text->tindex] = '>'; break;
+          case SDLK_SLASH: text->textBuffer[text->tindex] = '?'; break;
+          case SDLK_QUOTE: text->textBuffer[text->tindex] = '"'; break;
+          default: break;
+        }
+      }
+    } else {
+      // Unmodified key entry.  We'll treat them as ascii in the printable range.
+      text->textBuffer[text->tindex] = key;
+    }
 
-        case SDLK_DELETE:
-          // Erase the entire buffer by settings its size to 0 and terminating it.
-          currentText->tindex = 0;
-          currentText->textBuffer[0] = 0x00;
-          break;
+    // Advance the terminating null and increase the buffer size.
+    text->textBuffer[text->tindex + 1] = 0x00;
+    text->tindex++;
+    if (text->tindex >= (sizeof(text->textBuffer) - 2)) text->tindex--;
+  }
 
-        default:
-          // Place the pressed key into the text buffer.
-          if (key_event->key.keysym.mod & KMOD_SHIFT) {
-            // Shift was pushed.
-            if (key_event->key.keysym.sym <= 122 && key_event->key.keysym.sym >= 97) {
-              // Capitalize for a - z.
-              currentText->textBuffer[currentText->tindex] = (char)key_event->key.keysym.sym - 32;
-            } else {
-              // Lookup the symbols for the rest of the keys.
-              switch (key_event->key.keysym.sym) {
-                case SDLK_1:
-                  currentText->textBuffer[currentText->tindex] = '!';
-                  break;
-                case SDLK_2:
-                  currentText->textBuffer[currentText->tindex] = '@';
-                  break;
-                case SDLK_3:
-                  currentText->textBuffer[currentText->tindex] = '#';
-                  break;
-                case SDLK_4:
-                  currentText->textBuffer[currentText->tindex] = '$';
-                  break;
-                case SDLK_5:
-                  currentText->textBuffer[currentText->tindex] = '%';
-                  break;
-                case SDLK_6:
-                  currentText->textBuffer[currentText->tindex] = '^';
-                  break;
-                case SDLK_7:
-                  currentText->textBuffer[currentText->tindex] = '&';
-                  break;
-                case SDLK_8:
-                  currentText->textBuffer[currentText->tindex] = '*';
-                  break;
-                case SDLK_9:
-                  currentText->textBuffer[currentText->tindex] = '(';
-                  break;
-                case SDLK_0:
-                  currentText->textBuffer[currentText->tindex] = ')';
-                  break;
-                case SDLK_BACKSLASH:
-                  currentText->textBuffer[currentText->tindex] = '|';
-                  break;
-                case SDLK_BACKQUOTE:
-                  currentText->textBuffer[currentText->tindex] = '~';
-                  break;
-                case SDLK_MINUS:
-                  currentText->textBuffer[currentText->tindex] = '_';
-                  break;
-                case SDLK_EQUALS:
-                  currentText->textBuffer[currentText->tindex] = '+';
-                  break;
-                case SDLK_LEFTBRACKET:
-                  currentText->textBuffer[currentText->tindex] = '{';
-                  break;
-                case SDLK_RIGHTBRACKET:
-                  currentText->textBuffer[currentText->tindex] = '}';
-                  break;
-                case SDLK_SEMICOLON:
-                  currentText->textBuffer[currentText->tindex] = ':';
-                  break;
-                case SDLK_COMMA:
-                  currentText->textBuffer[currentText->tindex] = '<';
-                  break;
-                case SDLK_PERIOD:
-                  currentText->textBuffer[currentText->tindex] = '>';
-                  break;
-                case SDLK_SLASH:
-                  currentText->textBuffer[currentText->tindex] = '?';
-                  break;
-                case SDLK_QUOTE:
-                  currentText->textBuffer[currentText->tindex] = '"';
-                  break;
-                default:
-                  break;
-              }
-            }
-          } else {
-            // Unmodified key entry.
-            currentText->textBuffer[currentText->tindex] = (char)key_event->key.keysym.sym;
-          }
-          // Advance the terminating null and increase the buffer size.
-          currentText->textBuffer[currentText->tindex + 1] = 0x00;
-          currentText->tindex++;
+  return 0;
+}
 
-          // But not too much.
-          if (currentText->tindex >= (sizeof(currentText->textBuffer) - 2)) {
-            currentText->tindex--;
-          }
-          break;  // End the default case (most keys).
-      } // End normal key switch.
-    }  // End normal key else.
-  }  // End elses between modifier keys.
-  return 1;
+// Executes a user command - toggles flags, adjusts parameters, etc.
+int HandleCommand(command_e command) {
+  modes_t *mode = &moments[now].mode;
+  text_info_t *text = &moments[now].text;
+  parms_t *parms = &moments[now].coefs;
+
+  switch(command) {
+    case COM_CELL: mode->cellAutoFun = !mode->cellAutoFun; break;
+    case COM_TEXT_FLIP: mode->fontFlip = !mode->fontFlip; break;
+    case COM_TEXT_REVERSE: mode->fontDirection = !mode->fontDirection; break;
+    case COM_TEXT: mode->textSeed = !mode->textSeed; break;
+    case COM_BOUNCE: mode->bouncer = !mode->bouncer; break;
+    case COM_FADE: mode->fadeout = !mode->fadeout; break;
+    case COM_DIFFUSE: mode->diffuse = !mode->diffuse; break;
+    case COM_ROLL: mode->roller = !mode->roller; break;
+    case COM_SCROLL: mode->scroller = !mode->scroller; break;
+    case COM_HBAR: mode->horizontalBars = YES; break;
+    case COM_VBAR: mode->verticalBars = YES; break;
+    case COM_FGALL: mode->colorAll = YES; break;
+    case COM_BGALL: mode->clearAll = YES; break;
+    case COM_RDOT: mode->randDots = !mode->randDots; break;
+    case COM_FGCYCLE: mode->cycleForeground = !mode->cycleForeground; break;
+    case COM_BGCYCLE: mode->cycleBackground = !mode->cycleBackground; break;
+    case COM_CYCLESET: cycleMomentsMode = !cycleMomentsMode; break;
+    case COM_MODEOFF:
+      mode->alias = NO;
+      mode->bouncer = NO;
+      mode->cellAutoFun = NO;
+      mode->clearAll = NO;
+      mode->colorAll = NO;
+      mode->cycleBackground = NO;
+      mode->cycleForeground = NO;
+      mode->diffuse = NO;
+      mode->fadeMode = FM_LIMIT;
+      mode->fadeout = NO;
+      mode->horizontalBars = NO;
+      mode->multiply = NO;
+      mode->randDots = NO;
+      mode->roller = NO;
+      mode->postRotateZoom = NO;
+      mode->preRotateZoom = NO;
+      mode->scroller = NO;
+      mode->textSeed = NO;
+      mode->verticalBars = NO;
+      mode->sidebar = NO;
+      mode->clearRed = NO;
+      mode->clearBlue = NO;
+      mode->clearGreen = NO;
+      mode->shiftBlue = SM_HOLD;
+      mode->shiftCyan = SM_HOLD;
+      mode->shiftGreen = SM_HOLD;
+      mode->shiftMagenta = SM_HOLD;
+      mode->shiftYellow = SM_HOLD;
+      mode->shiftRed = SM_HOLD;
+      break;
+    case COM_LOADSET0: now = 0; break;
+    case COM_LOADSET1: now = 1; break;
+    case COM_LOADSET2: now = 2; break;
+    case COM_LOADSET3: now = 3; break;
+    case COM_LOADSET4: now = 4; break;
+    case COM_LOADSET5: now = 5; break;
+    case COM_LOADSET6: now = 6; break;
+    case COM_LOADSET7: now = 7; break;
+    case COM_LOADSET8: now = 8; break;
+    case COM_LOADSET9: now = 9; break;
+    case COM_FADEMODE: mode->fadeMode = !mode->fadeMode; break;
+    case COM_NORED: mode->clearRed = !mode->clearRed; break;
+    case COM_NOGREEN: mode->clearGreen = !mode->clearGreen; break;
+    case COM_NOBLUE: mode->clearBlue = !mode->clearBlue; break;
+    case COM_TEXTRESET: text->imaginaryIndex = -1; break;
+    case COM_POSTROTATE:
+      mode->postRotateZoom = !mode->postRotateZoom;
+      parms->postRotationAngle = 0;
+      break;
+    case COM_PREROTATE: mode->preRotateZoom = !mode->preRotateZoom; break;
+    case COM_AA: mode->alias = !mode->alias; break;
+    case COM_MULTIPLY: mode->multiply = !mode->multiply; break;
+    case COM_SIDEBAR: mode->sidebar = !mode->sidebar; break;
+    case COM_ORIENTATION:
+      tensor_landscape_p = !tensor_landscape_p;
+      SetDims();
+      DrawPreviewBorder(PREVIEW_A_POSITION_X, PREVIEW_A_POSITION_Y);
+      //~ DrawPreviewBorder(PREVIEW_B_POSITION_X, PREVIEW_B_POSITION_Y);
+      break;
+    case COM_TEXT_MODE_UP: mode->textStagger = (mode->textStagger + 1) % TS_COUNT; break;
+    case COM_TEXT_MODE_DOWN:
+      mode->textStagger--;
+      if (mode->textStagger < 0) mode->textStagger = TS_COUNT - 1;
+      break;
+    case COM_RP_UP: mode->shiftRed = (mode->shiftRed + 1) % SM_COUNT; break;
+    case COM_RP_DOWN:
+      mode->shiftRed--;
+      if (mode->shiftRed < 0) mode->shiftRed = SM_COUNT - 1;
+      break;
+    case COM_GP_UP: mode->shiftGreen = (mode->shiftGreen + 1) % SM_COUNT; break;
+    case COM_GP_DOWN:
+      mode->shiftGreen--;
+      if (mode->shiftGreen < 0) mode->shiftGreen = SM_COUNT - 1;
+      break;
+    case COM_BP_UP: mode->shiftBlue = (mode->shiftBlue + 1) % SM_COUNT; break;
+    case COM_BP_DOWN:
+      mode->shiftBlue--;
+      if (mode->shiftBlue < 0) mode->shiftBlue = SM_COUNT - 1;
+      break;
+    case COM_FG_DEC:
+      parms->foreground--;
+      if (parms->foreground < CE_RED) parms->foreground = CE_COUNT - 1;
+      parms->fg = namedPalette[parms->foreground].color;
+      break;
+    case COM_FG_INC:
+      parms->foreground = (parms->foreground + 1) % CE_COUNT;
+      parms->fg = namedPalette[parms->foreground].color;
+      break;
+    case COM_BG_DEC:
+      parms->background--;
+      if (parms->background < 0) parms->background = CE_COUNT - 1;
+      parms->bg = namedPalette[parms->background].color;
+      break;
+    case COM_BG_INC:
+      parms->background = (parms->background + 1) % CE_COUNT;
+      parms->bg = namedPalette[parms->background].color;
+      break;
+    case COM_COPYSET0: memcpy(&moments[0], &moments[now], sizeof(moment_t)); break;
+    case COM_COPYSET1: memcpy(&moments[1], &moments[now], sizeof(moment_t)); break;
+    case COM_COPYSET2: memcpy(&moments[2], &moments[now], sizeof(moment_t)); break;
+    case COM_COPYSET3: memcpy(&moments[3], &moments[now], sizeof(moment_t)); break;
+    case COM_COPYSET4: memcpy(&moments[4], &moments[now], sizeof(moment_t)); break;
+    case COM_COPYSET5: memcpy(&moments[5], &moments[now], sizeof(moment_t)); break;
+    case COM_COPYSET6: memcpy(&moments[6], &moments[now], sizeof(moment_t)); break;
+    case COM_COPYSET7: memcpy(&moments[7], &moments[now], sizeof(moment_t)); break;
+    case COM_COPYSET8: memcpy(&moments[8], &moments[now], sizeof(moment_t)); break;
+    case COM_COPYSET9: memcpy(&moments[9], &moments[now], sizeof(moment_t)); break;
+    case COM_TEXTO_DEC:
+      parms->textOffset--;
+      if (parms->textOffset < 0) {
+        if ((parms->scrollerDir == DIR_LEFT) || (parms->scrollerDir == DIR_RIGHT)) {
+          parms->textOffset = tensorHeight - 1;
+        } else {
+          parms->textOffset = tensorWidth - 1;
+        }
+      }
+      break;
+    case COM_TEXTO_INC:
+      parms->textOffset++;
+      if ((parms->scrollerDir == DIR_LEFT) || (parms->scrollerDir == DIR_RIGHT)) {
+        parms->textOffset %= tensorHeight;
+      } else {
+        parms->textOffset %= tensorWidth;
+      }
+      break;
+    case COM_DELAY_DEC:
+      parms->delay--;
+      if (parms->delay < 1) parms->delay = 1;
+      break;
+    case COM_DELAY_RST:
+      parms->delay = INITIAL_DELAY;
+      break;
+    case COM_DELAY_INC:
+      parms->delay++;
+      break;
+    case COM_CP_UP: mode->shiftCyan = (mode->shiftCyan + 1) % SM_COUNT; break;
+    case COM_CP_DOWN:
+      mode->shiftCyan--;
+      if (mode->shiftCyan < 0) mode->shiftCyan = SM_COUNT - 1;
+      break;
+    case COM_YP_UP: mode->shiftYellow = (mode->shiftYellow + 1) % SM_COUNT; break;
+    case COM_YP_DOWN:
+      mode->shiftYellow--;
+      if (mode->shiftYellow < 0) mode->shiftYellow = SM_COUNT - 1;
+      break;
+    case COM_MP_UP: mode->shiftMagenta = (mode->shiftMagenta + 1) % SM_COUNT; break;
+    case COM_MP_DOWN:
+      mode->shiftMagenta--;
+      if (mode->shiftMagenta < 0) mode->shiftMagenta = SM_COUNT - 1;
+      break;
+    case COM_IMAGE: mode->postImage = !mode->postImage; break;
+    case COM_FADE_DEC: parms->fadeout_dec--; break;
+    case COM_FADE_INC: parms->fadeout_dec++; break;
+    case COM_FADE_RST: parms->fadeout_dec = INITIAL_FADEOUT_DEC; break;
+    case COM_DIFFUSE_DEC: parms->diffusion_coef -= parms->floatinc; break;
+    case COM_DIFFUSE_RST: parms->diffusion_coef = INITIAL_DIFF_COEF; break;
+    case COM_DIFFUSE_INC: parms->diffusion_coef += parms->floatinc; break;
+    case COM_EXPAND_DEC: parms->expand -= parms->floatinc; break;
+    case COM_EXPAND_RST: parms->expand = INITIAL_EXPAND; break;
+    case COM_EXPAND_INC: parms->expand += parms->floatinc; break;
+    case COM_RANDOM_DEC:
+      parms->randMod -= max(1, parms->randMod / 50);
+      if (parms->randMod < 1) parms->randMod = 1;
+      break;
+    case COM_RANDOM_RST: parms->randMod = INITIAL_RAND_MOD; break;
+    case COM_RANDOM_INC:
+      parms->randMod += max(1, parms->randMod / 50);
+      if (parms->randMod > 20000) parms->randMod = 20000;
+      break;
+    case COM_POSTROT_DEC: parms->postRotationAngle -= parms->floatinc; break;
+    case COM_POSTROT_RST: parms->postRotationAngle = INITIAL_POSTROT_ANGLE; break;
+    case COM_POSTROT_INC: parms->postRotationAngle += parms->floatinc; break;
+    case COM_LOAD0: memcpy(moments[now].fb, moments[0].fb, sizeof(unsigned char) * TENSOR_BYTES); break;
+    case COM_LOAD1: memcpy(moments[now].fb, moments[1].fb, sizeof(unsigned char) * TENSOR_BYTES); break;
+    case COM_LOAD2: memcpy(moments[now].fb, moments[2].fb, sizeof(unsigned char) * TENSOR_BYTES); break;
+    case COM_LOAD3: memcpy(moments[now].fb, moments[3].fb, sizeof(unsigned char) * TENSOR_BYTES); break;
+    case COM_LOAD4: memcpy(moments[now].fb, moments[4].fb, sizeof(unsigned char) * TENSOR_BYTES); break;
+    case COM_LOAD5: memcpy(moments[now].fb, moments[5].fb, sizeof(unsigned char) * TENSOR_BYTES); break;
+    case COM_LOAD6: memcpy(moments[now].fb, moments[6].fb, sizeof(unsigned char) * TENSOR_BYTES); break;
+    case COM_LOAD7: memcpy(moments[now].fb, moments[7].fb, sizeof(unsigned char) * TENSOR_BYTES); break;
+    case COM_LOAD8: memcpy(moments[now].fb, moments[8].fb, sizeof(unsigned char) * TENSOR_BYTES); break;
+    case COM_LOAD9: memcpy(moments[now].fb, moments[9].fb, sizeof(unsigned char) * TENSOR_BYTES); break;
+    case COM_RAINDBOW_DEC: parms->rainbowInc--; break;
+    case COM_RAINDBOW_RST: parms->rainbowInc = INITIAL_RAINBOW_INC; break;
+    case COM_RAINDBOW_INC: parms->rainbowInc++; break;
+    case COM_CYCLE_MODE: parms->colorCycleMode = (parms->colorCycleMode + 1) % CM_COUNT; break;
+    case COM_CYCLE_MODE_DOWN:
+      parms->colorCycleMode--;
+      if (parms->colorCycleMode < 0) parms->colorCycleMode = CM_COUNT - 1;
+      break;
+    case COM_PREROT_DEC: parms->preRotationAngle-= parms->floatinc; break;
+    case COM_PREROT_RST: parms->preRotationAngle = INITIAL_PREROT_ANGLE; break;
+    case COM_PREROT_INC: parms->preRotationAngle+= parms->floatinc; break;
+    case COM_SCROLL_UPC:
+      parms->scrollerDir = DIR_UP;
+      mode->scroller = YES;
+      break;
+    case COM_SCROLL_DOWNC:
+      parms->scrollerDir = DIR_DOWN;
+      mode->scroller = YES;
+      break;
+    case COM_SCROLL_LEFTC:
+      parms->scrollerDir = DIR_LEFT;
+      mode->scroller = YES;
+      break;
+    case COM_SCROLL_RIGHTC:
+      parms->scrollerDir = DIR_RIGHT;
+      mode->scroller = YES;
+      break;
+    case COM_SCROLL_CYCLE_UP:
+      parms->scrollerDir = (parms->scrollerDir + 1) % DIR_COUNT;
+      mode->scroller = YES;
+      break;
+    case COM_SCROLL_CYCLE_DOWN:
+      parms->scrollerDir--;
+      if (parms->scrollerDir < 0) parms->scrollerDir = DIR_COUNT - 1;
+      mode->scroller = YES;
+      break;
+    case COM_MULT_DEC: parms->colorMultiplier -= parms->floatinc; break;
+    case COM_MULT_RST: parms->colorMultiplier = INITIAL_COLOR_MULTIPLIER; break;
+    case COM_MULT_INC: parms->colorMultiplier += parms->floatinc; break;
+    case COM_POSTSPEED_DEC: parms->postRotationIncr -= parms->floatinc; break;
+    case COM_POSTSPEED_RST: parms->postRotationIncr = INITIAL_POSTROT_INC; break;
+    case COM_POSTSPEED_INC: parms->postRotationIncr += parms->floatinc; break;
+    case COM_STEP_INC: parms->floatinc *= 10; break;
+    case COM_STEP_RST: parms->floatinc = INITIAL_FLOAT_INC; break;
+    case COM_STEP_DEC: parms->floatinc /= 10; break;
+    case COM_SCROLL_UP: parms->scrollerDir = DIR_UP; break;
+    case COM_SCROLL_DOWN: parms->scrollerDir = DIR_DOWN; break;
+    case COM_SCROLL_LEFT: parms->scrollerDir = DIR_LEFT; break;
+    case COM_SCROLL_RIGHT: parms->scrollerDir = DIR_RIGHT; break;
+    case COM_EXIT: return 1;
+    case COM_BACKSPACE:
+      text->tindex--;
+      if (text->tindex < 0) text->tindex = 0;
+      text->textBuffer[text->tindex] = 0x00;
+      break;
+    case COM_RETURN:
+      text->textBuffer[text->tindex] = '\n';
+      text->textBuffer[text->tindex + 1] = 0x00;
+      text->tindex++;
+      if (text->tindex >= (sizeof(text->textBuffer) - 2)) {
+        text->tindex--;
+      }
+      break;
+    case COM_DELETE:
+      text->tindex = 0;
+      text->textBuffer[0] = 0x00;
+      break;
+
+    //~ // <alt> <shift>
+    //~ } else if ((key_event->key.keysym.mod & KMOD_ALT) && (key_event->key.keysym.mod & KMOD_SHIFT)) {
+    //~ SaveMoments(&key_event->key, &moments[0], now);
+
+    //~ // <ctrl> <shift>
+    //~ } else if ((key_event->key.keysym.mod & KMOD_CTRL) && (key_event->key.keysym.mod & KMOD_SHIFT)) {
+    //~ LoadMoments(&key_event->key, &moments[0], NULL);
+
+    case COM_INVALID: case COM_NONE: case COM_COUNT:
+      break;
+  }
+  return 0;
 }
 
 // Weighted Averager.
@@ -1103,8 +1485,8 @@ void Diffuse(float diffusion_coeff, unsigned char *buffer) {
   float weightSumR, weightSumG, weightSumB;
   float divisor;
 
-  for (x = 0; x < TENSOR_WIDTH_EFF; x++) {
-    for (y = 0; y < TENSOR_HEIGHT_EFF; y++) {
+  for (x = 0; x < tensorWidth; x++) {
+    for (y = 0; y < tensorHeight; y++) {
       divisor = 0;
       weightSumR = 0;
       weightSumG = 0;
@@ -1114,7 +1496,7 @@ void Diffuse(float diffusion_coeff, unsigned char *buffer) {
         for (j = -1; j <= 1; j++) {
           k = x + i;
           l = y + j;
-          if ((k >= 0) && (k < TENSOR_WIDTH_EFF) && (l >= 0) && (l < TENSOR_HEIGHT_EFF)) {
+          if ((k >= 0) && (k < tensorWidth) && (l >= 0) && (l < tensorHeight)) {
             colorTemp = GetPixel(k, l, buffer);
             if ((i == 0) && (j == 0)) {
               weightSumR += colorTemp.r;
@@ -1131,15 +1513,15 @@ void Diffuse(float diffusion_coeff, unsigned char *buffer) {
         }
       }
 
-      finalColor[(y * TENSOR_WIDTH_EFF) + x].r = weightSumR / divisor;
-      finalColor[(y * TENSOR_WIDTH_EFF) + x].g = weightSumG / divisor;
-      finalColor[(y * TENSOR_WIDTH_EFF) + x].b = weightSumB / divisor;
+      finalColor[(y * tensorWidth) + x].r = weightSumR / divisor;
+      finalColor[(y * tensorWidth) + x].g = weightSumG / divisor;
+      finalColor[(y * tensorWidth) + x].b = weightSumB / divisor;
     }
   }
 
-  for (x = 0; x < TENSOR_WIDTH_EFF; x++) {
-    for (y = 0; y < TENSOR_HEIGHT_EFF; y++) {
-      SetPixel(x,y,finalColor[(y * TENSOR_WIDTH_EFF) + x], buffer);
+  for (x = 0; x < tensorWidth; x++) {
+    for (y = 0; y < tensorHeight; y++) {
+      SetPixel(x,y,finalColor[(y * tensorWidth) + x], buffer);
     }
   }
 }
@@ -1147,8 +1529,8 @@ void Diffuse(float diffusion_coeff, unsigned char *buffer) {
 // Color all the pixels a certain color.
 void ColorAll(color_t color, unsigned char *fb) {
   int x,y;
-  for (x = 0; x < TENSOR_WIDTH_EFF; x++) {
-    for (y = 0; y < TENSOR_HEIGHT_EFF; y++) {
+  for (x = 0; x < tensorWidth; x++) {
+    for (y = 0; y < tensorHeight; y++) {
       SetPixel(x, y, color, fb);
     }
   }
@@ -1164,31 +1546,31 @@ void Multiply(float multiplier, unsigned char *buffer) {
 }
 
 
-// Darken (or lighten) all the pixels by a certain value.
-void FadeAll(int dec, fadeModes_e fadeMode, unsigned char *buffer) {
+// Lighten (or darker) all the pixels by a certain value.
+void FadeAll(int inc, fadeModes_e fadeMode, unsigned char *buffer) {
   int x, y, r, g, b;
   color_t colorTemp;
 
-  for (x = 0; x < TENSOR_WIDTH_EFF; x++) {
-    for (y = 0; y < TENSOR_HEIGHT_EFF; y++) {
+  for (x = 0; x < tensorWidth; x++) {
+    for (y = 0; y < tensorHeight; y++) {
 
       // Grab the pixel color.
       colorTemp = GetPixel(x, y, buffer);
 
       if (fadeMode == FM_MODULAR) {
-        // Modular color fade is easy regardless of dec sign.
-        // Unsigned chars rollover.
-        colorTemp.r -= dec;
-        colorTemp.g -= dec;
-        colorTemp.b -= dec;
+        // Modular color fade is easy regardless of inc sign.
+        // Unsigned chars rollover in either direction.
+        colorTemp.r += inc;
+        colorTemp.g += inc;
+        colorTemp.b += inc;
       } else {
         // For the limiter, we'll do the math with ints.
         r = colorTemp.r;
         g = colorTemp.g;
         b = colorTemp.b;
-        r -= dec;
-        g -= dec;
-        b -= dec;
+        r += inc;
+        g += inc;
+        b += inc;
         if ( r < 0 ) r = 0;
         if ( g < 0 ) g = 0;
         if ( b < 0 ) b = 0;
@@ -1210,47 +1592,53 @@ void FadeAll(int dec, fadeModes_e fadeMode, unsigned char *buffer) {
 
 // Set a single pixel a particular color.
 void SetPixel(int x, int y, color_t color, unsigned char *buffer) {
-  buffer[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 0] = color.r;
-  buffer[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 1] = color.g;
-  buffer[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 2] = color.b;
+  if ((x >= tensorWidth) || (y >= tensorHeight)) {
+    fprintf(stderr, "Attempt to set pixel outside of frame buffer! %i, %i\n", x, y);
+  }
+  buffer[(y * tensorWidth * 3) + (x * 3) + 0] = color.r;
+  buffer[(y * tensorWidth * 3) + (x * 3) + 1] = color.g;
+  buffer[(y * tensorWidth * 3) + (x * 3) + 2] = color.b;
 }
 
 // Set a single pixel a particular color by color plane.
 // Rediculous.
 void SetPixelByPlane(int x, int y, color_t color, unsigned char plane, unsigned char *buffer) {
+  if ((x >= tensorWidth) || (y >= tensorHeight)) {
+    fprintf(stderr, "Attempt to set pixel outside of frame buffer! %i, %i\n", x, y);
+  }
   switch(plane) {
     case PLANE_ALL:
-      buffer[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 0] = color.r;
-      buffer[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 1] = color.g;
-      buffer[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 2] = color.b;
+      buffer[(y * tensorWidth * 3) + (x * 3) + 0] = color.r;
+      buffer[(y * tensorWidth * 3) + (x * 3) + 1] = color.g;
+      buffer[(y * tensorWidth * 3) + (x * 3) + 2] = color.b;
       break;
 
     case PLANE_RED:
-      buffer[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 0] = color.r;
+      buffer[(y * tensorWidth * 3) + (x * 3) + 0] = color.r;
       break;
 
     case PLANE_GREEN:
-      buffer[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 1] = color.g;
+      buffer[(y * tensorWidth * 3) + (x * 3) + 1] = color.g;
       break;
 
     case PLANE_BLUE:
-      buffer[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 2] = color.b;
+      buffer[(y * tensorWidth * 3) + (x * 3) + 2] = color.b;
       break;
 
     // More complicated.
     case PLANE_CYAN:
-      buffer[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 1] = color.g;
-      buffer[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 2] = color.b;
+      buffer[(y * tensorWidth * 3) + (x * 3) + 1] = color.g;
+      buffer[(y * tensorWidth * 3) + (x * 3) + 2] = color.b;
       break;
 
     case PLANE_YELLOW:
-      buffer[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 0] = color.r;
-      buffer[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 1] = color.g;
+      buffer[(y * tensorWidth * 3) + (x * 3) + 0] = color.r;
+      buffer[(y * tensorWidth * 3) + (x * 3) + 1] = color.g;
       break;
 
     case PLANE_MAGENTA:
-      buffer[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 0] = color.r;
-      buffer[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 2] = color.b;
+      buffer[(y * tensorWidth * 3) + (x * 3) + 0] = color.r;
+      buffer[(y * tensorWidth * 3) + (x * 3) + 2] = color.b;
       break;
     default:
       break;
@@ -1263,6 +1651,10 @@ void SetPixelByPlane(int x, int y, color_t color, unsigned char plane, unsigned 
 void SetPixelA(int x, int y, color_t color, unsigned char *buffer) {
   color_t colorTemp;
   float a, r1, g1, b1, r2, g2, b2;
+
+  if ((x >= tensorWidth) || (y >= tensorHeight)) {
+    fprintf(stderr, "Attempt to set pixel outside of frame buffer! %i, %i\n", x, y);
+  }
 
   // Input colors.
   r1 = color.r;
@@ -1284,18 +1676,18 @@ void SetPixelA(int x, int y, color_t color, unsigned char *buffer) {
   color.g = (unsigned char) (a * g1) + ((1 - a) * g2);
   color.b = (unsigned char) (a * b1) + ((1 - a) * b2);
 
-  buffer[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 0] = color.r;
-  buffer[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 1] = color.g;
-  buffer[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 2] = color.b;
+  buffer[(y * tensorWidth * 3) + (x * 3) + 0] = color.r;
+  buffer[(y * tensorWidth * 3) + (x * 3) + 1] = color.g;
+  buffer[(y * tensorWidth * 3) + (x * 3) + 2] = color.b;
 }
 
 // Get the color of a particular pixel.
 color_t GetPixel(int x, int y, unsigned char *buffer) {
   color_t colorTemp;
-  colorTemp.r = buffer[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 0];
-  colorTemp.g = buffer[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 1];
-  colorTemp.b = buffer[(y * TENSOR_WIDTH_EFF * 3) + (x * 3) + 2];
-  colorTemp.a = 0; // We don't return an alpha for a written pixel?
+  colorTemp.r = buffer[(y * tensorWidth * 3) + (x * 3) + 0];
+  colorTemp.g = buffer[(y * tensorWidth * 3) + (x * 3) + 1];
+  colorTemp.b = buffer[(y * tensorWidth * 3) + (x * 3) + 2];
+  colorTemp.a = 255; // We don't return an alpha for a written pixel?
   return colorTemp;
 }
 
@@ -1315,10 +1707,11 @@ void Update(float intensity_limit, moment_t *moment) {
 
   // Output rotate (doesn't effect array values, but does effect the final image).
   if (mode->postRotateZoom) {
-    parms->rotation = parms->rotation + parms->rotationDelta;
-    Rotate(parms->rotation, parms->expand, mode->alias, &fba[0], &buffer[0]);
+    parms->postRotationAngle = parms->postRotationAngle + parms->postRotationIncr;
+    Rotate(parms->postRotationAngle, parms->expand, mode->alias, &fba[0], &buffer[0]);
 
-    UpdatePreview(fba);
+    UpdatePreview(PREVIEW_A_POSITION_X, PREVIEW_A_POSITION_Y, fba);
+    //~ UpdatePreview(PREVIEW_B_POSITION_X, PREVIEW_B_POSITION_Y, fba);
 
     // Output diminish - no reason to do this to the preview (or is there?)
     for (i = 0; i < TENSOR_BYTES; i++) {
@@ -1326,8 +1719,8 @@ void Update(float intensity_limit, moment_t *moment) {
     }
 
   } else {
-    UpdatePreview(buffer);
-
+    UpdatePreview(PREVIEW_A_POSITION_X, PREVIEW_A_POSITION_Y, buffer);
+    //~ UpdatePreview(PREVIEW_B_POSITION_X, PREVIEW_B_POSITION_Y, buffer);
     // Output diminish
     for (i = 0; i < TENSOR_BYTES; i++) {
       fba[i] = (unsigned char)((float) buffer[i] * intensity_limit);
@@ -1378,8 +1771,8 @@ SDL_Surface * FBToSurface(SDL_Surface *surface, unsigned char *FB) {
   int x, y;
 
   surfacePixels = surface->pixels;
-  for (x = 0; x < TENSOR_WIDTH_EFF; x++) {
-    for (y = 0; y < TENSOR_HEIGHT_EFF; y++) {
+  for (x = 0; x < tensorWidth; x++) {
+    for (y = 0; y < tensorHeight; y++) {
 
       // Get pixel color.
       pixel = GetPixel(x, y, FB);
@@ -1397,13 +1790,13 @@ unsigned char * SurfaceToFB(unsigned char *FB, SDL_Surface *surface) {
   Uint8 r,g,b;
   int x,y;
 
-  for(x = 0; x < TENSOR_WIDTH_EFF; x++) {
-    for (y = 0; y < TENSOR_HEIGHT_EFF; y++) {
+  for(x = 0; x < tensorWidth; x++) {
+    for (y = 0; y < tensorHeight; y++) {
       pixel = surface->pixels + y * surface->pitch + x * (surface->pitch / surface->w);
       SDL_GetRGB(*pixel, surface->format, &r, &g, &b);
-      FB[((y * TENSOR_WIDTH_EFF * 3) + (x * 3)) + 0] = r;
-      FB[((y * TENSOR_WIDTH_EFF * 3) + (x * 3)) + 1] = g;
-      FB[((y * TENSOR_WIDTH_EFF * 3) + (x * 3)) + 2] = b;
+      FB[((y * tensorWidth * 3) + (x * 3)) + 0] = r;
+      FB[((y * tensorWidth * 3) + (x * 3)) + 1] = g;
+      FB[((y * tensorWidth * 3) + (x * 3)) + 2] = b;
     }
   }
 
@@ -1411,29 +1804,35 @@ unsigned char * SurfaceToFB(unsigned char *FB, SDL_Surface *surface) {
 }
 
 
-// Send frame buffer to display window
-void UpdatePreview(unsigned char *buffer) {
+// Send frame buffer to preview area.  The preview area is a square
+// encompassing the actual preview, so we should center the buffer within it.
+void UpdatePreview(int xOffset, int yOffset, unsigned char *buffer) {
   color_t pixel;
-  int x,y;
-  int x1, y1, x2, y2;
+  int x, y;
+  int maxDim;
 
-  for (x = 0; x < TENSOR_WIDTH_EFF; x++) {
-    for (y = 0; y < TENSOR_HEIGHT_EFF; y++) {
+  // Get the outer border dimensions.
+  x = (tensorWidth * PREVIEW_PIXEL_SIZE);
+  y = (tensorHeight * PREVIEW_PIXEL_SIZE);
 
-      // Get pixel color.
+  // Get the preview area square dimension.
+  maxDim = max(x, y);
+
+  // Adjust our offsets to fit inside it.
+  xOffset = xOffset + PREVIEW_BORDER_THICKNESS + (maxDim - x) / 2;
+  yOffset = yOffset + PREVIEW_BORDER_THICKNESS + (maxDim - y) / 2;
+
+  // Draw out the pixels.
+  for (x = 0; x < tensorWidth; x++) {
+    for (y = 0; y < tensorHeight; y++) {
+
+      // Get pixel color from the buffer.
       pixel = GetPixel(x, y, buffer);
 
-      // Write it to the output surface as a 10x10 square. (PSIZE_X x PSIZE_Y).
-      x1 = (x * PREVIEW_PIXEL_WIDTH) + PREVIEW_BORDER_THICKNESS;
-      y1 = (y * PREVIEW_PIXEL_HEIGHT) + PREVIEW_BORDER_THICKNESS;
-      x2 = x1 + PREVIEW_PIXEL_WIDTH - 2;
-      y2 = y1 + PREVIEW_PIXEL_HEIGHT - 2;
-
-      boxRGBA(mwRenderer, x1, y1, x2, y2,
-             (Uint8) pixel.r,
-             (Uint8) pixel.g,
-             (Uint8) pixel.b,
-             (Uint8) 255);
+      // Draw the output pixel as a square of dimension PREVIEW_PIXEL_SIZE - 1.
+      // This leaves us with a border around our pixels.
+      DrawBox(xOffset + (x * PREVIEW_PIXEL_SIZE), yOffset + (y * PREVIEW_PIXEL_SIZE),
+              PREVIEW_PIXEL_SIZE - 1, PREVIEW_PIXEL_SIZE - 1, pixel);
     }
   }
   SDL_RenderPresent(mwRenderer);
@@ -1449,25 +1848,25 @@ void Scroll (dir_e direction, int rollovermode, unsigned char *fb, unsigned char
   if (rollovermode == YES) {
     switch(direction) {
       case DIR_UP:
-        for(i = 0; i < TENSOR_WIDTH_EFF; i++) {
+        for(i = 0; i < tensorWidth; i++) {
           rollSave[i] = GetPixel(i, 0, fb);
         }
         break;
 
       case DIR_DOWN:
-        for (i = 0; i < TENSOR_WIDTH_EFF; i++) {
-          rollSave[i] = GetPixel(i, TENSOR_HEIGHT_EFF - 1, fb);
+        for (i = 0; i < tensorWidth; i++) {
+          rollSave[i] = GetPixel(i, tensorHeight - 1, fb);
         }
         break;
 
       case DIR_RIGHT:
-        for (i = 0; i < TENSOR_HEIGHT_EFF; i++) {
-          rollSave[i] = GetPixel(TENSOR_WIDTH_EFF - 1, i, fb);
+        for (i = 0; i < tensorHeight; i++) {
+          rollSave[i] = GetPixel(tensorWidth - 1, i, fb);
         }
       break;
 
       case DIR_LEFT:
-        for (i = 0; i < TENSOR_HEIGHT_EFF; i++) {
+        for (i = 0; i < tensorHeight; i++) {
           rollSave[i] = GetPixel(0, i, fb);
         }
         break;
@@ -1480,24 +1879,24 @@ void Scroll (dir_e direction, int rollovermode, unsigned char *fb, unsigned char
   //
   switch(direction) {
     case DIR_UP:
-      for (y = 0; y < (TENSOR_HEIGHT_EFF - 1); y++) {
-        for (x = 0; x < TENSOR_WIDTH_EFF; x++) {
+      for (y = 0; y < (tensorHeight - 1); y++) {
+        for (x = 0; x < tensorWidth; x++) {
           SetPixelByPlane(x, y, GetPixel(x, y+1, fb), plane, fb);
         }
       }
       break;
 
     case DIR_DOWN:
-      for (y = (TENSOR_HEIGHT_EFF - 1); y > 0; y--) {
-        for (x = 0; x < TENSOR_WIDTH_EFF; x++) {
+      for (y = (tensorHeight - 1); y > 0; y--) {
+        for (x = 0; x < tensorWidth; x++) {
           SetPixelByPlane(x, y, GetPixel(x, y - 1, fb), plane, fb);
         }
       }
       break;
 
     case DIR_LEFT:
-      for (y = 0; y < TENSOR_HEIGHT_EFF; y++) {
-        for (x = 0; x < (TENSOR_WIDTH_EFF - 1); x++) {
+      for (y = 0; y < tensorHeight; y++) {
+        for (x = 0; x < (tensorWidth - 1); x++) {
           SetPixelByPlane(x, y, GetPixel(x + 1, y, fb),plane, fb);
         }
       }
@@ -1505,8 +1904,8 @@ void Scroll (dir_e direction, int rollovermode, unsigned char *fb, unsigned char
 
     case DIR_RIGHT:
     default:
-      for (y = 0; y < TENSOR_HEIGHT_EFF; y++) {
-        for (x = (TENSOR_WIDTH_EFF - 1); x > 0; x--) {
+      for (y = 0; y < tensorHeight; y++) {
+        for (x = (tensorWidth - 1); x > 0; x--) {
           SetPixelByPlane(x, y, GetPixel(x - 1, y, fb),plane, fb);
         }
       }
@@ -1517,26 +1916,26 @@ void Scroll (dir_e direction, int rollovermode, unsigned char *fb, unsigned char
   if (rollovermode == YES) {
     switch(direction) {
       case DIR_UP:
-        for(i = 0; i < TENSOR_WIDTH_EFF; i++) {
-          SetPixelByPlane(i, TENSOR_HEIGHT_EFF - 1, rollSave[i], plane, fb);
+        for(i = 0; i < tensorWidth; i++) {
+          SetPixelByPlane(i, tensorHeight - 1, rollSave[i], plane, fb);
         }
         break;
 
       case DIR_DOWN:
-        for (i = 0; i < TENSOR_WIDTH_EFF; i++) {
+        for (i = 0; i < tensorWidth; i++) {
           SetPixelByPlane(i, 0, rollSave[i],plane, fb);
         }
         break;
 
       case DIR_RIGHT:
-        for (i = 0; i < TENSOR_HEIGHT_EFF; i++) {
+        for (i = 0; i < tensorHeight; i++) {
           SetPixelByPlane(0, i, rollSave[i],plane, fb);
         }
       break;
 
       case DIR_LEFT:
-        for (i = 0; i < TENSOR_HEIGHT_EFF; i++) {
-          SetPixelByPlane(TENSOR_WIDTH_EFF - 1, i, rollSave[i],plane, fb);
+        for (i = 0; i < tensorHeight; i++) {
+          SetPixelByPlane(tensorWidth - 1, i, rollSave[i],plane, fb);
         }
         break;
 
@@ -1574,12 +1973,12 @@ void WriteSlice(moment_t *moment) {
   horizontal = YES;
   switch (moment->coefs.scrollerDir) {
     case DIR_LEFT:
-      sliceColOrRow = TENSOR_WIDTH_EFF - 1;
+      sliceColOrRow = tensorWidth - 1;
       break;
 
     case DIR_UP:
       horizontal = NO;
-      sliceColOrRow = TENSOR_HEIGHT_EFF - 1;
+      sliceColOrRow = tensorHeight - 1;
       break;
 
     case DIR_DOWN:
@@ -1637,24 +2036,24 @@ void WriteSlice(moment_t *moment) {
     // Looks like we changed direction.
     moment->text.lastDirection = moment->coefs.scrollerDir;
 
-    // TENSOR_WIDTH_EFF is used here to preserve continuity of the text, even
+    // tensorWidth is used here to preserve continuity of the text, even
     // across text buffer wrap-around, when the direction changes (but only
     // really between UP - DOWN or RIGHT - LEFT changes).
     switch(textDirection) {
       case DIR_LEFT:
-        moment->text.imaginaryIndex = (moment->text.imaginaryIndex + TENSOR_WIDTH_EFF) % imaginaryBufferSize;
+        moment->text.imaginaryIndex = (moment->text.imaginaryIndex + tensorWidth) % imaginaryBufferSize;
         break;
       case DIR_RIGHT:
-        moment->text.imaginaryIndex = moment->text.imaginaryIndex - TENSOR_WIDTH_EFF;
+        moment->text.imaginaryIndex = moment->text.imaginaryIndex - tensorWidth;
         if (moment->text.imaginaryIndex < 0) {
           moment->text.imaginaryIndex = imaginaryBufferSize + moment->text.imaginaryIndex;
         }
         break;
       case DIR_DOWN:
-        moment->text.imaginaryIndex = (moment->text.imaginaryIndex + TENSOR_HEIGHT_EFF) % imaginaryBufferSize;
+        moment->text.imaginaryIndex = (moment->text.imaginaryIndex + tensorHeight) % imaginaryBufferSize;
         break;
       case DIR_UP:
-        moment->text.imaginaryIndex = moment->text.imaginaryIndex - TENSOR_HEIGHT_EFF;
+        moment->text.imaginaryIndex = moment->text.imaginaryIndex - tensorHeight;
         if (moment->text.imaginaryIndex < 0) {
           moment->text.imaginaryIndex = imaginaryBufferSize + moment->text.imaginaryIndex;
         }
@@ -1702,10 +2101,10 @@ void WriteSlice(moment_t *moment) {
       sliceIndex = moment->coefs.textOffset;
       if (!moment->text.textBufferRand[bufferIndex]) sliceIndex += 8;
       if (horizontal) {
-        sliceIndex = sliceIndex % TENSOR_HEIGHT_EFF;
+        sliceIndex = sliceIndex % tensorHeight;
         SetPixelA(sliceColOrRow, sliceIndex, moment->coefs.bg, moment->fb);
       } else {
-        sliceIndex = sliceIndex % TENSOR_WIDTH_EFF;
+        sliceIndex = sliceIndex % tensorWidth;
         SetPixelA(sliceIndex, sliceColOrRow, moment->coefs.bg, moment->fb);
       }
       useRand = moment->text.textBufferRand[bufferIndex];
@@ -1715,20 +2114,20 @@ void WriteSlice(moment_t *moment) {
       // No stagger. Draw a single line border on top & bottom of text with bg.
       sliceIndex = moment->coefs.textOffset - 1;
       if (horizontal) {
-        if (sliceIndex < 0) sliceIndex = TENSOR_HEIGHT_EFF - 1;
-        sliceIndex %= TENSOR_HEIGHT_EFF;
+        if (sliceIndex < 0) sliceIndex = tensorHeight - 1;
+        sliceIndex %= tensorHeight;
         SetPixelA(sliceColOrRow, sliceIndex, moment->coefs.bg, moment->fb);
       } else {
-        if (sliceIndex < 0) sliceIndex = TENSOR_WIDTH_EFF - 1;
-        sliceIndex %= TENSOR_WIDTH_EFF;
+        if (sliceIndex < 0) sliceIndex = tensorWidth - 1;
+        sliceIndex %= tensorWidth;
         SetPixelA(sliceIndex, sliceColOrRow, moment->coefs.bg, moment->fb);
       }
       sliceIndex = moment->coefs.textOffset + 8;
       if (horizontal) {
-        sliceIndex %= TENSOR_HEIGHT_EFF;
+        sliceIndex %= tensorHeight;
         SetPixelA(sliceColOrRow, sliceIndex, moment->coefs.bg, moment->fb);
       } else {
-        sliceIndex %= TENSOR_WIDTH_EFF;
+        sliceIndex %= tensorWidth;
         SetPixelA(sliceIndex, sliceColOrRow, moment->coefs.bg, moment->fb);
       }
       break;
@@ -1736,11 +2135,11 @@ void WriteSlice(moment_t *moment) {
     case TS_FULLBG:
       // No stagger, but background on the whole image.
       if (horizontal) {
-        for (i = 0; i < TENSOR_HEIGHT_EFF; i++) {
+        for (i = 0; i < tensorHeight; i++) {
           SetPixelA(sliceColOrRow, i, moment->coefs.bg, moment->fb);
         }
       } else {
-        for (i = 0; i < TENSOR_WIDTH_EFF; i++) {
+        for (i = 0; i < tensorWidth; i++) {
           SetPixelA(i, sliceColOrRow, moment->coefs.bg, moment->fb);
         }
       }
@@ -1763,10 +2162,10 @@ void WriteSlice(moment_t *moment) {
     sliceIndex = i + useRand + moment->coefs.textOffset;
     pixelOn = myfont[fontPixelIndex] & charColMasks[charCol];
     if (horizontal) {
-      sliceIndex = sliceIndex % TENSOR_HEIGHT_EFF;
+      sliceIndex = sliceIndex % tensorHeight;
       SetPixelA(sliceColOrRow, sliceIndex, pixelOn ? moment->coefs.fg : moment->coefs.bg, moment->fb);
     } else {
-      sliceIndex = sliceIndex % TENSOR_WIDTH_EFF;
+      sliceIndex = sliceIndex % tensorWidth;
       SetPixelA(sliceIndex, sliceColOrRow, pixelOn ? moment->coefs.fg : moment->coefs.bg, moment->fb);
     }
   }
@@ -1774,472 +2173,11 @@ void WriteSlice(moment_t *moment) {
   return;
 }
 
-// Alter foreground and background colors according to key press.
-// There's more here than just that, though.
-int ColorAlter(int thiskey, moment_t *moments, int now) {
-  moment_t *moment = &moments[now];
-  parms_t *parms = &moment->coefs;
-  modes_t *mode = &moment->mode;
-
-  switch (thiskey) {
-    case SDLK_q:
-      parms->foreground--;
-      if (parms->foreground < 0 || parms->foreground >= CE_COUNT) {
-        parms->foreground = CE_COUNT - 1;
-      }
-      parms->fg = namedPalette[parms->foreground].color;
-      break;
-
-    case SDLK_w:
-      parms->foreground++;
-      if (parms->foreground >= CE_COUNT) {
-        parms->foreground = 0;
-      }
-      parms->fg = namedPalette[parms->foreground].color;
-      break;
-
-    case SDLK_a:
-      parms->background--;
-      if (parms->background < 0 || parms->background >= CE_COUNT) {
-        parms->background = CE_COUNT - 1;
-      }
-      parms->bg = namedPalette[parms->background].color;
-      break;
-
-    case SDLK_s:
-      parms->background++;
-      if (parms->background >= CE_COUNT) {
-        parms->background = 0;
-      }
-      parms->bg = namedPalette[parms->background].color;
-      break;
-
-    case SDLK_0: case SDLK_1: case SDLK_2: case SDLK_3: case SDLK_4: case SDLK_5:
-    case SDLK_6: case SDLK_7: case SDLK_8: case SDLK_9:
-      memcpy(&moments[thiskey - SDLK_0], moment, sizeof(moment_t));
-      printf("Current moment (%i) saved in box %i\n", now, thiskey - SDLK_0);
-      break;
-
-    case SDLK_z:
-      parms->textOffset--;
-      if (parms->textOffset < 0) {
-        if ((parms->scrollerDir == DIR_LEFT) || (parms->scrollerDir == DIR_RIGHT)) {
-          parms->textOffset = TENSOR_HEIGHT_EFF - 1;
-        } else {
-          parms->textOffset = TENSOR_WIDTH_EFF - 1;
-        }
-      }
-      break;
-
-    case SDLK_x:
-      parms->textOffset++;
-      if ((parms->scrollerDir == DIR_LEFT) || (parms->scrollerDir == DIR_RIGHT)) {
-        if (parms->textOffset >= TENSOR_HEIGHT_EFF) {
-          parms->textOffset = 0;
-        }
-      } else {
-        if (parms->textOffset >= TENSOR_WIDTH_EFF) {
-          parms->textOffset = 0;
-        }
-      }
-      break;
-
-    case SDLK_u:
-      parms->delay--;
-      if (parms->delay < 1) {
-        parms->delay = 1;
-      }
-      break;
-
-    case SDLK_i:
-      parms->delay = 60;
-      break;
-
-    case SDLK_o:
-      parms->delay++;
-      break;
-
-    case SDLK_LEFTBRACKET:
-      mode->shiftCyan = (mode->shiftCyan + 1) % SM_COUNT;
-      break;
-
-    case SDLK_RIGHTBRACKET:
-      mode->shiftYellow = (mode->shiftYellow + 1) % SM_COUNT;
-      break;
-
-    case SDLK_BACKSLASH:
-      mode->shiftMagenta = (mode->shiftMagenta + 1) % SM_COUNT;
-      break;
-
-    case SDLK_p:
-      mode->postImage = !mode->postImage;
-      break;
-
-    default:
-      break;
-  }
-  return now;
-}
-
-
-
-int ModeAlter(int thiskey, moment_t *moments, int now) {
-  moment_t *moment = &moments[now];
-  modes_t *mode = &moment->mode;
-  parms_t *parms = &moment->coefs;
-  text_info_t *text = &moment->text;
-
-  switch(thiskey) {
-
-    case SDLK_SEMICOLON:
-      mode->fontFlip = !mode->fontFlip;
-      break;
-
-    case SDLK_QUOTE:
-      mode->fontDirection = !mode->fontDirection;
-      break;
-
-    case SDLK_t:
-      mode->textSeed = !mode->textSeed;
-      break;
-
-    case SDLK_q:
-      mode->cellAutoFun = !mode->cellAutoFun;
-      break;
-
-    case SDLK_w:
-      mode->bouncer = !mode->bouncer;
-      break;
-
-    case SDLK_e:
-      mode->fadeout = !mode->fadeout;
-      break;
-
-    case SDLK_r:
-      mode->diffuse = !mode->diffuse;
-      break;
-
-    case SDLK_y:
-      mode->roller = !mode->roller;
-      break;
-
-    case SDLK_u:
-      mode->scroller = !mode->scroller;
-      break;
-
-    case SDLK_i:
-      mode->horizontalBars = YES;
-      break;
-
-    case SDLK_o:
-      mode->verticalBars = YES;
-      break;
-
-    case SDLK_p:
-      mode->colorAll = YES;
-      break;
-
-    case SDLK_a:
-      mode->clearAll = YES;
-      break;
-
-    case SDLK_s:
-      mode->randDots = !mode->randDots;
-      break;
-
-    case SDLK_d:
-      mode->cycleForeground = !mode->cycleForeground;
-      break;
-
-    case SDLK_f:
-      mode->cycleBackground = !mode->cycleBackground;
-      break;
-
-    case SDLK_g:
-      cycleMomentsMode = !cycleMomentsMode;
-      break;
-
-    case SDLK_l:
-      mode->alias = NO;
-      mode->bouncer = NO;
-      mode->cellAutoFun = NO;
-      mode->clearAll = NO;
-      mode->colorAll = NO;
-      mode->cycleBackground = NO;
-      mode->cycleForeground = NO;
-      mode->diffuse = NO;
-      mode->fadeMode = FM_LIMIT;
-      mode->fadeout = NO;
-      mode->horizontalBars = NO;
-      mode->multiply = NO;
-      mode->randDots = NO;
-      mode->roller = NO;
-      mode->postRotateZoom = NO;
-      mode->preRotateZoom = NO;
-      mode->scroller = NO;
-      mode->textSeed = NO;
-      mode->verticalBars = NO;
-      mode->sidebar = NO;
-      mode->clearRed = NO;
-      mode->clearBlue = NO;
-      mode->clearGreen = NO;
-      mode->shiftBlue = SM_HOLD;
-      mode->shiftCyan = SM_HOLD;
-      mode->shiftGreen = SM_HOLD;
-      mode->shiftMagenta = SM_HOLD;
-      mode->shiftYellow = SM_HOLD;
-      mode->shiftRed = SM_HOLD;
-      break;
-
-    case SDLK_0: case SDLK_1: case SDLK_2: case SDLK_3: case SDLK_4: case SDLK_5:
-    case SDLK_6: case SDLK_7: case SDLK_8: case SDLK_9:
-      now = thiskey - SDLK_0;
-      printf("Moment %i loaded.\n", now);
-      break;
-
-    case SDLK_h:
-      mode->fadeMode = !mode->fadeMode;
-      break;
-
-    case SDLK_m:
-      mode->clearRed = !mode->clearRed;
-      break;
-
-    case SDLK_COMMA:
-         mode->clearGreen = !mode->clearGreen;
-         break;
-
-    case SDLK_PERIOD:
-         mode->clearBlue = !mode->clearBlue;
-         break;
-
-    case SDLK_j:
-      text->imaginaryIndex = -1;
-      break;
-
-    case SDLK_k:
-      mode->postRotateZoom = !mode->postRotateZoom;
-      parms->rotation = 0;
-      break;
-
-    case SDLK_z:
-      mode->preRotateZoom = !mode->preRotateZoom;
-      break;
-
-    case SDLK_x:
-      mode->alias = !mode->alias;
-      break;
-
-    case SDLK_c:
-      mode->multiply = !mode->multiply;
-      break;
-
-    case SDLK_n:
-      mode->sidebar = !mode->sidebar;
-      break;
-
-    case SDLK_v:
-      tensor_landscape_p = !tensor_landscape_p;
-      SetDims();
-      DrawPreviewBorder();
-      break;
-
-    case SDLK_b:
-      mode->textStagger = (mode->textStagger + 1) % TS_COUNT;
-      break;
-
-    case SDLK_LEFTBRACKET:
-      mode->shiftRed = (mode->shiftRed + 1) % SM_COUNT;
-      break;
-
-    case SDLK_RIGHTBRACKET:
-      mode->shiftGreen = (mode->shiftGreen + 1) % SM_COUNT;
-      break;
-
-    case SDLK_BACKSLASH:
-      mode->shiftBlue = (mode->shiftBlue + 1) % SM_COUNT;
-      break;
-
-    default:
-      break;
-  }  // End <ctrl> mode switch
-
-  return(now);
-}
-
-
-void ParmAlter(int thiskey, moment_t *moments, int now) {
-  moment_t *moment = &moments[now];
-  parms_t *parms = &moment->coefs;
-  modes_t *modes = &moment->mode;
-
-  switch(thiskey) {
-    case SDLK_z:
-      parms->fadeout_dec--;
-      break;
-
-    case SDLK_c:
-      parms->fadeout_dec++;
-      break;
-
-    case SDLK_x:
-      parms->fadeout_dec = 0;
-      break;
-
-    case SDLK_q:
-      parms->diffusion_coef = parms->diffusion_coef - parms->floatinc;
-      break;
-
-    case SDLK_w:
-      parms->diffusion_coef = INITIAL_DIFF_COEF;
-      break;
-
-    case SDLK_e:
-      parms->diffusion_coef = parms->diffusion_coef + parms->floatinc;
-      break;
-
-    case SDLK_a:
-      parms->expand = parms->expand - parms->floatinc;
-      break;
-
-    case SDLK_s:
-      parms->expand = INITIAL_EXPAND;
-      break;
-
-    case SDLK_d:
-      parms->expand = parms->expand + parms->floatinc;
-      break;
-
-    case SDLK_p:
-      parms->randMod = parms->randMod - max(1, parms->randMod / 50);
-      if (parms->randMod < 1) {
-        parms->randMod = 1;
-      }
-      break;
-
-    case SDLK_LEFTBRACKET:
-      parms->randMod = INITIAL_RAND_MOD;
-      break;
-
-    case SDLK_RIGHTBRACKET:
-      parms->randMod = parms->randMod + max(1, parms->randMod / 50);
-      if (parms->randMod > 20000) {
-        parms->randMod = 20000;
-      }
-      break;
-
-    case SDLK_v:
-      parms->rotation = parms->rotation - parms->floatinc;
-      break;
-
-    case SDLK_b:
-      parms->rotation = INITIAL_ROTATION_ANGLE;
-      break;
-
-    case SDLK_n:
-      parms->rotation = parms->rotation + parms->floatinc;
-      break;
-
-    case SDLK_0: case SDLK_1: case SDLK_2: case SDLK_3: case SDLK_4: case SDLK_5:
-    case SDLK_6: case SDLK_7: case SDLK_8: case SDLK_9:
-      memcpy(moment->fb, moments[thiskey - SDLK_0].fb, sizeof(unsigned char) * TENSOR_BYTES);
-      break;
-
-    case SDLK_f:
-      parms->rainbowInc--;
-      break;
-
-    case SDLK_g:
-      parms->rainbowInc = INITIAL_RAINBOW_INC;
-      break;
-
-    case SDLK_h:
-      parms->rainbowInc++;
-      break;
-
-    case SDLK_SEMICOLON:
-      parms->colorCycleMode = (parms->colorCycleMode + 1) % CM_COUNT;
-      break;
-
-    case SDLK_r:
-      parms->rotation2-= parms->floatinc;
-      break;
-
-    case SDLK_t:
-      parms->rotation2 = INITIAL_ROTATION_ANGLE2;
-      break;
-
-    case SDLK_y:
-      parms->rotation2+= parms->floatinc;
-      break;
-
-    case SDLK_UP:
-      parms->scrollerDir = DIR_UP;
-      modes->scroller = YES;
-      break;
-
-    case SDLK_DOWN:
-      parms->scrollerDir = DIR_DOWN;
-      modes->scroller = YES;
-      break;
-
-    case SDLK_LEFT:
-      parms->scrollerDir = DIR_LEFT;
-      modes->scroller = YES;
-      break;
-
-    case SDLK_RIGHT:
-      parms->scrollerDir = DIR_RIGHT;
-      modes->scroller = YES;
-      break;
-
-    case SDLK_u:
-      parms->colorMultiplier -= parms->floatinc;
-      break;
-
-    case SDLK_i:
-      parms->colorMultiplier = INITIAL_COLOR_MULTIPLIER;
-      break;
-
-    case SDLK_o:
-      parms->colorMultiplier += parms->floatinc;
-      break;
-
-    case SDLK_j:
-      parms->rotationDelta -= parms->floatinc;
-      break;
-
-    case SDLK_k:
-      parms->rotationDelta = INITIAL_ROTATION_DELTA;
-      break;
-
-    case SDLK_l:
-      parms->rotationDelta += parms->floatinc;
-      break;
-
-    case SDLK_m:
-      parms->floatinc *= 10;
-      break;
-
-    case SDLK_COMMA:
-      parms->floatinc = INITIAL_FLOAT_INC;
-      break;
-
-    case SDLK_PERIOD:
-      parms->floatinc /= 10;
-      break;
-
-    default:
-      break;
-  }
-}
-
-
 
 void HorizontalBars(color_t color, unsigned char *buffer) {
   int i, j;
-  for (i = 0; i < TENSOR_WIDTH_EFF; i++) {
-    for (j = 0; j < TENSOR_HEIGHT_EFF; j += 2) {
+  for (i = 0; i < tensorWidth; i++) {
+    for (j = 0; j < tensorHeight; j += 2) {
       SetPixel(i, j, color, buffer);
     }
   }
@@ -2248,8 +2186,8 @@ void HorizontalBars(color_t color, unsigned char *buffer) {
 
 void VerticalBars(color_t color, unsigned char *buffer) {
   int i, j;
-  for (i = 0; i < TENSOR_WIDTH_EFF; i+=2) {
-    for (j = 0; j < TENSOR_HEIGHT_EFF; j++) {
+  for (i = 0; i < tensorWidth; i+=2) {
+    for (j = 0; j < tensorHeight; j++) {
       SetPixel(i,j, color, buffer);
     }
   }
@@ -2259,28 +2197,17 @@ void VerticalBars(color_t color, unsigned char *buffer) {
 void RandomDots(color_t color, unsigned int rFreq, unsigned char *buffer) {
   int x,y;
 
-  for (x = 0; x < TENSOR_WIDTH_EFF; x++) {
-    for (y = 0; y < TENSOR_HEIGHT_EFF; y++) {
+  for (x = 0; x < tensorWidth; x++) {
+    for (y = 0; y < tensorHeight; y++) {
       if (!(rand() % rFreq)) {
         SetPixel(x, y, color, buffer);
       }
     }
   }
-  //~ if (rFreq == 0) {
-    //~ return;
-  //~ }
-
-  //~ if ((rand() % rFreq) == 0) {
-    //~ x = rand() % TENSOR_WIDTH_EFF;
-    //~ y = rand() % TENSOR_HEIGHT_EFF;
-    //~ SetPixel(x,y,color, buffer);
-  //~ }
-
 }
 
 
 
-//void ColorCycle(color_t originalColor, colorCycles_e cycleMode, int rainbowInc, int *cycleSaver) {
 void ColorCycle(parms_t *parms, int fb_mode) {
   color_t colorTemp = cBlack;
   int inpos, inposo;
@@ -2391,10 +2318,65 @@ void ColorCycle(parms_t *parms, int fb_mode) {
 // Write the static menu information to the display.
 void InitInfoDisplay(void) {
   int i;
-  for (i = 0; i < DISPLAY_TEXT_SIZE; i++) {
-    WriteLine(displayText[i].text, displayText[i].line, displayText[i].col, displayText[i].color);
+  // DrawBox(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT, cDkGray);
+  for (i = 0; i < DISPLAY_COMMAND_SIZE; i++) {
+    WriteCommand(i, mouseCommands, DISPLAY_COLOR_TEXTS, DISPLAY_COLOR_TEXTSBG);
+  }
+
+  for (i = 0; i < HEAD_TEXT_SIZE; i++) {
+    WriteLine(headerText[i].text, headerText[i].line, headerText[i].col, DISPLAY_COLOR_TITLES, DISPLAY_COLOR_TITLESBG);
+  }
+
+  for (i = 0; i < OTHER_COMMAND_SIZE; i++) {
+    WriteCommand(i, otherCommands, DISPLAY_COLOR_TEXTS, DISPLAY_COLOR_TEXTSBG);
+  }
+
+  for (i = 0; i < OTHER_TEXT_SIZE; i++) {
+    WriteLine(otherText[i].text, otherText[i].line, otherText[i].col, DISPLAY_COLOR_TEXTS, DISPLAY_COLOR_TEXTSBG);
   }
 }
+
+void WriteCommand(int index, const command_t *comList, color_t fg, color_t bg) {
+  char text[100] = "";
+  char *ind = text;
+  char * const end = text + sizeof(text);
+  int i;
+
+  if (mouseCommands[index].line == -1) {
+    return;
+  }
+
+  // Handle the modifier keys - worked well when we had only one modifier key
+  // possible for each command, but now... Strategy: Show the modifiers from
+  // the first command in the list that doesn't have KMOD_NONE, and assume it
+  // will be the same for all three.
+  for (i = 0; i < MOUSE_COUNT; i++) {
+    if (comList[index].commands[i].mod != KMOD_NONE) {
+      ind += snprintf(ind, end - ind, "%s%s%s",
+        comList[index].commands[i].mod & KMOD_CTRL ? "<ctrl> " : "",
+        comList[index].commands[i].mod & KMOD_SHIFT ? "<shft> " : "",
+        comList[index].commands[i].mod & KMOD_ALT ? "<alt> " : "");
+      break;  // Found the first, skip the rest.
+    }
+  }
+
+  // Handle the key selection
+  ind += snprintf(ind, end - ind, "%s%s", SDL_GetKeyName(comList[index].commands[MOUSE_WHEEL_UP].key),
+    strlen(SDL_GetKeyName(comList[index].commands[MOUSE_WHEEL_UP].key)) ? " " : "");
+  ind += snprintf(ind, end - ind, "%s%s", SDL_GetKeyName(comList[index].commands[MOUSE_CLICK].key),
+    strlen(SDL_GetKeyName(comList[index].commands[MOUSE_CLICK].key)) ? " " : "");
+  ind += snprintf(ind, end - ind, "%s%s", SDL_GetKeyName(comList[index].commands[MOUSE_WHEEL_DOWN].key),
+    strlen(SDL_GetKeyName(comList[index].commands[MOUSE_WHEEL_DOWN].key)) ? " " : "");
+
+  if (strlen(text)) ind += snprintf(ind, end - ind, "- ");
+
+  // Add the text from the mouseCommands structure.
+  ind += snprintf(ind, end - ind, "%s", comList[index].text);
+
+  // Write it.
+  WriteLine(text, comList[index].line, comList[index].col, fg, bg);
+}
+
 
 // Update the values of the text on the display window.
 void UpdateInfoDisplay(moment_t *moment, int now) {
@@ -2434,11 +2416,11 @@ void UpdateInfoDisplay(moment_t *moment, int now) {
   WriteFloat(parms->diffusion_coef, 4, 3, 14, 6);
   WriteFloat(parms->expand, 5, 3, 14, 6);
   WriteInt(parms->fadeout_dec, 6, 3, 14);
-  WriteFloat(parms->rotation2, 7, 3, 14, 6);
+  WriteFloat(parms->preRotationAngle, 7, 3, 14, 6);
   WriteInt(parms->rainbowInc, 8, 3, 14);
-  WriteFloat(parms->rotation, 9, 3, 14, 6);
+  WriteFloat(parms->postRotationAngle, 9, 3, 14, 6);
   WriteFloat(parms->colorMultiplier, 10, 3, 14, 6);
-  WriteFloat(parms->rotationDelta, 11, 3, 14, 6);
+  WriteFloat(parms->postRotationIncr, 11, 3, 14, 6);
   WriteFloat((1.0 / parms->randMod), 12, 3, 14, 6);
   WriteString(colorCycleText[parms->colorCycleMode], 13, 3, 14);
   WriteString(dirText[parms->scrollerDir], 14, 3, 14);
@@ -2463,60 +2445,60 @@ void UpdateInfoDisplay(moment_t *moment, int now) {
   strncpy(mybuff, scrollText->textBuffer + (length > 100 ? length - 100 : 0), 101);
   // The extra snprintf takes care of overwriting longer lines.
   snprintf(text, sizeof(text), "%-100s", mybuff );
-  WriteLine(text, 52, 0, PARAMETER_COLOR);
+  WriteLine(text, 52, 0, DISPLAY_COLOR_PARMS, DISPLAY_COLOR_PARMSBG);
 
   UpdateAll();
 }
 
 void WriteBool(int value, int row, int col) {
   if (value) {
-    WriteLine("YES", row, col, PARAMETER_COLOR);
+    WriteLine("YES", row, col, DISPLAY_COLOR_PARMS, DISPLAY_COLOR_PARMSBG);
   } else {
-    WriteLine(" NO", row, col, PARAMETER_COLOR);
+    WriteLine(" NO", row, col, DISPLAY_COLOR_PARMS, DISPLAY_COLOR_PARMSBG);
   }
 }
 
 void WriteInt(int value, int row, int col, int width) {
   char text[100];
   snprintf(text, sizeof(text), "%*i", width, value);
-  WriteLine(text, row, col, PARAMETER_COLOR);
+  WriteLine(text, row, col, DISPLAY_COLOR_PARMS, DISPLAY_COLOR_PARMSBG);
 }
 
 void WriteFloat(float value, int row, int col, int width, int precision) {
   char text[100];
   snprintf(text, sizeof(text), "%*.*f", width, precision, value);
-  WriteLine(text, row, col, PARAMETER_COLOR);
+  WriteLine(text, row, col, DISPLAY_COLOR_PARMS, DISPLAY_COLOR_PARMSBG);
 }
 
 void WriteString(const char *text, int line, int col, int width) {
   char temp[200];
   snprintf(temp, sizeof(temp), "%*.*s", width, width, text);
-  WriteLine(temp, line, col, PARAMETER_COLOR);
+  WriteLine(temp, line, col, DISPLAY_COLOR_PARMS, DISPLAY_COLOR_PARMSBG);
 }
 
 // Writes a line of text to the selected line and column of the
 // output window with the selected color.
-void WriteLine(char * thisText, int line, int col, color_t color) {
+void WriteLine(char * thisText, int line, int col, color_t color, color_t bgColor) {
 
   // Vars
   const SDL_Color fontColor = {color.r, color.g, color.b};
-  const SDL_Color bgColor = {0, 0, 0};
-  const int colstart[] = {0, 275, 375, 675, 763};
+  const SDL_Color fontbgColor = {bgColor.r, bgColor.g, bgColor.b};
   SDL_Surface *textSurface;
   SDL_Texture *textTexture;
   SDL_Rect rect;
 
   // Set the position of the output text.
   rect.x = colstart[col];
-  rect.y = line * (PREVIEW_FONT_HEIGHT);
+  rect.y = line * (DISPLAY_TEXT_HEIGHT);
 
   // Render the text to a surface.
-  textSurface = TTF_RenderText_Shaded(screenFont, thisText, fontColor, bgColor);
+  textSurface = TTF_RenderText_Shaded(screenFont, thisText, fontColor, fontbgColor);
+  //~ textSurface = TTF_RenderText_Blended(screenFont, thisText, fontColor);//, bgColor);
   if (textSurface) {
     // Set the width and height of the output text.
     rect.w = textSurface->w;
     // rect.h = textSurface->h;
-    rect.h = PREVIEW_FONT_HEIGHT;
+    rect.h = DISPLAY_TEXT_HEIGHT;
 
     // Create a texture in video memory from the surface.
     textTexture = SDL_CreateTextureFromSurface(mwRenderer, textSurface);
@@ -2546,16 +2528,16 @@ void ClearAll(void) {
 // Set some dimensions according to orientation
 void SetDims(void) {
    if (tensor_landscape_p) {
-    TENSOR_WIDTH_EFF = TENSOR_HEIGHT;
-    TENSOR_HEIGHT_EFF = TENSOR_WIDTH;
+    tensorWidth = TENSOR_HEIGHT;
+    tensorHeight = TENSOR_WIDTH;
   } else {
-    TENSOR_WIDTH_EFF = TENSOR_WIDTH;
-    TENSOR_HEIGHT_EFF = TENSOR_HEIGHT;
+    tensorWidth = TENSOR_WIDTH;
+    tensorHeight = TENSOR_HEIGHT;
   }
 
   if (previewSurface) SDL_FreeSurface(previewSurface);
 
-  previewSurface = SDL_CreateRGBSurface(0, TENSOR_WIDTH_EFF, TENSOR_HEIGHT_EFF,
+  previewSurface = SDL_CreateRGBSurface(0, tensorWidth, tensorHeight,
     32, 0, 0, 0, 0);
   if (!previewSurface) {
     fprintf(stderr, "Unable to allocate a temp buffer: %s\n", SDL_GetError());
@@ -2596,40 +2578,48 @@ void DrawImage(double angle, double expansion, int aliasmode, unsigned char *fb_
   SDL_FreeSurface(rotatedImage);
 }
 
-// Draw the borders around the preview output.
-void DrawPreviewBorder(void) {
-  int w, h, w2, h2;
+// Draw the borders around the preview output.  We can switch between portrait
+// and landscape, so the preview space is a square box that would accomodate
+// either orientation.
+void DrawPreviewBorder(int x, int y) {
 
-  // Get the border dimensions/
-  w = (TENSOR_WIDTH_EFF * PREVIEW_PIXEL_WIDTH) + (PREVIEW_BORDER_THICKNESS * 2);
-  h = (TENSOR_HEIGHT_EFF * PREVIEW_PIXEL_HEIGHT) + (PREVIEW_BORDER_THICKNESS * 2);
+  // Vars
+  int w, h;
+  int maxDim;
+  int i;
+
+  // Get the outer border dimensions.
+  w = (tensorWidth * PREVIEW_PIXEL_SIZE) + (PREVIEW_BORDER_THICKNESS * 2);
+  h = (tensorHeight * PREVIEW_PIXEL_SIZE) + (PREVIEW_BORDER_THICKNESS * 2);
+
+  // Preview space dimension.
+  maxDim = max(w, h);
 
   // Erase the old preview.
-  DrawBox(0, 0, h, w, cBlack);
+  DrawBox(x, y, maxDim, maxDim, cBlack);
+  DrawRectangle(x, y, maxDim, maxDim, cWhite);
 
-  // Draw the new border.
-  DrawRectangle(0, 0, w, h, cWhite);
+  // Ajust x and y to center the preview.
+  x = x + (maxDim - w) / 2;
+  y = y + (maxDim - h) / 2;
 
-  // Draw the panel indicators
-  w2 = (TENSOR_WIDTH_EFF * PREVIEW_PIXEL_WIDTH) + 1;
-  h2 = (TENSOR_HEIGHT_EFF * PREVIEW_PIXEL_HEIGHT) + 1;
+  // Draw the new outer border.
+  DrawRectangle(x, y, w, h, cWhite);
+
+  // Get the inner border dimensions.
+  w = (tensorWidth * PREVIEW_PIXEL_SIZE) + 1;
+  h = (tensorHeight * PREVIEW_PIXEL_SIZE) + 1;
 
   if (tensor_landscape_p) {
-    // Landscape - Horizontal indicators.
-    DrawRectangle(PREVIEW_BORDER_THICKNESS - 1, 0 * (h2 / 3) + PREVIEW_BORDER_THICKNESS - 1,
-                  w2, (h2 / 3) + 1, cGray);
-    DrawRectangle(PREVIEW_BORDER_THICKNESS - 1, 1 * (h2 / 3) + PREVIEW_BORDER_THICKNESS - 1,
-                  w2, (h2 / 3) + 1, cGray);
-    DrawRectangle(PREVIEW_BORDER_THICKNESS - 1, 2 * (h2 / 3) + PREVIEW_BORDER_THICKNESS - 1,
-                  w2, (h2 / 3) + 1, cGray);
+    // Landscape - Draw horizontal panel indicators.
+    for (i = 0; i < 3; i++) {
+      DrawRectangle(x + PREVIEW_BORDER_THICKNESS - 1, y + i * (h / 3) + PREVIEW_BORDER_THICKNESS - 1, w, (h / 3) + 1, cGray);
+    }
   } else {
-    // Portrait - Vertical indicators
-    DrawRectangle(0 * (w2 / 3) + PREVIEW_BORDER_THICKNESS - 1, PREVIEW_BORDER_THICKNESS - 1,
-                  (w2 / 3) + 1, h2, cGray);
-    DrawRectangle(1 * (w2 / 3) + PREVIEW_BORDER_THICKNESS - 1, PREVIEW_BORDER_THICKNESS - 1,
-                  (w2 / 3) + 1, h2, cGray);
-    DrawRectangle(2 * (w2 / 3) + PREVIEW_BORDER_THICKNESS - 1, PREVIEW_BORDER_THICKNESS - 1,
-                  (w2 / 3) + 1, h2, cGray);
+    // Portrait - Draw vertical panel indicators.
+    for (i = 0; i < 3; i++) {
+      DrawRectangle(x + i * (w / 3) + PREVIEW_BORDER_THICKNESS - 1, y + PREVIEW_BORDER_THICKNESS - 1, (w / 3) + 1, h, cGray);
+    }
   }
 
   SDL_RenderPresent(mwRenderer);
@@ -2642,8 +2632,8 @@ void CellFun(moment_t *moment) {
 
   moment->coefs.cellAutoCount++;
 
-  for(x = 0 ; x < TENSOR_WIDTH_EFF ; x++) {
-    for(y = 0 ; y < TENSOR_HEIGHT_EFF ; y++) {
+  for(x = 0 ; x < tensorWidth ; x++) {
+    for(y = 0 ; y < tensorHeight ; y++) {
       oldColor = GetPixel(x, y, moment->fb);
       pixelColor.r = ((x + 1) * (y + 1)) + (oldColor.r / 2);
       pixelColor.g = oldColor.g + pixelColor.r;
@@ -2713,25 +2703,25 @@ void DrawSideBar(moment_t *moment) {
 
   switch (moment->coefs.scrollerDir) {
     case DIR_LEFT:
-      for (i = 0; i < TENSOR_HEIGHT_EFF; i++) {
-              SetPixel(TENSOR_WIDTH_EFF - 1, i, moment->coefs.fg, moment->fb);
+      for (i = 0; i < tensorHeight; i++) {
+              SetPixel(tensorWidth - 1, i, moment->coefs.fg, moment->fb);
             }
             break;
 
     case DIR_RIGHT:
-      for (i = 0; i < TENSOR_HEIGHT_EFF; i++) {
+      for (i = 0; i < tensorHeight; i++) {
               SetPixel(0, i, moment->coefs.fg, moment->fb);
             }
             break;
 
     case DIR_UP:
-      for (i = 0; i < TENSOR_WIDTH_EFF; i++) {
-              SetPixel(i, TENSOR_HEIGHT_EFF - 1, moment->coefs.fg, moment->fb);
+      for (i = 0; i < tensorWidth; i++) {
+              SetPixel(i, tensorHeight - 1, moment->coefs.fg, moment->fb);
             }
             break;
 
     case DIR_DOWN:
-      for (i = 0; i < TENSOR_WIDTH_EFF; i++) {
+      for (i = 0; i < tensorWidth; i++) {
               SetPixel(i, 0, moment->coefs.fg, moment->fb);
             }
             break;
@@ -2779,4 +2769,10 @@ int max(int a, int b) {
   }
 }
 
-
+unsigned char SameRectangle(SDL_Rect a, SDL_Rect b) {
+  if ((a.x == b.x) && (a.y == b.y) && (a.w == b.w) && (a.h == b.h)) {
+    return YES;
+  } else {
+    return NO;
+  }
+}
