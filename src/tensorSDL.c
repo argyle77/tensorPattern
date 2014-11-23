@@ -575,9 +575,11 @@ typedef struct displayText_t {
 displayText_t displayText[] = {
   {39, 2, "Text buffer size:"},
   {32, 2, "<Unmodified keys> - Add text."},
-  {28, 2, "<alt> 0-9 - Load buffer from set #"},
-  {26, 2, "<ctrl> 0-9 - Change set #"},
-  {27, 2, "<ctrl> <alt> 0-9 - Copy to set #"}
+  {25, 2, "<ctrl> 0-9 - Change set #"},
+  {26, 2, "<ctrl> <alt> 0-9 - Copy to set #"},
+  {27, 2, "<alt> 0-9 - Load buffer from set #"},
+  {28, 2, "<alt> <shift> 0-9, a-z - Save to disk."},
+  {29, 2, "<ctrl> <shift> 0-9, a-z - Load saved set."},
 };
 #define DISPLAYTEXT_SIZE (sizeof(displayText) / sizeof(displayText_t))
 
