@@ -59,3 +59,6 @@ Version 4.1:
 
 Version 5.0:
   Skipped dead-end branches 4.0, 4.1.  Added mouse support.
+
+Version 5.1:
+  Re-added save / load feature with text based pattern set files.

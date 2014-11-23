@@ -6,7 +6,7 @@
 #define MAIN_C_
 
 // Includes
-#include <stdio.h>
+#include <stdio.h> // File io
 #include <stdlib.h>
 #include <unistd.h>
 #include <math.h>
@@ -18,7 +18,9 @@
 #include <time.h>
 #include "drv-tensor.h"
 #include "my_font.h"
-
+#include <string.h>  // memcpy
+#include "version.h"
+#include <errno.h>
 // Defines
 #define NO 0
 #define YES 1
@@ -54,7 +56,7 @@
 #define PATTERN_SET_COUNT 10
 
 // Initial Values
-#define INITIAL_COLOR_MULTIPLIER 1.0
+#define INITIAL_MULTIPLIER 1.0
 #define INITIAL_DIFF_COEF 0.002
 #define INITIAL_FADEOUT_DEC -1
 #define INITIAL_RAND_MOD 100
@@ -137,13 +139,11 @@ const color_t cBlack = CD_BLACK;
 #define DISPLAY_COLOR_TEXTS_HL cBlack
 #define DISPLAY_COLOR_TEXTSBG_HL cWhite
 
-// Named color palette structures and constants
-typedef struct palette_t {
-  char *name;
-  color_t color;
-} palette_t;
 
-// If you change this, change palette too.
+
+// Named color palette structures and constants
+
+// If you change color_e, change the namedPalette array too.
 typedef enum color_e {
   CE_INVALID = -1,
   CE_RED = 0, CE_ORANGE, CE_YELLOW, CE_CHARTREUSE, CE_GREEN, CE_AQUA, CE_CYAN,
@@ -152,26 +152,36 @@ typedef enum color_e {
   CE_COUNT // Last.
 } color_e;
 
+// Palette typedef - a string name, the color constant, and the array index /
+// enumeration for verification.
+typedef struct palette_t {
+  char *name;
+  color_t color;
+  color_e index;
+} palette_t;
+
 // This palette order should line up with color_e enumeration values.
-const palette_t namedPalette[CE_COUNT] = {
-  { "red", CD_RED },
-  { "orange", CD_ORANGE },
-  { "yellow", CD_YELLOW },
-  { "chartreuse", CD_CHARTREUSE },
-  { "green", CD_GREEN },
-  { "aqua", CD_AQUA },
-  { "cyan", CD_CYAN },
-  { "azure", CD_AZURE },
-  { "blue", CD_BLUE },
-  { "violet", CD_VIOLET },
-  { "magenta", CD_MAGENTA },
-  { "rose", CD_ROSE },
-  { "white", CD_WHITE },
-  { "lt gray", CD_LTGRAY },
-  { "gray", CD_GRAY },
-  { "dk gray", CD_DKGRAY },
-  { "black", CD_BLACK }
+const palette_t namedPalette[] = {
+  { "red", CD_RED, CE_RED },
+  { "orange", CD_ORANGE, CE_ORANGE },
+  { "yellow", CD_YELLOW, CE_YELLOW },
+  { "chartreuse", CD_CHARTREUSE, CE_CHARTREUSE },
+  { "green", CD_GREEN, CE_GREEN },
+  { "aqua", CD_AQUA, CE_AQUA },
+  { "cyan", CD_CYAN, CE_CYAN },
+  { "azure", CD_AZURE, CE_AZURE },
+  { "blue", CD_BLUE, CE_BLUE },
+  { "violet", CD_VIOLET, CE_VIOLET },
+  { "magenta", CD_MAGENTA, CE_MAGENTA },
+  { "rose", CD_ROSE, CE_ROSE },
+  { "white", CD_WHITE, CE_WHITE },
+  { "lt gray", CD_LTGRAY, CE_LTGRAY },
+  { "gray", CD_GRAY, CE_GRAY },
+  { "dk gray", CD_DKGRAY, CE_DKGRAY },
+  { "black", CD_BLACK, CE_BLACK }
 };
+#define NAMEDPALETTE_SIZE (sizeof(namedPalette) / sizeof(palette_t))
+
 
 // Enumerations and Strings.
 
@@ -238,86 +248,165 @@ const cyclePalette_t paletteTer = { paletteTercolors, (sizeof(paletteTercolors) 
 const color_e paletteGrycolors[] = { CE_WHITE, CE_LTGRAY, CE_GRAY, CE_DKGRAY };
 const cyclePalette_t paletteGry = { paletteGrycolors, (sizeof(paletteGrycolors) / sizeof(color_e)) };
 
-// Types
+// Pattern element data types and access macros
 
-// Pattern modes
-typedef struct modes_t {
-  unsigned char textSeed;
-  unsigned char cellAutoFun;
-  unsigned char bouncer;
-  unsigned char fadeout;
-  unsigned char diffuse;
-  unsigned char rollOver;
-  unsigned char scroller;
-  unsigned char horizontalBars;
-  unsigned char verticalBars;
-  unsigned char colorAll;
-  unsigned char clearAll;
-  unsigned char randomDots;
-  unsigned char cycleForeground;
-  unsigned char cycleBackground;
-  fadeModes_e fadeMode;
-  unsigned char postRotateZoom;
-  unsigned char preRotateZoom;
-  unsigned char alias;
-  unsigned char multiply;
-  textStaggerMode_e textStagger;
-  unsigned char sidebar;
-  unsigned char clearRed;
-  unsigned char clearGreen;
-  unsigned char clearBlue;
-  shiftModes_e shiftRed;
-  shiftModes_e shiftGreen;
-  shiftModes_e shiftBlue;
-  shiftModes_e shiftCyan;
-  shiftModes_e shiftYellow;
-  shiftModes_e shiftMagenta;
-  unsigned char postImage;
-  unsigned char fontFlip;
-  unsigned char fontDirection;
-} modes_t;
+// A pattern set consists of pattern elements (mode flags, parameters, text,
+// and even the frame buffer) that tell the engine how to behave while
+// constructing the next frame.  The data for each element starts as a void
+// pointer that is allocated at runtime.  Each element is allocated as an array,
+// allowing there to be multiple pattern sets, which the user can switch
+// between.
 
-// Parameters
-typedef struct parms_t{
-  // Use parms
-  color_e foreground;
-  color_e background;
-  int fadeAllIncr;
-  float diffusionCoef;
-  dir_e scrollDirection;
-  int dotRandomness;
-  colorCycleModes_e colorCycleMode;
-  int rainbowInc;
-  float expand;
-  float floatIncr;
-  float postRotationAngle;
-  float preRotationAngle;
-  float postRotationIncr;
-  float colorMultiplier;
-  int textOffset;
-  int delay;
-  // Internals
-  int cycleSaveForegound;
-  int cycleSaveBackground;
-  color_t fg;  // For keeping colors other than the color_e named ones.
-  color_t bg;  // For keeping colors other than the color_e named ones.
-  int cellAutoCount;
-} parms_t;
+// This patternElement enumeration should be maintained in the same order as
+// the patternSet global pattern data set array.  The program will run a check on
+// startup to make sure this occurs.
+typedef enum patternElement_e {
+  PE_INVALID = -1,
+  // Modes
+  PE_CELLFUN = 0, PE_BOUNCER, PE_FADE, PE_DIFFUSE, PE_ROLLOVER,
+  PE_SCROLL, PE_HBARS, PE_VBARS, PE_FGCOLORALL, PE_BGCOLORALL, PE_RANDOMDOT,
+  PE_CYCLEFG, PE_CYCLEBG, PE_FADEMODE, PE_POSTRZ, PE_PRERZ, PE_ALIAS,
+  PE_MULTIPLY, PE_BARSEED, PE_NORED, PE_NOGREEN, PE_NOBLUE, PE_SHIFTRED,
+  PE_SHIFTGREEN, PE_SHIFTBLUE, PE_SHIFTCYAN, PE_SHIFTYELLOW, PE_SHIFTMAGENTA,
+  PE_POSTIMAGE,
+  // Parameters
+  PE_FGE, PE_BGE, PE_FADEINC, PE_DIFFUSECOEF, PE_SCROLLDIR, PE_RANDOMDOTCOEF,
+  PE_COLORCYCLEMODE, PE_RAINBOWINC, PE_EXPAND, PE_FLOATINC, PE_POSTRZANGLE,
+  PE_PRERZANGLE, PE_POSTRZINC, PE_MULTIPLYBY, PE_DELAY,
+  // Internal parameters
+  PE_CYCLESAVEFG, PE_CYCLESAVEBG, PE_FGC, PE_BGC, PE_CELLFUNCOUNT,
+  // Text
+  PE_TEXTBUFFER, PE_TEXTMODE, PE_FONTFLIP, PE_FONTDIR, PE_TEXTOFFSET,
+  PE_TEXTINDEX, PE_PIXELINDEX, PE_SCROLLDIRLAST, PE_TEXTSEED,
+  // Frame buffer
+  PE_FRAMEBUFFER,
+  PE_COUNT // LAst
+} patternElement_e;
 
-typedef struct textBuffer_t{
-  char textBuffer[TEXT_BUFFER_SIZE];
-  int textIndex;  // How many chars in.
-  int pixelIndex;  // How many pixel cols in?
-  unsigned char textStaggerFlag[TEXT_BUFFER_SIZE];
-  dir_e prevScrollDir;
-} textBuffer_t;
+// These are the supported data types for a pattern element.
+typedef enum elementType_e {
+  ET_INVALID = -1,
+  ET_BOOL = 0, ET_INT, ET_FLOAT, ET_COLOR, ET_ENUM, ET_STRING, ET_BUFFER,
+  ET_COUNT // LAST
+} elementType_e;
 
-typedef struct patternSet_t{
-  modes_t mode;
-  parms_t parm;
-  textBuffer_t text;
-  unsigned char fb[TENSOR_BYTES];  // Tensor frame buffer image
-} patternSet_t;
+// This holds the pattern element initializer, which is of a type determined
+// depending on the element.
+typedef union default_u {
+  int i;           // Integer initializer
+  int e;           // Enumerated intializer
+  float f;         // Float
+  color_t c;       // Color type - the big one.
+  char *s;         // String pointer.
+  unsigned char b; // Boolean flag.
+  // No buffer initializer.
+} default_u;
+
+// patternElement type - Includes descriptors of the element as well as a
+// pointer (to be allocated) to the element's array of data.
+typedef struct patternElement_t {
+  const patternElement_e index;  // Corresponds to patterElement_e
+  const char *name;              // String name of the element.  Unique, no spaces!
+  const elementType_e type;      // Element type.
+  const default_u initial;       // Initial value.
+  const int size;                // Size of array elements (string, buffer)
+  void *data;                    // Pointer to the element's data.  Allocated later.
+} patternElement_t;
+
+// The pattern elements used by the engine.
+patternElement_t patternSet[] = {
+  { PE_CELLFUN,     "CellFun",     ET_BOOL,   {.b = NO} },
+  { PE_BOUNCER,     "Bouncer",     ET_BOOL,   {.b = NO} },
+  { PE_FADE,        "Fader",       ET_BOOL,   {.b = NO} },
+  { PE_DIFFUSE,     "Diffuse",     ET_BOOL,   {.b = NO} },
+  { PE_ROLLOVER,    "RollOver",    ET_BOOL,   {.b = NO} },
+  { PE_SCROLL,      "Scroll",      ET_BOOL,   {.b = YES} },
+  { PE_HBARS,       "Hbars",       ET_BOOL,   {.b = NO} },
+  { PE_VBARS,       "Vbars",       ET_BOOL,   {.b = NO} },
+  { PE_FGCOLORALL,  "FGColorAll",  ET_BOOL,   {.b = NO} },
+  { PE_BGCOLORALL,  "BGColorAll",  ET_BOOL,   {.b = NO} },
+  { PE_RANDOMDOT,   "RandomDots",  ET_BOOL,   {.b = NO} },
+  { PE_CYCLEFG,     "CycleFG",     ET_BOOL,   {.b = YES} },
+  { PE_CYCLEBG,     "CycleBG",     ET_BOOL,   {.b = NO} },
+  { PE_FADEMODE,    "FadeMode",    ET_ENUM,   {.e = FM_LIMIT} },
+  { PE_POSTRZ,      "PostRotZoom", ET_BOOL,   {.b = NO} },
+  { PE_PRERZ,       "PreRotZoom",  ET_BOOL,   {.b = NO} },
+  { PE_ALIAS,       "AntiAlias",   ET_BOOL,   {.b = NO} },
+  { PE_MULTIPLY,    "Multiply",    ET_BOOL,   {.b = NO} },
+  { PE_BARSEED,     "SideBar",     ET_BOOL,   {.b = NO} },
+  { PE_NORED,       "NoRed",       ET_BOOL,   {.b = NO} },
+  { PE_NOGREEN,     "NoGreen",     ET_BOOL,   {.b = NO} },
+  { PE_NOBLUE,      "NoBlue",      ET_BOOL,   {.b = NO} },
+  { PE_SHIFTRED,    "ShiftRed",    ET_ENUM,   {.e = SM_HOLD} },
+  { PE_SHIFTGREEN,  "ShiftGreen",  ET_ENUM,   {.e = SM_HOLD} },
+  { PE_SHIFTBLUE,   "ShiftBlue",   ET_ENUM,   {.e = SM_HOLD} },
+  { PE_SHIFTCYAN,   "ShiftCyan",   ET_ENUM,   {.e = SM_HOLD} },
+  { PE_SHIFTYELLOW, "ShiftYellow", ET_ENUM,   {.e = SM_HOLD} },
+  { PE_SHIFTMAGENTA,"ShiftMagenta",ET_ENUM,   {.e = SM_HOLD} },
+  { PE_POSTIMAGE,   "PostImage",   ET_BOOL,   {.b = NO} },
+  { PE_FGE,         "FGColorE",    ET_ENUM,   {.e = CE_RED} },
+  { PE_BGE,         "BGColorE",    ET_ENUM,   {.e = CE_BLACK} },
+  { PE_FADEINC,     "FadeIncr",    ET_INT,    {.i = INITIAL_FADEOUT_DEC} },
+  { PE_DIFFUSECOEF, "DiffuseCoef", ET_FLOAT,  {.f = INITIAL_DIFF_COEF} },
+  { PE_SCROLLDIR,   "ScrollDir",   ET_ENUM,   {.e = INITIAL_DIR} },
+  { PE_RANDOMDOTCOEF,"DotCoef",    ET_INT,    {.i = INITIAL_RAND_MOD} },
+  { PE_COLORCYCLEMODE,"CycleMode", ET_ENUM,   {.e = CM_RAINBOW} },
+  { PE_RAINBOWINC,  "RainbowInc",  ET_INT,    {.i = INITIAL_RAINBOW_INC} },
+  { PE_EXPAND,      "Expansion",   ET_FLOAT,  {.f = INITIAL_EXPAND} },
+  { PE_FLOATINC,    "FloatInc",    ET_FLOAT,  {.f = INITIAL_FLOAT_INC} },
+  { PE_POSTRZANGLE, "PostRotAngle",ET_FLOAT,  {.f = INITIAL_POSTROT_ANGLE} },
+  { PE_PRERZANGLE,  "PreRotAngle", ET_FLOAT,  {.f = INITIAL_PREROT_ANGLE} },
+  { PE_POSTRZINC,   "PostRotInc",  ET_FLOAT,  {.f = INITIAL_POSTROT_INC} },
+  { PE_MULTIPLYBY,  "MultiplyBy",  ET_FLOAT,  {.f = INITIAL_MULTIPLIER} },
+  { PE_DELAY,       "Delay",       ET_INT,    {.i = INITIAL_DELAY} },
+  { PE_CYCLESAVEFG, "FGCyclePos",  ET_INT,    {.i = 0} },
+  { PE_CYCLESAVEBG, "BGCyclePos",  ET_INT,    {.i = 0} },
+  { PE_FGC,         "FGColorC",    ET_COLOR,  {.c = CD_RED} },
+  { PE_BGC,         "BGColorC",    ET_COLOR,  {.c = CD_BLACK} },
+  { PE_CELLFUNCOUNT,"CellFunCt",   ET_INT,    {.i = 0} },
+  { PE_TEXTBUFFER,  "TextBuffer",  ET_STRING, {.s = INITIAL_TEXT}, TEXT_BUFFER_SIZE },
+  { PE_TEXTMODE,    "TextMode",    ET_ENUM,   {.e = TS_FULLBG} },
+  { PE_FONTFLIP,    "FontFlip",    ET_BOOL,   {.b = NO } },
+  { PE_FONTDIR,     "FontDir",     ET_BOOL,   {.b = FORWARDS} },
+  { PE_TEXTOFFSET,  "TextOffset",  ET_INT,    {.i = TENSOR_HEIGHT / 3 - 1} },
+  { PE_TEXTINDEX,   "TextIndex",   ET_INT,    {.i = sizeof(INITIAL_TEXT) - 1} },
+  { PE_PIXELINDEX,  "PixelIndex",  ET_INT,    {.i = INVALID} },
+  { PE_SCROLLDIRLAST,"ScrollDirLast",ET_ENUM, {.e = INITIAL_DIR} },
+  { PE_TEXTSEED,    "TextSeed",    ET_BOOL,   {.b = YES} },
+  { PE_FRAMEBUFFER, "FrameBuffer", ET_BUFFER, .size = TENSOR_BYTES }
+};
+#define PSET_SIZE (sizeof(patternSet) / sizeof(patternElement_t))
+#define GLOBAL_PATTERN_ELEMENT_ARRAY patternSet
+
+// Data element access macros - with patternElement array, element, and set selection.
+#define ABOOL(varName, varElement, varSet) ( ((unsigned char *)varName[varElement].data)[varSet] )
+#define AINT(varName, varElement, varSet) ( ((int *)varName[varElement].data)[varSet] )
+#define AFLOAT(varName, varElement, varSet) ( ((float *)varName[varElement].data)[varSet] )
+#define ACOLOR(varName, varElement, varSet) ( ((color_t *)varName[varElement].data)[varSet] )
+#define AENUM(varName, varElement, varSet) ( ((int *)varName[varElement].data)[varSet] )
+#define ASENUM(varName, varElement, varSet, varType) ( ((varType *)varName[varElement].data)[varSet] )
+#define ASTRING(varName, varElement, varSet) ( &((char *)varName[varElement].data)[varSet * varName[varElement].size] )
+#define ABUFFER(varName, varElement, varSet) ( &((unsigned char *)varName[varElement].data)[varSet * varName[varElement].size] )
+
+// Data element access macros - using the global patternElement array, with element and set selection.
+#define SBOOL(varElement, varSet) ( ABOOL(GLOBAL_PATTERN_ELEMENT_ARRAY, varElement, varSet) )
+#define SINT(varElement, varSet) ( AINT(GLOBAL_PATTERN_ELEMENT_ARRAY, varElement, varSet) )
+#define SFLOAT(varElement, varSet) ( AFLOAT(GLOBAL_PATTERN_ELEMENT_ARRAY, varElement, varSet) )
+#define SCOLOR(varElement, varSet) ( ACOLOR(GLOBAL_PATTERN_ELEMENT_ARRAY, varElement, varSet) )
+#define SENUM(varElement, varSet) ( AENUM(GLOBAL_PATTERN_ELEMENT_ARRAY, varElement, varSet) )
+#define SSENUM(varElement, varSet, varType) ( ASENUM(GLOBAL_PATTERN_ELEMENT_ARRAY, varElement, varSet, varType) )
+#define SSTRING(varElement, varSet) ( ASTRING(GLOBAL_PATTERN_ELEMENT_ARRAY, varElement, varSet) )
+#define SBUFFER(varElement, varSet) ( ABUFFER(GLOBAL_PATTERN_ELEMENT_ARRAY, varElement, varSet) )
+
+// Data element access macros - using the global patternElement array and the currentSet, with element selection.
+#define DBOOL(varElement) ( SBOOL(varElement, currentSet) )
+#define DINT(varElement) ( SINT(varElement, currentSet) )
+#define DFLOAT(varElement) ( SFLOAT(varElement, currentSet) )
+#define DCOLOR(varElement) ( SCOLOR(varElement, currentSet) )
+#define DENUM(varElement) ( SENUM(varElement, currentSet) )
+#define DSENUM(varElement, varType) ( SSENUM(varElement, currentSet, varType) )
+#define DSTRING(varElement) ( SSTRING(varElement, currentSet) )
+#define DBUFFER(varElement) ( SBUFFER(varElement, currentSet) )
 
 // User Commands
 typedef enum command_e {
@@ -350,20 +439,23 @@ typedef enum command_e {
   COM_COUNT // Last
 } command_e;
 
-//
+// Associate key presses and commands
 typedef struct keyCommand_t {
   SDL_Keymod mod;
   SDL_Keycode key;
   command_e command;
 } keyCommand_t;
 
-// Single key commands
+// Mouse command enumeration.
 typedef enum mouseCommand_e {
   MOUSE_INVALID = -1,
   MOUSE_CLICK = 0, MOUSE_WHEEL_UP, MOUSE_WHEEL_DOWN,
   MOUSE_COUNT // Last
 } mouseCommand_e;
 
+// Structure of a command includes its position on screen (line, col)
+// (line = -1 supresses display), command name to display, and which command
+// enumerations and keys are associated with each mouse action.
 typedef struct command_t {
   int line;
   int col;
@@ -371,7 +463,7 @@ typedef struct command_t {
   keyCommand_t commands[MOUSE_COUNT];
 } command_t;
 
-const command_t mouseCommands[] = {
+const command_t displayCommand[] = {
   {23, 0, "Cell pattern", {{KMOD_CTRL, SDLK_q, COM_CELL}}},
   {24, 0, "Bouncer", {{KMOD_CTRL, SDLK_w, COM_BOUNCE}}},
   {25, 0, "Fader", {{KMOD_CTRL, SDLK_e,  COM_FADE}}},
@@ -422,15 +514,15 @@ const command_t mouseCommands[] = {
   {9, 2, "Post rotation angle", {{KMOD_ALT, SDLK_b, COM_POSTROT_RST}, {KMOD_ALT, SDLK_v, COM_POSTROT_INC}, {KMOD_ALT, SDLK_n, COM_POSTROT_DEC}}},
   {10, 2, "Multiplier", {{KMOD_ALT, SDLK_i, COM_MULT_RST}, {KMOD_ALT, SDLK_u, COM_MULT_INC}, {KMOD_ALT, SDLK_o, COM_MULT_DEC}}},
   {11, 2, "Post rotation incr", {{KMOD_ALT, SDLK_k, COM_POSTSPEED_RST}, {KMOD_ALT, SDLK_j, COM_POSTSPEED_INC}, {KMOD_ALT, SDLK_l, COM_POSTSPEED_DEC}}},
-  {12, 2, "Dot randomness", {{KMOD_ALT, SDLK_LEFTBRACKET, COM_RANDOM_RST}, {KMOD_ALT, SDLK_p, COM_RANDOM_DEC}, {KMOD_ALT, SDLK_RIGHTBRACKET, COM_RANDOM_INC}}},
+  {12, 2, "Dot randomness", {{KMOD_ALT, SDLK_LEFTBRACKET, COM_RANDOM_RST}, {KMOD_ALT, SDLK_p, COM_RANDOM_INC}, {KMOD_ALT, SDLK_RIGHTBRACKET, COM_RANDOM_DEC}}},
   {15, 2, "Frame delay(ms)", {{KMOD_ALT | KMOD_CTRL, SDLK_i, COM_DELAY_RST}, {KMOD_ALT | KMOD_CTRL, SDLK_u, COM_DELAY_INC}, {KMOD_ALT | KMOD_CTRL, SDLK_o, COM_DELAY_DEC}}},
   {20, 2, "foreground:", {{KMOD_ALT | KMOD_CTRL, SDLK_q, COM_FG_INC}, {}, {KMOD_ALT | KMOD_CTRL, SDLK_w, COM_FG_DEC}}},
   {21, 2, "background:", {{KMOD_ALT | KMOD_CTRL, SDLK_a, COM_BG_INC}, {}, {KMOD_ALT | KMOD_CTRL, SDLK_s, COM_BG_DEC}}},
   {37, 2, "Offset:", {{KMOD_ALT | KMOD_CTRL, SDLK_z, COM_TEXTO_INC}, {}, {KMOD_ALT | KMOD_CTRL, SDLK_x, COM_TEXTO_DEC}}},
 };
-#define DISPLAY_COMMAND_SIZE (sizeof(mouseCommands) / sizeof(command_t))
+#define DISPLAYCOMMAND_SIZE (sizeof(displayCommand) / sizeof(command_t))
 
-const command_t otherCommands[] = {
+const command_t otherCommand[] = {
   {-1, 0, "Orientation", {{KMOD_CTRL, SDLK_v, COM_ORIENTATION}}},
   {-1, 2, "Scroll Up", {{KMOD_NONE, SDLK_UP, COM_SCROLL_UP}}},
   {-1, 2, "Scroll Down", {{KMOD_NONE, SDLK_DOWN, COM_SCROLL_DOWN}}},
@@ -471,7 +563,7 @@ const command_t otherCommands[] = {
   {-1, 0, "Copy to set 8", {{KMOD_CTRL | KMOD_ALT,  SDLK_8, COM_COPYSET8 }}},
   {-1, 0, "Copy to set 9", {{KMOD_CTRL | KMOD_ALT,  SDLK_9, COM_COPYSET9 }}},
 };
-#define OTHER_COMMAND_SIZE (sizeof(otherCommands) / sizeof(command_t))
+#define OTHERCOMMAND_SIZE (sizeof(otherCommand) / sizeof(command_t))
 
 // Display titles
 typedef struct displayText_t {
@@ -480,14 +572,14 @@ typedef struct displayText_t {
   char *text;
 } displayText_t;
 
-displayText_t otherText[] = {
+displayText_t displayText[] = {
   {39, 2, "Text buffer size:"},
   {32, 2, "<Unmodified keys> - Add text."},
-  {28, 2, "<alt> 0-9 - Load image buffer from set #"},
-  {26, 2, "<ctrl> 0-9 - Load set #.  Current:"},
+  {28, 2, "<alt> 0-9 - Load buffer from set #"},
+  {26, 2, "<ctrl> 0-9 - Change set #"},
   {27, 2, "<ctrl> <alt> 0-9 - Copy to set #"}
 };
-#define OTHER_TEXT_SIZE (sizeof(otherText) / sizeof(displayText_t))
+#define DISPLAYTEXT_SIZE (sizeof(displayText) / sizeof(displayText_t))
 
 displayText_t headerText[] = {
   {21, 0,  "Modes:               PREVIEW FPS:"},
@@ -495,11 +587,11 @@ displayText_t headerText[] = {
   {51, 0,  "Text buffer:"},
   {0, 2,   "Coeffs: (3 keys = increment / reset / decrement)"},
   {18, 2, "Colors:"},
-  {24, 2, "Pattern Sets:"},
+  {24, 2, "Pattern Sets:            Current:"},
   {31, 2, "Text entry:"},
   {42, 2, "More modes:"}
 };
-#define HEAD_TEXT_SIZE (sizeof(headerText) / sizeof(displayText_t))
+#define HEADERTEXT_SIZE (sizeof(headerText) / sizeof(displayText_t))
 
 // Globals - We do love our globals.
 TTF_Font *screenFont;
@@ -513,40 +605,10 @@ int currentSet = 0;
 float global_intensity_limit = 1.0;
 int previewFrameCount = 0, previewFPS = 0;
 int guiFrameCount = 0, guiFPS = 0;
-const int colToPixel[] = {0, 275, 375, 675, 763, WINDOW_WIDTH};
+#define THISCOL 595
+#define THATCOL (THISCOL + 88)
+const int colToPixel[] = {0, 275, 331, THISCOL, THATCOL, WINDOW_WIDTH};
 Uint32 FPSEventType, DRAWEventType, GUIEventType;
-
-// We hold PATTERN_SET_COUNT pattern sets in memory at a time.  We'll put some
-// intial values in the first one and then copy that to the others.  Note, c
-// globals are initialized to 0 at startup, so the rest should come up 0.
-patternSet_t patternSets[PATTERN_SET_COUNT] = { {
-  .mode.alias = NO, .mode.bouncer = NO, .mode.cellAutoFun = NO,
-  .mode.clearAll = NO, .mode.colorAll = NO, .mode.cycleBackground = NO,
-  .mode.cycleForeground = YES, .mode.diffuse = NO, .mode.fadeMode = FM_LIMIT,
-  .mode.fadeout = NO, .mode.horizontalBars = NO, .mode.multiply = NO,
-  .mode.randomDots = NO, .mode.rollOver = NO, .mode.postRotateZoom = NO,
-  .mode.preRotateZoom = NO, .mode.scroller = YES, .mode.textSeed = YES,
-  .mode.verticalBars = NO, .mode.textStagger = TS_FULLBG, .mode.sidebar = NO,
-  .mode.clearBlue = NO, .mode.clearGreen = NO, .mode.clearRed = NO,
-  .mode.shiftRed = SM_HOLD, .mode.shiftGreen = SM_HOLD,
-  .mode.shiftBlue = SM_HOLD, .mode.shiftCyan = SM_HOLD,
-  .mode.shiftMagenta = SM_HOLD, .mode.shiftYellow = SM_HOLD,
-  .mode.postImage = NO, .mode.fontFlip = NO, .mode.fontDirection = FORWARDS,
-  .parm.background = CE_BLACK, .parm.bg = CD_BLACK,
-  .parm.colorCycleMode = CM_RAINBOW, .parm.colorMultiplier = INITIAL_COLOR_MULTIPLIER,
-  .parm.cycleSaveForegound = 0, .parm.cycleSaveBackground = 0,
-  .parm.diffusionCoef = INITIAL_DIFF_COEF, .parm.expand = INITIAL_EXPAND,
-  .parm.fadeAllIncr = INITIAL_FADEOUT_DEC, .parm.floatIncr = INITIAL_FLOAT_INC,
-  .parm.foreground = CE_RED, .parm.fg = CD_RED, .parm.rainbowInc = INITIAL_RAINBOW_INC,
-  .parm.dotRandomness = INITIAL_RAND_MOD, .parm.postRotationAngle = INITIAL_POSTROT_ANGLE,
-  .parm.preRotationAngle = INITIAL_PREROT_ANGLE, .parm.postRotationIncr = INITIAL_POSTROT_INC,
-  .parm.scrollDirection = INITIAL_DIR, .parm.cellAutoCount = 0,
-  .parm.textOffset = TENSOR_HEIGHT / 3 - 1, .parm.delay = INITIAL_DELAY,
-  .text.textBuffer = INITIAL_TEXT, .text.textIndex = sizeof(INITIAL_TEXT),
-  .text.pixelIndex = -1, .text.prevScrollDir = INITIAL_DIR,
-  .text.textStaggerFlag = "a"
-} };
-
 
 // Prototypes
 void DrawNewFrame(void);
@@ -560,25 +622,25 @@ void SetPixel(int x, int y, color_t color, unsigned char *fb);
 color_t GetPixel(int x, int y, unsigned char *buffer);
 void FadeAll(int inc, fadeModes_e fadeMode, unsigned char *buffer);
 void Scroll (dir_e direction, int rollovermode, unsigned char *fb, unsigned char plane);
-void WriteSlice(patternSet_t *patternSet);
-void CellFun(patternSet_t *patternSet);
-void DrawSideBar(patternSet_t *patternSet);
+void WriteSlice(void);
+void CellFun(void);
+void DrawSideBar(void);
 void Diffuse(float diffusionCoeff, unsigned char *buffer);
 void HorizontalBars(color_t color, unsigned char *buffer);
 void VerticalBars(color_t color, unsigned char *buffer);
-void SavePatternSet(SDL_KeyboardEvent *key, patternSet_t *patternSet, int setIndex);
-void LoadPatternSet(SDL_KeyboardEvent *key, patternSet_t *patternSet, char *fn);
+void SavePatternSet(char key, int set);
+void LoadPatternSet(char key, int set);
 void RandomDots(color_t color, unsigned int rFreq, unsigned char *buffer);
-void ColorCycle(parms_t *parms, int fb_mode);
+void ColorCycle(int fb_mode);
 void ColorAll(color_t color, unsigned char *fb);
 void SetDims(void);
-void UpdateDisplays(float intensity_limit, patternSet_t *patternSet);
+void UpdateDisplays(float intensity_limit);
 void UpdateGUI(void);
 void UpdateTensor(unsigned char *buffer);
 void DrawPreviewBorder(int x, int y);
 void UpdatePreview(int xOffset, int yOffset, unsigned char *buffer);
 void InitDisplayTexts(void);
-void UpdateInfoDisplay(patternSet_t *patternSet, int setIndex);
+void UpdateInfoDisplay(void);
 void ClearWindow(void);
 void WriteLine(char * thisText, int line, int col, color_t color, color_t bgColor);
 void WriteBool(int value, int row, int col);
@@ -592,15 +654,18 @@ void Rotate(double angle, double expansion, int aliasmode, unsigned char *fb_dst
 void Multiply(float multiplier, unsigned char *buffer);
 void DrawRectangle(int x, int y, int w, int h, color_t color);
 void DrawBox(int x, int y, int w, int h, color_t color);
-void ClearRed(patternSet_t *currentMoment);
-void ClearGreen(patternSet_t *currentMoment);
-void ClearBlue(patternSet_t *currentMoment);
+void ClearRed(void);
+void ClearGreen(void);
+void ClearBlue(void);
 void DrawImage(double angle, double expansion, int aliasmode, unsigned char *fb_dst);
 int min(int a, int b);
 int max(int a, int b);
 unsigned char SameRectangle(SDL_Rect a, SDL_Rect b);
 int HandleCommand(command_e command);
 int HandleKey(SDL_Keycode key, SDL_Keymod mod);
+void AllocatePatternData(void);
+void VerifyStructureIntegrity(void);
+void CopyPatternSet(int dst, int src);
 
 // Main
 int main(int argc, char *argv[]) {
@@ -628,6 +693,13 @@ int main(int argc, char *argv[]) {
       global_intensity_limit = 1.0;
     }
   }
+
+  // Verify the integrity of some of the data structures.  This is to enforce
+  // consistency for enumerated array access.
+  VerifyStructureIntegrity();
+
+  // Allocate pattern set memory
+  AllocatePatternData();
 
   // Initialize SDL components.
   if (SDL_Init(SDL_INIT_VIDEO|SDL_INIT_TIMER) != 0) {
@@ -684,24 +756,19 @@ int main(int argc, char *argv[]) {
   DrawPreviewBorder(PREVIEW_A_POSITION_X, PREVIEW_A_POSITION_Y);
   //~ DrawPreviewBorder(PREVIEW_B_POSITION_X, PREVIEW_B_POSITION_Y);
 
-  // Further patternSet 0 initializations
-  patternSets[0].parm.textOffset = tensorHeight / 3 - 1;  // After SetDims()
-  ColorAll(cBlack, patternSets[0].fb);
-
-  // Initialize the rest of the pattern sets from the first one.
-  for (i = 1; i < PATTERN_SET_COUNT; i++) {
-    memcpy(&patternSets[i], &patternSets[0], sizeof(patternSet_t));
+  // Further patternSet initializations
+  for (i = 0; i < PATTERN_SET_COUNT; i++) {
+    SINT(PE_TEXTOFFSET, i) = tensorHeight / 3 - 1;  // After SetDims()
   }
 
-  // Attempt to load startup pattern sets from disk.
+  // Attempt to load startup pattern sets from disk.  These are 0.now - 9.now
+  // files.  Its okay if they don't exist.
   for (i = 0; i < PATTERN_SET_COUNT; i++) {
-    char filename[8];
-    snprintf(filename, sizeof(filename), "%i.now", i);
-    LoadPatternSet(NULL, &patternSets[i], filename);
+    LoadPatternSet(i + '0', i);
   }
 
   // Bam - Show the (blank) preview.
-  UpdateDisplays(global_intensity_limit, &patternSets[currentSet]);
+  UpdateDisplays(global_intensity_limit);
 
   // Add the text to the window
   InitDisplayTexts();
@@ -712,7 +779,7 @@ int main(int argc, char *argv[]) {
   GUIEventType = SDL_RegisterEvents(1);
 
   // Init the processing timer.
-  if (!SDL_AddTimer(patternSets[currentSet].parm.delay, TriggerFrameDraw, NULL)) {
+  if (!SDL_AddTimer(DINT(PE_DELAY), TriggerFrameDraw, NULL)) {
     fprintf(stderr, "Can't initialize the processing timer! %s\n", SDL_GetError());
     exit(EXIT_FAILURE);
   }
@@ -751,13 +818,13 @@ int main(int argc, char *argv[]) {
 
           // Check if its hovering over a command.
           thisHover = INVALID;
-          for (i = 0; i < DISPLAY_COMMAND_SIZE; i++) {
+          for (i = 0; i < DISPLAYCOMMAND_SIZE; i++) {
             // box is the rectangle encompassing the command text.  We could
             // precompute these if timing were important.
-            box.x = colToPixel[mouseCommands[i].col];
-            box.y = mouseCommands[i].line * DISPLAY_TEXT_HEIGHT;
-            box.w = colToPixel[mouseCommands[i].col + 1] - box.x;
-            box.h = (mouseCommands[i].line + 1) * DISPLAY_TEXT_HEIGHT - box.y + 1;
+            box.x = colToPixel[displayCommand[i].col];
+            box.y = displayCommand[i].line * DISPLAY_TEXT_HEIGHT;
+            box.w = colToPixel[displayCommand[i].col + 1] - box.x;
+            box.h = (displayCommand[i].line + 1) * DISPLAY_TEXT_HEIGHT - box.y + 1;
 
             // Is it in the rectangle of command i?
             if ((y >= box.y) && (y < box.y + box.h)) {
@@ -771,12 +838,12 @@ int main(int argc, char *argv[]) {
 
                   // Yeah, so draw the new highlight.
                   DrawBox(box.x, box.y, box.w, box.h, DISPLAY_COLOR_TEXTSBG_HL);
-                  WriteCommand(i, mouseCommands, DISPLAY_COLOR_TEXTS_HL, DISPLAY_COLOR_TEXTSBG_HL);
+                  WriteCommand(i, displayCommand, DISPLAY_COLOR_TEXTS_HL, DISPLAY_COLOR_TEXTSBG_HL);
 
                   // And if it came off a different command, remove that highlight.
                   if (lastHover != INVALID) {
                     DrawBox(boxOld.x, boxOld.y, boxOld.w, boxOld.h, DISPLAY_COLOR_TEXTSBG);
-                    WriteCommand(lastHover, mouseCommands, DISPLAY_COLOR_TEXTS, DISPLAY_COLOR_TEXTSBG);
+                    WriteCommand(lastHover, displayCommand, DISPLAY_COLOR_TEXTS, DISPLAY_COLOR_TEXTSBG);
                   }
 
                   // Keep track for next time.
@@ -793,7 +860,7 @@ int main(int argc, char *argv[]) {
           // Not over a new command? May have to clear the old highlight anyway.
           if ((thisHover == INVALID) && (lastHover != INVALID)) {
             DrawBox(boxOld.x, boxOld.y, boxOld.w, boxOld.h, DISPLAY_COLOR_TEXTSBG);
-            WriteCommand(lastHover, mouseCommands, DISPLAY_COLOR_TEXTS, DISPLAY_COLOR_TEXTSBG);
+            WriteCommand(lastHover, displayCommand, DISPLAY_COLOR_TEXTS, DISPLAY_COLOR_TEXTSBG);
             lastHover = INVALID;
           }
           break;
@@ -806,20 +873,20 @@ int main(int argc, char *argv[]) {
             if (event.wheel.y < 0) {
 
               // If there are no mouse wheel commands for this item, consider it a click.
-              if (mouseCommands[thisHover].commands[MOUSE_WHEEL_DOWN].command == COM_NONE) {
-                exitProgram = HandleCommand(mouseCommands[thisHover].commands[MOUSE_CLICK].command);
+              if (displayCommand[thisHover].commands[MOUSE_WHEEL_DOWN].command == COM_NONE) {
+                exitProgram = HandleCommand(displayCommand[thisHover].commands[MOUSE_CLICK].command);
               } else {
-                exitProgram = HandleCommand(mouseCommands[thisHover].commands[MOUSE_WHEEL_DOWN].command);
+                exitProgram = HandleCommand(displayCommand[thisHover].commands[MOUSE_WHEEL_DOWN].command);
               }
 
             // Wheel up.
             } else {
 
               // If there are no mouse wheel commands for this item, consider it a click.
-              if (mouseCommands[thisHover].commands[MOUSE_WHEEL_UP].command == COM_NONE) {
-                exitProgram = HandleCommand(mouseCommands[thisHover].commands[MOUSE_CLICK].command);
+              if (displayCommand[thisHover].commands[MOUSE_WHEEL_UP].command == COM_NONE) {
+                exitProgram = HandleCommand(displayCommand[thisHover].commands[MOUSE_CLICK].command);
               } else {
-                exitProgram = HandleCommand(mouseCommands[thisHover].commands[MOUSE_WHEEL_UP].command);
+                exitProgram = HandleCommand(displayCommand[thisHover].commands[MOUSE_WHEEL_UP].command);
               }
             }
           }
@@ -829,7 +896,7 @@ int main(int argc, char *argv[]) {
           // Mouse button unpushed.  Consider this a click.  If we're over
           // the same item we down clicked on, execute a command.
           if ((thisHover != INVALID) && (thisHover == mouseDownOn)) {
-            exitProgram = HandleCommand(mouseCommands[thisHover].commands[MOUSE_CLICK].command);
+            exitProgram = HandleCommand(displayCommand[thisHover].commands[MOUSE_CLICK].command);
           }
           break;
 
@@ -873,7 +940,7 @@ int main(int argc, char *argv[]) {
 
           } else if (event.type == GUIEventType) {
             // Update the text display.
-            UpdateInfoDisplay(&patternSets[currentSet], currentSet);
+            UpdateInfoDisplay();
             UpdateGUI();
             guiFrameCount++;
 
@@ -893,7 +960,7 @@ int main(int argc, char *argv[]) {
     } else {
       // Large delays make the CPU spin. Its because we;re stuck in a tight
       // loop, polling for events that never occur.  Best to get out of the way...
-      if (patternSets[currentSet].parm.delay > 10) {
+      if (DINT(PE_DELAY) > 10) {
 
         // Idle the processor for 1 ms.
         nanosleep((struct timespec[]) {{0,1000000}}, NULL);
@@ -924,7 +991,7 @@ Uint32 TriggerFrameDraw(Uint32 interval, void *param) {
   SDL_PushEvent(&event);
 
   // Returning the next delay sets the timer to fire again.
-  return(patternSets[currentSet].parm.delay);
+  return(DINT(PE_DELAY));
 }
 
 // Event that triggers the fps to be updated.
@@ -959,13 +1026,166 @@ Uint32 TriggerGUIUpdate(Uint32 interval, void *param) {
   return(interval);
 }
 
+// Check to make sure that some of the program's data sets are built correctly.
+// This is done to ensure that certain arrays can be accessed via enumeration
+// values rather than indicies (i.e. enumerations must match indecies).
+void VerifyStructureIntegrity(void) {
+  int i;
+
+  // patternElement_e and patternSet array.
+  for (i = 0; i < PSET_SIZE; i++) {
+    if (i != patternSet[i].index) {
+      fprintf(stderr, "Programmer error: patternElement_e does not match patternSet array!\n");
+      fprintf(stderr, "Element %i, \"%s\" has incorrect enumeration value %i!\n", i, patternSet[i].name, patternSet[i].index);
+      exit(EXIT_FAILURE);
+    }
+  }
+
+  // color_e and namedPalette array.
+  for (i = 0; i < NAMEDPALETTE_SIZE; i++) {
+    if (i != namedPalette[i].index) {
+      fprintf(stderr, "Programmer error: color_e does not match namedPalette array!\n");
+      fprintf(stderr, "Element %i, \"%s\" has incorrect enumeration value %i!\n", i, namedPalette[i].name, namedPalette[i].index);
+      exit(EXIT_FAILURE);
+    }
+  }
+}
+
+// Allocate the data memory for the pattern sets.
+void AllocatePatternData(void) {
+  int i, j;
+
+  // Allocate data for each element based on type.  Allocated data will be an
+  // array to that multiple pattern sets can be kept in memory at a time.
+  for (i = 0; i < PSET_SIZE; i++) {
+    switch (patternSet[i].type) {
+      case ET_INT: case ET_ENUM:
+        // patternSet[i].data is a void * pointing at memory allocated for 10 ints.
+        patternSet[i].data = malloc(sizeof(int) * PATTERN_SET_COUNT);
+        if (!patternSet[i].data) {
+          fprintf(stderr, "Unable to allocate int %i - %s\n", i, patternSet[i].name);
+          exit(EXIT_FAILURE);
+        } else {
+          for(j = 0; j < PATTERN_SET_COUNT; j++) {
+            SINT(i, j) = patternSet[i].initial.i;
+          }
+        }
+        break;
+
+      case ET_FLOAT:
+        patternSet[i].data = malloc(sizeof(float) * PATTERN_SET_COUNT);
+        if (!patternSet[i].data) {
+          fprintf(stderr, "Unable to allocate float %i - %s\n", i, patternSet[i].name);
+          exit(EXIT_FAILURE);
+        } else {
+          for(j = 0; j < PATTERN_SET_COUNT; j++) {
+            SFLOAT(i, j) = patternSet[i].initial.f;
+          }
+        }
+        break;
+
+      case ET_COLOR:
+        patternSet[i].data = malloc(sizeof(color_t) * PATTERN_SET_COUNT);
+        if (!patternSet[i].data) {
+          fprintf(stderr, "Unable to allocate color %i - %s\n", i, patternSet[i].name);
+          exit(EXIT_FAILURE);
+        } else {
+          for(j = 0; j < PATTERN_SET_COUNT; j++) {
+            SCOLOR(i, j) = patternSet[i].initial.c;
+          }
+        }
+        break;
+
+      case ET_BOOL:
+        patternSet[i].data = malloc(sizeof(unsigned char) * PATTERN_SET_COUNT);
+        if (!patternSet[i].data) {
+          fprintf(stderr, "Unable to allocate flag %i - %s\n", i, patternSet[i].name);
+          exit(EXIT_FAILURE);
+        } else {
+          for(j = 0; j < PATTERN_SET_COUNT; j++) {
+            SBOOL(i, j) = patternSet[i].initial.b;
+          }
+        }
+        break;
+
+      case ET_STRING:
+        if (patternSet[i].size <= 0) {
+          fprintf(stderr, "Invalid size for element %i (%s) of type string - %i\n", i, patternSet[i].name, patternSet[i].size);
+          exit(EXIT_FAILURE);
+        }
+        patternSet[i].data = malloc(sizeof(char) * patternSet[i].size * PATTERN_SET_COUNT);
+        if (!patternSet[i].data) {
+          fprintf(stderr, "Unable to allocate string %i - %s\n", i, patternSet[i].name);
+          exit(EXIT_FAILURE);
+        } else {
+          for (j = 0; j < PATTERN_SET_COUNT; j++) {
+            strncpy(SSTRING(i, j), patternSet[i].initial.s, patternSet[i].size);
+            SSTRING(i, j)[patternSet[i].size - 1] = '\0';
+          }
+        }
+        break;
+
+      case ET_BUFFER:
+        if (patternSet[i].size <= 0) {
+          fprintf(stderr, "Invalid size for element %i (%s) of type string - %i\n", i, patternSet[i].name, patternSet[i].size);
+          exit(EXIT_FAILURE);
+        }
+        // Allocate and intialize to 0.
+        patternSet[i].data = calloc(patternSet[i].size * PATTERN_SET_COUNT, sizeof(unsigned char));
+        if (!patternSet[i].data) {
+          fprintf(stderr, "Unable to allocate buffer %i - %s\n", i, patternSet[i].name);
+          exit(EXIT_FAILURE);
+        }
+        break;
+
+      case ET_INVALID:
+      case ET_COUNT:
+      default:
+        fprintf(stderr, "Error.  Unrecognized type!\n");
+        break;
+    }
+  }
+
+  // Write out the pattern data set.
+  //~ for (j = 0; j < PATTERN_SET_COUNT; j++) {
+    //~ for (i = 0; i < PSET_SIZE; i++) {
+      //~ switch(patternSet[i].type) {
+        //~ case ET_INT:
+          //~ printf("Element %i - %i (%s) of type int is %i\n", i, patternSet[i].index, patternSet[i].name, SINT(i,j));
+          //~ break;
+        //~ case ET_FLOAT:
+          //~ printf("Element %i - %i (%s) of type float is %f\n", i, patternSet[i].index, patternSet[i].name, SFLOAT(i, j));
+          //~ break;
+        //~ case ET_COLOR:
+          //~ printf("Element %i - %i (%s) of type color is (%i, %i, %i, %i)\n", i, patternSet[i].index, patternSet[i].name, SCOLOR(i, j).r, SCOLOR(i, j).g, SCOLOR(i, j).b, SCOLOR(i, j).a);
+          //~ break;
+        //~ case ET_ENUM:
+          //~ printf("Element %i - %i (%s) of type enum is %i\n", i, patternSet[i].index, patternSet[i].name, SINT( i, j));
+          //~ break;
+        //~ case ET_BOOL:
+          //~ printf("Element %i - %i (%s) of type bool is %s\n", i, patternSet[i].index, patternSet[i].name, SBOOL( i, j) ? "YES" : "NO");
+          //~ break;
+        //~ case ET_STRING:
+          //~ printf("Element %i - %i (%s) of type string is \"%s\"\n", i, patternSet[i].index, patternSet[i].name, SSTRING( i, j));
+          //~ break;
+        //~ case ET_BUFFER:
+          //~ printf("Element %i - %i (%s) of type buffer is %i bytes.\n", i, patternSet[i].index, patternSet[i].name, patternSet[i].size);
+          //~ break;
+        //~ default:
+          //~ fprintf(stderr, "Error - Unknown data type on element %i - %i\n", i, patternSet[i].type);
+          //~ exit(EXIT_FAILURE);
+          //~ break;
+      //~ }
+    //~ }
+  //~ }
+}
 // The thing that happens at every frame.
 void DrawNewFrame(void) {
   // Update the buffer. (I.E. make pattern)
   ProcessModes();
 
   // Update the preview and tensor.
-  UpdateDisplays(global_intensity_limit, &patternSets[currentSet]);
+  UpdateDisplays(global_intensity_limit);
 }
 
 // Time to make a mess of the array.
@@ -985,147 +1205,146 @@ void ProcessModes(void) {
   }
 
   // Change foreground color.
-  if (patternSets[currentSet].mode.cycleForeground) {
-    ColorCycle(&patternSets[currentSet].parm, FOREGROUND);
+  if (DBOOL(PE_CYCLEFG)) {
+    ColorCycle(FOREGROUND);
   }
 
   // Change background color.
-  if (patternSets[currentSet].mode.cycleBackground) {
-    ColorCycle(&patternSets[currentSet].parm, BACKGROUND);
+  if (DBOOL(PE_CYCLEBG)) {
+    ColorCycle(BACKGROUND);
   }
 
   // Seed the entire array with the foreground color.
-  if (patternSets[currentSet].mode.colorAll) {
-    ColorAll(patternSets[currentSet].parm.fg, patternSets[currentSet].fb);
-    patternSets[currentSet].mode.colorAll = NO;
+  if (DBOOL(PE_FGCOLORALL)) {
+    ColorAll(DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
+    DBOOL(PE_FGCOLORALL) = NO;
   }
 
   // Scroller.
-  if (patternSets[currentSet].mode.scroller) {
-    Scroll(patternSets[currentSet].parm.scrollDirection, patternSets[currentSet].mode.rollOver, patternSets[currentSet].fb, PLANE_ALL);
+  if (DBOOL(PE_SCROLL)) {
+    Scroll(DENUM(PE_SCROLLDIR), DBOOL(PE_ROLLOVER), DBUFFER(PE_FRAMEBUFFER), PLANE_ALL);
   }
 
   // Scroll red.
-  if (patternSets[currentSet].mode.shiftRed) {
-    Scroll(patternSets[currentSet].mode.shiftRed - 1, patternSets[currentSet].mode.rollOver, patternSets[currentSet].fb, PLANE_RED);
+  if (DENUM(PE_SHIFTRED)) {
+    Scroll(DENUM(PE_SHIFTRED) - 1, DBOOL(PE_ROLLOVER), DBUFFER(PE_FRAMEBUFFER), PLANE_RED);
   }
 
   // Scroll green.
-  if (patternSets[currentSet].mode.shiftGreen) {
-    Scroll(patternSets[currentSet].mode.shiftGreen - 1, patternSets[currentSet].mode.rollOver, patternSets[currentSet].fb, PLANE_GREEN);
+  if (DENUM(PE_SHIFTGREEN)) {
+    Scroll(DENUM(PE_SHIFTGREEN) - 1, DBOOL(PE_ROLLOVER), DBUFFER(PE_FRAMEBUFFER), PLANE_GREEN);
   }
 
   // Scroll blue.
-  if (patternSets[currentSet].mode.shiftBlue) {
-    Scroll(patternSets[currentSet].mode.shiftBlue - 1, patternSets[currentSet].mode.rollOver, patternSets[currentSet].fb, PLANE_BLUE);
+  if (DENUM(PE_SHIFTBLUE)) {
+    Scroll(DENUM(PE_SHIFTBLUE) - 1, DBOOL(PE_ROLLOVER), DBUFFER(PE_FRAMEBUFFER), PLANE_BLUE);
   }
 
   // Scroll blue and green
-  if (patternSets[currentSet].mode.shiftCyan) {
-      Scroll(patternSets[currentSet].mode.shiftCyan - 1, patternSets[currentSet].mode.rollOver, patternSets[currentSet].fb, PLANE_CYAN);
+  if (DENUM(PE_SHIFTCYAN)) {
+      Scroll(DENUM(PE_SHIFTCYAN) - 1, DBOOL(PE_ROLLOVER), DBUFFER(PE_FRAMEBUFFER), PLANE_CYAN);
   }
 
   // Scroll red and blue.
-  if (patternSets[currentSet].mode.shiftMagenta) {
-    Scroll(patternSets[currentSet].mode.shiftMagenta - 1, patternSets[currentSet].mode.rollOver, patternSets[currentSet].fb, PLANE_MAGENTA);
+  if (DENUM(PE_SHIFTMAGENTA)) {
+    Scroll(DENUM(PE_SHIFTMAGENTA) - 1, DBOOL(PE_ROLLOVER), DBUFFER(PE_FRAMEBUFFER), PLANE_MAGENTA);
   }
 
   // Scroll green and red.
-  if (patternSets[currentSet].mode.shiftYellow) {
-    Scroll(patternSets[currentSet].mode.shiftYellow - 1, patternSets[currentSet].mode.rollOver, patternSets[currentSet].fb, PLANE_YELLOW);
+  if (DENUM(PE_SHIFTYELLOW)) {
+    Scroll(DENUM(PE_SHIFTYELLOW) - 1, DBOOL(PE_ROLLOVER), DBUFFER(PE_FRAMEBUFFER), PLANE_YELLOW);
   }
 
   // Draw a solid bar up the side we are scrolling from.
-  if (patternSets[currentSet].mode.sidebar) {
-    DrawSideBar(&patternSets[currentSet]);
+  if (DBOOL(PE_BARSEED)) {
+    DrawSideBar();
   }
 
   // First stab experimental image drawing.  Needs work.
-  if (patternSets[currentSet].mode.postImage) {
-    DrawImage(patternSets[currentSet].parm.postRotationAngle, patternSets[currentSet].parm.expand, patternSets[currentSet].mode.alias, patternSets[currentSet].fb);
-    patternSets[currentSet].parm.postRotationAngle = patternSets[currentSet].parm.postRotationAngle + patternSets[currentSet].parm.postRotationIncr;
+  if (DBOOL(PE_POSTIMAGE)) {
+    DrawImage(DFLOAT(PE_POSTRZANGLE), DFLOAT(PE_EXPAND), DBOOL(PE_ALIAS), DBUFFER(PE_FRAMEBUFFER));
+    DFLOAT(PE_POSTRZANGLE) += DFLOAT(PE_POSTRZINC);
   }
 
-  // I think this just writes a column of text on the right or left.
-  if (patternSets[currentSet].mode.textSeed) {
+  // Write a column of text on the side opposite of the scroll direction.
+  if (DBOOL(PE_TEXTSEED)) {
     // Scroll provided by scroller if its on.
-    WriteSlice(&patternSets[currentSet]);
+    WriteSlice();
   }
 
   // Cellular automata manips?  Not actually cellular auto.  Never finished this.
-  if (patternSets[currentSet].mode.cellAutoFun) {
+  if (DBOOL(PE_CELLFUN)) {
     // Give each pixel a color value.
-    CellFun(&patternSets[currentSet]);
+    CellFun();
   }
 
   // Bouncy bouncy (ick).
-  if (patternSets[currentSet].mode.bouncer) {
+  if (DBOOL(PE_BOUNCER)) {
     scrDir = (scrDir + 1) % 4;
-    Scroll(scrDir, patternSets[currentSet].mode.rollOver, patternSets[currentSet].fb, PLANE_ALL);
+    Scroll(scrDir, DBOOL(PE_ROLLOVER), DBUFFER(PE_FRAMEBUFFER), PLANE_ALL);
   }
 
   // Bam!  Draw some horizontal bars.
-  if (patternSets[currentSet].mode.horizontalBars) {
-    HorizontalBars(patternSets[currentSet].parm.fg, patternSets[currentSet].fb);
-    patternSets[currentSet].mode.horizontalBars = NO;
+  if (DBOOL(PE_HBARS)) {
+    HorizontalBars(DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
+    DBOOL(PE_HBARS) = NO;
   }
 
   // Bam!
-  if (patternSets[currentSet].mode.verticalBars) {
-    VerticalBars(patternSets[currentSet].parm.fg, patternSets[currentSet].fb);
-    patternSets[currentSet].mode.verticalBars = NO;
+  if (DBOOL(PE_VBARS)) {
+    VerticalBars(DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
+    DBOOL(PE_VBARS) = NO;
   }
 
   // Random dots.  Most useful seed ever.
-  if (patternSets[currentSet].mode.randomDots) {
-    RandomDots(patternSets[currentSet].parm.fg, patternSets[currentSet].parm.dotRandomness, patternSets[currentSet].fb);
+  if (DBOOL(PE_RANDOMDOT)) {
+    RandomDots(DCOLOR(PE_FGC), DINT(PE_RANDOMDOTCOEF), DBUFFER(PE_FRAMEBUFFER));
   }
 
   // Fader
-  if (patternSets[currentSet].mode.fadeout) {
-    FadeAll(patternSets[currentSet].parm.fadeAllIncr, patternSets[currentSet].mode.fadeMode, patternSets[currentSet].fb);
+  if (DBOOL(PE_FADE)) {
+    FadeAll(DINT(PE_FADEINC), DENUM(PE_FADEMODE), DBUFFER(PE_FRAMEBUFFER));
   }
 
   // Averager
-  if (patternSets[currentSet].mode.diffuse) {
-    Diffuse(patternSets[currentSet].parm.diffusionCoef, patternSets[currentSet].fb);
+  if (DBOOL(PE_DIFFUSE)) {
+    Diffuse(DFLOAT(PE_DIFFUSECOEF), DBUFFER(PE_FRAMEBUFFER));
   }
 
   // Clear screen.
-  if (patternSets[currentSet].mode.clearAll) {
-    ColorAll(patternSets[currentSet].parm.bg, patternSets[currentSet].fb);
-    patternSets[currentSet].mode.clearAll = NO;
+  if (DBOOL(PE_BGCOLORALL)) {
+    ColorAll(DCOLOR(PE_BGC), DBUFFER(PE_FRAMEBUFFER));
+    DBOOL(PE_BGCOLORALL) = NO;
   }
 
   // Multiplier
-  if (patternSets[currentSet].mode.multiply) {
-    Multiply(patternSets[currentSet].parm.colorMultiplier, patternSets[currentSet].fb);
+  if (DBOOL(PE_MULTIPLY)) {
+    Multiply(DFLOAT(PE_MULTIPLYBY), DBUFFER(PE_FRAMEBUFFER));
   }
 
   // Experimental Rotozoomer
-  if (patternSets[currentSet].mode.preRotateZoom) {
-    Rotate(patternSets[currentSet].parm.preRotationAngle, patternSets[currentSet].parm.expand, patternSets[currentSet].mode.alias, patternSets[currentSet].fb, patternSets[currentSet].fb);
+  if (DBOOL(PE_PRERZ)) {
+    Rotate(DFLOAT(PE_PRERZANGLE), DFLOAT(PE_EXPAND), DBOOL(PE_ALIAS), DBUFFER(PE_FRAMEBUFFER), DBUFFER(PE_FRAMEBUFFER));
   }
 
   // Zero the red.
-  if (patternSets[currentSet].mode.clearRed) {
-    ClearRed(&patternSets[currentSet]);
+  if (DBOOL(PE_NORED)) {
+    ClearRed();
   }
 
   // Zero the blue.
-  if (patternSets[currentSet].mode.clearBlue) {
-    ClearBlue(&patternSets[currentSet]);
+  if (DBOOL(PE_NOBLUE)) {
+    ClearBlue();
   }
 
   // Zero the green.
-  if (patternSets[currentSet].mode.clearGreen) {
-    ClearGreen(&patternSets[currentSet]);
+  if (DBOOL(PE_NOGREEN)) {
+    ClearGreen();
   }
 }
 
 // Key press processing.
 int HandleKey(SDL_Keycode key, SDL_Keymod mod) {
-  textBuffer_t *text = &patternSets[currentSet].text;
   int i, j;
 
   // Prolly not necessary.
@@ -1138,20 +1357,37 @@ int HandleKey(SDL_Keycode key, SDL_Keymod mod) {
   if (mod & KMOD_SHIFT) mod |= KMOD_SHIFT;
 
   // Check to see if the key combination activates a command.
-  for ( i = 0 ; i < DISPLAY_COMMAND_SIZE; i++) {
+  for ( i = 0 ; i < DISPLAYCOMMAND_SIZE; i++) {
     for (j = 0; j < MOUSE_COUNT; j++) {
-      if ((mouseCommands[i].commands[j].key == key) && (mouseCommands[i].commands[j].mod == mod)) {
-        return(HandleCommand(mouseCommands[i].commands[j].command));
+      if ((displayCommand[i].commands[j].key == key) && (displayCommand[i].commands[j].mod == mod)) {
+        return(HandleCommand(displayCommand[i].commands[j].command));
       }
     }
   }
 
   // Check other place for commands.
-  for ( i = 0 ; i < OTHER_COMMAND_SIZE; i++) {
+  for ( i = 0 ; i < OTHERCOMMAND_SIZE; i++) {
     for (j = 0 ; j < MOUSE_COUNT; j++) {
-      if ((otherCommands[i].commands[j].key == key) && (otherCommands[i].commands[j].mod == mod)) {
-        return(HandleCommand(otherCommands[i].commands[j].command));
+      if ((otherCommand[i].commands[j].key == key) && (otherCommand[i].commands[j].mod == mod)) {
+        return(HandleCommand(otherCommand[i].commands[j].command));
       }
+    }
+  }
+
+  // Check for load or save to disk commands.
+  // Save the current pattern set as <key>.now (for 0-9, a-z, only)
+  if (mod == (KMOD_ALT | KMOD_SHIFT)) {
+    if ((key >= 'a' && key <= 'z') || (key >= '0' && key <= '9')) {
+      SavePatternSet(key, currentSet);
+      return 0;
+    }
+  }
+
+  // Load a pattern set from <key>.now into the current set.
+  if (mod == (KMOD_CTRL | KMOD_SHIFT)) {
+    if ((key >= 'a' && key <= 'z') || (key >= '0' && key <= '9')) {
+      LoadPatternSet(key, currentSet);
+      return 0;
     }
   }
 
@@ -1162,43 +1398,43 @@ int HandleKey(SDL_Keycode key, SDL_Keymod mod) {
       // Keys with shift held down.
       if (key <= SDLK_z && key >= SDLK_a) {
         // Capitalize for a - z.
-        text->textBuffer[text->textIndex] = key - ('a' - 'A');
+        DSTRING(PE_TEXTBUFFER)[DINT(PE_TEXTINDEX)] = key - ('a' - 'A');
       } else {
         // Lookup the symbols for the rest of the keys.
         switch (key) {
-          case SDLK_1: text->textBuffer[text->textIndex] = '!'; break;
-          case SDLK_2: text->textBuffer[text->textIndex] = '@'; break;
-          case SDLK_3: text->textBuffer[text->textIndex] = '#'; break;
-          case SDLK_4: text->textBuffer[text->textIndex] = '$'; break;
-          case SDLK_5: text->textBuffer[text->textIndex] = '%'; break;
-          case SDLK_6: text->textBuffer[text->textIndex] = '^'; break;
-          case SDLK_7: text->textBuffer[text->textIndex] = '&'; break;
-          case SDLK_8: text->textBuffer[text->textIndex] = '*'; break;
-          case SDLK_9: text->textBuffer[text->textIndex] = '('; break;
-          case SDLK_0: text->textBuffer[text->textIndex] = ')'; break;
-          case SDLK_BACKSLASH: text->textBuffer[text->textIndex] = '|'; break;
-          case SDLK_BACKQUOTE: text->textBuffer[text->textIndex] = '~'; break;
-          case SDLK_MINUS: text->textBuffer[text->textIndex] = '_'; break;
-          case SDLK_EQUALS: text->textBuffer[text->textIndex] = '+'; break;
-          case SDLK_LEFTBRACKET: text->textBuffer[text->textIndex] = '{'; break;
-          case SDLK_RIGHTBRACKET: text->textBuffer[text->textIndex] = '}'; break;
-          case SDLK_SEMICOLON: text->textBuffer[text->textIndex] = ':'; break;
-          case SDLK_COMMA: text->textBuffer[text->textIndex] = '<'; break;
-          case SDLK_PERIOD: text->textBuffer[text->textIndex] = '>'; break;
-          case SDLK_SLASH: text->textBuffer[text->textIndex] = '?'; break;
-          case SDLK_QUOTE: text->textBuffer[text->textIndex] = '"'; break;
+          case SDLK_1: DSTRING(PE_TEXTBUFFER)[DINT(PE_TEXTINDEX)] = '!'; break;
+          case SDLK_2: DSTRING(PE_TEXTBUFFER)[DINT(PE_TEXTINDEX)] = '@'; break;
+          case SDLK_3: DSTRING(PE_TEXTBUFFER)[DINT(PE_TEXTINDEX)] = '#'; break;
+          case SDLK_4: DSTRING(PE_TEXTBUFFER)[DINT(PE_TEXTINDEX)] = '$'; break;
+          case SDLK_5: DSTRING(PE_TEXTBUFFER)[DINT(PE_TEXTINDEX)] = '%'; break;
+          case SDLK_6: DSTRING(PE_TEXTBUFFER)[DINT(PE_TEXTINDEX)] = '^'; break;
+          case SDLK_7: DSTRING(PE_TEXTBUFFER)[DINT(PE_TEXTINDEX)] = '&'; break;
+          case SDLK_8: DSTRING(PE_TEXTBUFFER)[DINT(PE_TEXTINDEX)] = '*'; break;
+          case SDLK_9: DSTRING(PE_TEXTBUFFER)[DINT(PE_TEXTINDEX)] = '('; break;
+          case SDLK_0: DSTRING(PE_TEXTBUFFER)[DINT(PE_TEXTINDEX)] = ')'; break;
+          case SDLK_BACKSLASH: DSTRING(PE_TEXTBUFFER)[DINT(PE_TEXTINDEX)] = '|'; break;
+          case SDLK_BACKQUOTE: DSTRING(PE_TEXTBUFFER)[DINT(PE_TEXTINDEX)] = '~'; break;
+          case SDLK_MINUS: DSTRING(PE_TEXTBUFFER)[DINT(PE_TEXTINDEX)] = '_'; break;
+          case SDLK_EQUALS: DSTRING(PE_TEXTBUFFER)[DINT(PE_TEXTINDEX)] = '+'; break;
+          case SDLK_LEFTBRACKET: DSTRING(PE_TEXTBUFFER)[DINT(PE_TEXTINDEX)] = '{'; break;
+          case SDLK_RIGHTBRACKET: DSTRING(PE_TEXTBUFFER)[DINT(PE_TEXTINDEX)] = '}'; break;
+          case SDLK_SEMICOLON: DSTRING(PE_TEXTBUFFER)[DINT(PE_TEXTINDEX)] = ':'; break;
+          case SDLK_COMMA: DSTRING(PE_TEXTBUFFER)[DINT(PE_TEXTINDEX)] = '<'; break;
+          case SDLK_PERIOD: DSTRING(PE_TEXTBUFFER)[DINT(PE_TEXTINDEX)] = '>'; break;
+          case SDLK_SLASH: DSTRING(PE_TEXTBUFFER)[DINT(PE_TEXTINDEX)] = '?'; break;
+          case SDLK_QUOTE: DSTRING(PE_TEXTBUFFER)[DINT(PE_TEXTINDEX)] = '"'; break;
           default: break;
         }
       }
     } else {
       // Unmodified key entry.  We'll treat them as ascii in the printable range.
-      text->textBuffer[text->textIndex] = key;
+      DSTRING(PE_TEXTBUFFER)[DINT(PE_TEXTINDEX)] = key;
     }
 
     // Advance the terminating null and increase the buffer size.
-    text->textBuffer[text->textIndex + 1] = 0x00;
-    text->textIndex++;
-    if (text->textIndex >= (sizeof(text->textBuffer) - 2)) text->textIndex--;
+    DSTRING(PE_TEXTBUFFER)[DINT(PE_TEXTINDEX) + 1] = 0x00;
+    DINT(PE_TEXTINDEX)++;
+    if (DINT(PE_TEXTINDEX) >= (patternSet[PE_TEXTBUFFER].size - 2)) DINT(PE_TEXTINDEX)--;
   }
 
   return 0;
@@ -1206,58 +1442,72 @@ int HandleKey(SDL_Keycode key, SDL_Keymod mod) {
 
 // Executes a user command - toggles flags, adjusts parameters, etc.
 int HandleCommand(command_e command) {
-  modes_t *mode = &patternSets[currentSet].mode;
-  textBuffer_t *text = &patternSets[currentSet].text;
-  parms_t *parms = &patternSets[currentSet].parm;
+  int i;
 
   switch(command) {
-    case COM_CELL: mode->cellAutoFun = !mode->cellAutoFun; break;
-    case COM_TEXT_FLIP: mode->fontFlip = !mode->fontFlip; break;
-    case COM_TEXT_REVERSE: mode->fontDirection = !mode->fontDirection; break;
-    case COM_TEXT: mode->textSeed = !mode->textSeed; break;
-    case COM_BOUNCE: mode->bouncer = !mode->bouncer; break;
-    case COM_FADE: mode->fadeout = !mode->fadeout; break;
-    case COM_DIFFUSE: mode->diffuse = !mode->diffuse; break;
-    case COM_ROLL: mode->rollOver = !mode->rollOver; break;
-    case COM_SCROLL: mode->scroller = !mode->scroller; break;
-    case COM_HBAR: mode->horizontalBars = YES; break;
-    case COM_VBAR: mode->verticalBars = YES; break;
-    case COM_FGALL: mode->colorAll = YES; break;
-    case COM_BGALL: mode->clearAll = YES; break;
-    case COM_RDOT: mode->randomDots = !mode->randomDots; break;
-    case COM_FGCYCLE: mode->cycleForeground = !mode->cycleForeground; break;
-    case COM_BGCYCLE: mode->cycleBackground = !mode->cycleBackground; break;
+    case COM_CELL: DBOOL(PE_CELLFUN) = !DBOOL(PE_CELLFUN); break;
+    case COM_TEXT_FLIP: DBOOL(PE_FONTFLIP) = !DBOOL(PE_FONTFLIP); break;
+    case COM_TEXT_REVERSE: DBOOL(PE_FONTDIR) = !DBOOL(PE_FONTDIR); break;
+    case COM_TEXT: DBOOL(PE_TEXTSEED) = !DBOOL(PE_TEXTSEED); break;
+    case COM_BOUNCE: DBOOL(PE_BOUNCER) = !DBOOL(PE_BOUNCER); break;
+    case COM_FADE: DBOOL(PE_FADE) = !DBOOL(PE_FADE); break;
+    case COM_DIFFUSE: DBOOL(PE_DIFFUSE) = !DBOOL(PE_DIFFUSE); break;
+    case COM_ROLL: DBOOL(PE_ROLLOVER) = !DBOOL(PE_ROLLOVER); break;
+    case COM_SCROLL: DBOOL(PE_SCROLL) = !DBOOL(PE_SCROLL); break;
+    case COM_HBAR: DBOOL(PE_HBARS) = YES; break;
+    case COM_VBAR: DBOOL(PE_VBARS) = YES; break;
+    case COM_FGALL: DBOOL(PE_FGCOLORALL) = YES; break;
+    case COM_BGALL: DBOOL(PE_BGCOLORALL) = YES; break;
+    case COM_RDOT: DBOOL(PE_RANDOMDOT) = !DBOOL(PE_RANDOMDOT); break;
+    case COM_FGCYCLE: DBOOL(PE_CYCLEFG) = !DBOOL(PE_CYCLEFG); break;
+    case COM_BGCYCLE: DBOOL(PE_CYCLEBG) = !DBOOL(PE_CYCLEBG); break;
     case COM_CYCLESET: cyclePatternSets = !cyclePatternSets; break;
     case COM_MODEOFF:
-      mode->alias = NO;
-      mode->bouncer = NO;
-      mode->cellAutoFun = NO;
-      mode->clearAll = NO;
-      mode->colorAll = NO;
-      mode->cycleBackground = NO;
-      mode->cycleForeground = NO;
-      mode->diffuse = NO;
-      mode->fadeMode = FM_LIMIT;
-      mode->fadeout = NO;
-      mode->horizontalBars = NO;
-      mode->multiply = NO;
-      mode->randomDots = NO;
-      mode->rollOver = NO;
-      mode->postRotateZoom = NO;
-      mode->preRotateZoom = NO;
-      mode->scroller = NO;
-      mode->textSeed = NO;
-      mode->verticalBars = NO;
-      mode->sidebar = NO;
-      mode->clearRed = NO;
-      mode->clearBlue = NO;
-      mode->clearGreen = NO;
-      mode->shiftBlue = SM_HOLD;
-      mode->shiftCyan = SM_HOLD;
-      mode->shiftGreen = SM_HOLD;
-      mode->shiftMagenta = SM_HOLD;
-      mode->shiftYellow = SM_HOLD;
-      mode->shiftRed = SM_HOLD;
+      for (i = 0; i < PSET_SIZE; i++) {
+        if (patternSet[i].type == ET_BOOL) {
+          DBOOL(i) = NO;
+        }
+      }
+      DENUM(PE_SHIFTBLUE) = SM_HOLD;
+      DENUM(PE_SHIFTCYAN) = SM_HOLD;
+      DENUM(PE_SHIFTGREEN) = SM_HOLD;
+      DENUM(PE_SHIFTMAGENTA) = SM_HOLD;
+      DENUM(PE_SHIFTYELLOW) = SM_HOLD;
+      DENUM(PE_SHIFTRED) = SM_HOLD;
+      cyclePatternSets = NO;
+      break;
+      //~ DBOOL(PE_ALIAS) = NO;
+      //~ DBOOL(PE_BOUNCER) = NO;
+      //~ DBOOL(PE_CELLFUN) = NO;
+      //~ DBOOL(PE_BGCOLORALL) = NO;
+      //~ DBOOL(PE_FGCOLORALL) = NO;
+      //~ DBOOL(PE_CYCLEBG) = NO;
+      //~ DBOOL(PE_CYCLEFG) = NO;
+      //~ DBOOL(PE_DIFFUSE) = NO;
+      //~ DENUM(PE_FADEMODE) = FM_LIMIT;
+      //~ DBOOL(PE_FADE) = NO;
+      //~ DBOOL(PE_HBARS) = NO;
+      //~ DBOOL(PE_MULTIPLY) = NO;
+      //~ DBOOL(PE_RANDOMDOT) = NO;
+      //~ DBOOL(PE_ROLLOVER) = NO;
+      //~ DBOOL(PE_POSTRZ) = NO;
+      //~ DBOOL(PE_PRERZ) = NO;
+      //~ DBOOL(PE_SCROLL) = NO;
+      //~ DBOOL(PE_TEXTSEED) = NO;
+      //~ DBOOL(PE_VBARS) = NO;
+      //~ DBOOL(PE_BARSEED) = NO;
+      //~ DBOOL(PE_NORED) = NO;
+      //~ DBOOL(PE_NOBLUE) = NO;
+      //~ DBOOL(PE_NOGREEN) = NO;
+      //~ DENUM(PE_SHIFTBLUE) = SM_HOLD;
+      //~ DENUM(PE_SHIFTCYAN) = SM_HOLD;
+      //~ DENUM(PE_SHIFTGREEN) = SM_HOLD;
+      //~ DENUM(PE_SHIFTMAGENTA) = SM_HOLD;
+      //~ DENUM(PE_SHIFTYELLOW) = SM_HOLD;
+      //~ DENUM(PE_SHIFTRED) = SM_HOLD;
+      //~ DBOOL(PE_POSTIMAGE) = OFF;
+      //~ DBOOL(PE_FONTFLIP) = OFF;
+      //~ DBOOL(PE_FONTDIR) = FORWARDS;
       break;
     case COM_LOADSET0: currentSet = 0; break;
     case COM_LOADSET1: currentSet = 1; break;
@@ -1269,224 +1519,217 @@ int HandleCommand(command_e command) {
     case COM_LOADSET7: currentSet = 7; break;
     case COM_LOADSET8: currentSet = 8; break;
     case COM_LOADSET9: currentSet = 9; break;
-    case COM_FADEMODE: mode->fadeMode = !mode->fadeMode; break;
-    case COM_NORED: mode->clearRed = !mode->clearRed; break;
-    case COM_NOGREEN: mode->clearGreen = !mode->clearGreen; break;
-    case COM_NOBLUE: mode->clearBlue = !mode->clearBlue; break;
-    case COM_TEXTRESET: text->pixelIndex = -1; break;
-    case COM_POSTROTATE:
-      mode->postRotateZoom = !mode->postRotateZoom;
-      parms->postRotationAngle = 0;
+    case COM_FADEMODE:
+      DENUM(PE_FADEMODE) = (DENUM(PE_FADEMODE) + 1) % FM_COUNT;
       break;
-    case COM_PREROTATE: mode->preRotateZoom = !mode->preRotateZoom; break;
-    case COM_AA: mode->alias = !mode->alias; break;
-    case COM_MULTIPLY: mode->multiply = !mode->multiply; break;
-    case COM_SIDEBAR: mode->sidebar = !mode->sidebar; break;
+    case COM_NORED: DBOOL(PE_NORED) = !DBOOL(PE_NORED); break;
+    case COM_NOGREEN: DBOOL(PE_NOGREEN) = !DBOOL(PE_NOGREEN); break;
+    case COM_NOBLUE: DBOOL(PE_NOBLUE) = !DBOOL(PE_NOBLUE); break;
+    case COM_TEXTRESET: DINT(PE_PIXELINDEX) = INVALID; break;
+    case COM_POSTROTATE:
+      DBOOL(PE_POSTRZ) = !DBOOL(PE_POSTRZ);
+      DFLOAT(PE_POSTRZANGLE) = 0;
+      break;
+    case COM_PREROTATE: DBOOL(PE_PRERZ) = !DBOOL(PE_PRERZ); break;
+    case COM_AA: DBOOL(PE_ALIAS) = !DBOOL(PE_ALIAS); break;
+    case COM_MULTIPLY: DBOOL(PE_MULTIPLY) = !DBOOL(PE_MULTIPLY); break;
+    case COM_SIDEBAR: DBOOL(PE_BARSEED) = !DBOOL(PE_BARSEED); break;
     case COM_ORIENTATION:
       tensor_landscape_p = !tensor_landscape_p;
       SetDims();
       DrawPreviewBorder(PREVIEW_A_POSITION_X, PREVIEW_A_POSITION_Y);
       //~ DrawPreviewBorder(PREVIEW_B_POSITION_X, PREVIEW_B_POSITION_Y);
       break;
-    case COM_TEXT_MODE_UP: mode->textStagger = (mode->textStagger + 1) % TS_COUNT; break;
+    case COM_TEXT_MODE_UP: DENUM(PE_TEXTMODE) = (DENUM(PE_TEXTMODE) + 1) % TS_COUNT; break;
     case COM_TEXT_MODE_DOWN:
-      mode->textStagger--;
-      if (mode->textStagger < 0) mode->textStagger = TS_COUNT - 1;
+      DENUM(PE_TEXTMODE)--;
+      if (DENUM(PE_TEXTMODE) < 0) DENUM(PE_TEXTMODE) = TS_COUNT - 1;
       break;
-    case COM_RP_UP: mode->shiftRed = (mode->shiftRed + 1) % SM_COUNT; break;
+    case COM_RP_UP: DENUM(PE_SHIFTRED) = (DENUM(PE_SHIFTRED) + 1) % SM_COUNT; break;
     case COM_RP_DOWN:
-      mode->shiftRed--;
-      if (mode->shiftRed < 0) mode->shiftRed = SM_COUNT - 1;
+      DENUM(PE_SHIFTRED)--;
+      if (DENUM(PE_SHIFTRED) < 0) DENUM(PE_SHIFTRED) = SM_COUNT - 1;
       break;
-    case COM_GP_UP: mode->shiftGreen = (mode->shiftGreen + 1) % SM_COUNT; break;
+    case COM_GP_UP: DENUM(PE_SHIFTGREEN) = (DENUM(PE_SHIFTGREEN) + 1) % SM_COUNT; break;
     case COM_GP_DOWN:
-      mode->shiftGreen--;
-      if (mode->shiftGreen < 0) mode->shiftGreen = SM_COUNT - 1;
+      DENUM(PE_SHIFTGREEN)--;
+      if (DENUM(PE_SHIFTGREEN) < 0) DENUM(PE_SHIFTGREEN) = SM_COUNT - 1;
       break;
-    case COM_BP_UP: mode->shiftBlue = (mode->shiftBlue + 1) % SM_COUNT; break;
+    case COM_BP_UP: DENUM(PE_SHIFTBLUE) = (DENUM(PE_SHIFTBLUE) + 1) % SM_COUNT; break;
     case COM_BP_DOWN:
-      mode->shiftBlue--;
-      if (mode->shiftBlue < 0) mode->shiftBlue = SM_COUNT - 1;
+      DENUM(PE_SHIFTBLUE)--;
+      if (DENUM(PE_SHIFTBLUE) < 0) DENUM(PE_SHIFTBLUE) = SM_COUNT - 1;
       break;
     case COM_FG_DEC:
-      parms->foreground--;
-      if (parms->foreground < CE_RED) parms->foreground = CE_COUNT - 1;
-      parms->fg = namedPalette[parms->foreground].color;
+      DENUM(PE_FGE)--;
+      if (DENUM(PE_FGE) < CE_RED) DENUM(PE_FGE) = CE_COUNT - 1;
+      DCOLOR(PE_FGC) = namedPalette[DENUM(PE_FGE)].color;
       break;
     case COM_FG_INC:
-      parms->foreground = (parms->foreground + 1) % CE_COUNT;
-      parms->fg = namedPalette[parms->foreground].color;
+      DENUM(PE_FGE) = (DENUM(PE_FGE) + 1) % CE_COUNT;
+      DCOLOR(PE_FGC) = namedPalette[DENUM(PE_FGE)].color;
       break;
     case COM_BG_DEC:
-      parms->background--;
-      if (parms->background < 0) parms->background = CE_COUNT - 1;
-      parms->bg = namedPalette[parms->background].color;
+      DENUM(PE_BGE)--;
+      if (DENUM(PE_BGE) < 0) DENUM(PE_BGE) = CE_COUNT - 1;
+      DCOLOR(PE_BGC) = namedPalette[DENUM(PE_BGE)].color;
       break;
     case COM_BG_INC:
-      parms->background = (parms->background + 1) % CE_COUNT;
-      parms->bg = namedPalette[parms->background].color;
+      DENUM(PE_BGE) = (DENUM(PE_BGE) + 1) % CE_COUNT;
+      DCOLOR(PE_BGC) = namedPalette[DENUM(PE_BGE)].color;
       break;
-    case COM_COPYSET0: memcpy(&patternSets[0], &patternSets[currentSet], sizeof(patternSet_t)); break;
-    case COM_COPYSET1: memcpy(&patternSets[1], &patternSets[currentSet], sizeof(patternSet_t)); break;
-    case COM_COPYSET2: memcpy(&patternSets[2], &patternSets[currentSet], sizeof(patternSet_t)); break;
-    case COM_COPYSET3: memcpy(&patternSets[3], &patternSets[currentSet], sizeof(patternSet_t)); break;
-    case COM_COPYSET4: memcpy(&patternSets[4], &patternSets[currentSet], sizeof(patternSet_t)); break;
-    case COM_COPYSET5: memcpy(&patternSets[5], &patternSets[currentSet], sizeof(patternSet_t)); break;
-    case COM_COPYSET6: memcpy(&patternSets[6], &patternSets[currentSet], sizeof(patternSet_t)); break;
-    case COM_COPYSET7: memcpy(&patternSets[7], &patternSets[currentSet], sizeof(patternSet_t)); break;
-    case COM_COPYSET8: memcpy(&patternSets[8], &patternSets[currentSet], sizeof(patternSet_t)); break;
-    case COM_COPYSET9: memcpy(&patternSets[9], &patternSets[currentSet], sizeof(patternSet_t)); break;
+    case COM_COPYSET0: CopyPatternSet(0, currentSet); break;
+    case COM_COPYSET1: CopyPatternSet(1, currentSet); break;
+    case COM_COPYSET2: CopyPatternSet(2, currentSet); break;
+    case COM_COPYSET3: CopyPatternSet(3, currentSet); break;
+    case COM_COPYSET4: CopyPatternSet(4, currentSet); break;
+    case COM_COPYSET5: CopyPatternSet(5, currentSet); break;
+    case COM_COPYSET6: CopyPatternSet(6, currentSet); break;
+    case COM_COPYSET7: CopyPatternSet(7, currentSet); break;
+    case COM_COPYSET8: CopyPatternSet(8, currentSet); break;
+    case COM_COPYSET9: CopyPatternSet(9, currentSet); break;
     case COM_TEXTO_DEC:
-      parms->textOffset--;
-      if (parms->textOffset < 0) {
-        if ((parms->scrollDirection == DIR_LEFT) || (parms->scrollDirection == DIR_RIGHT)) {
-          parms->textOffset = tensorHeight - 1;
+      DINT(PE_TEXTOFFSET)--;
+      if (DINT(PE_TEXTOFFSET) < 0) {
+        if ((DENUM(PE_SCROLLDIR) == DIR_LEFT) || (DENUM(PE_SCROLLDIR) == DIR_RIGHT)) {
+          DINT(PE_TEXTOFFSET) = tensorHeight - 1;
         } else {
-          parms->textOffset = tensorWidth - 1;
+          DINT(PE_TEXTOFFSET) = tensorWidth - 1;
         }
       }
       break;
     case COM_TEXTO_INC:
-      parms->textOffset++;
-      if ((parms->scrollDirection == DIR_LEFT) || (parms->scrollDirection == DIR_RIGHT)) {
-        parms->textOffset %= tensorHeight;
+      DINT(PE_TEXTOFFSET)++;
+      if ((DENUM(PE_SCROLLDIR) == DIR_LEFT) || (DENUM(PE_SCROLLDIR) == DIR_RIGHT)) {
+        DINT(PE_TEXTOFFSET) %= tensorHeight;
       } else {
-        parms->textOffset %= tensorWidth;
+        DINT(PE_TEXTOFFSET) %= tensorWidth;
       }
       break;
     case COM_DELAY_DEC:
-      parms->delay--;
-      if (parms->delay < 1) parms->delay = 1;  // Can't be 0!
+      DINT(PE_DELAY)--;
+      if (DINT(PE_DELAY) < 1) DINT(PE_DELAY) = 1;  // Can't be 0!
       break;
     case COM_DELAY_RST:
-      parms->delay = INITIAL_DELAY;
+      DINT(PE_DELAY) = INITIAL_DELAY;
       break;
     case COM_DELAY_INC:
-      parms->delay++;
+      DINT(PE_DELAY)++;
       break;
-    case COM_CP_UP: mode->shiftCyan = (mode->shiftCyan + 1) % SM_COUNT; break;
+    case COM_CP_UP: DENUM(PE_SHIFTCYAN) = (DENUM(PE_SHIFTCYAN) + 1) % SM_COUNT; break;
     case COM_CP_DOWN:
-      mode->shiftCyan--;
-      if (mode->shiftCyan < 0) mode->shiftCyan = SM_COUNT - 1;
+      DENUM(PE_SHIFTCYAN)--;
+      if (DENUM(PE_SHIFTCYAN) < 0) DENUM(PE_SHIFTCYAN) = SM_COUNT - 1;
       break;
-    case COM_YP_UP: mode->shiftYellow = (mode->shiftYellow + 1) % SM_COUNT; break;
+    case COM_YP_UP: DENUM(PE_SHIFTYELLOW) = (DENUM(PE_SHIFTYELLOW) + 1) % SM_COUNT; break;
     case COM_YP_DOWN:
-      mode->shiftYellow--;
-      if (mode->shiftYellow < 0) mode->shiftYellow = SM_COUNT - 1;
+      DENUM(PE_SHIFTYELLOW)--;
+      if (DENUM(PE_SHIFTYELLOW) < 0) DENUM(PE_SHIFTYELLOW) = SM_COUNT - 1;
       break;
-    case COM_MP_UP: mode->shiftMagenta = (mode->shiftMagenta + 1) % SM_COUNT; break;
+    case COM_MP_UP: DENUM(PE_SHIFTMAGENTA) = (DENUM(PE_SHIFTMAGENTA) + 1) % SM_COUNT; break;
     case COM_MP_DOWN:
-      mode->shiftMagenta--;
-      if (mode->shiftMagenta < 0) mode->shiftMagenta = SM_COUNT - 1;
+      DENUM(PE_SHIFTMAGENTA)--;
+      if (DENUM(PE_SHIFTMAGENTA) < 0) DENUM(PE_SHIFTMAGENTA) = SM_COUNT - 1;
       break;
-    case COM_IMAGE: mode->postImage = !mode->postImage; break;
-    case COM_FADE_DEC: parms->fadeAllIncr--; break;
-    case COM_FADE_INC: parms->fadeAllIncr++; break;
-    case COM_FADE_RST: parms->fadeAllIncr = INITIAL_FADEOUT_DEC; break;
-    case COM_DIFFUSE_DEC: parms->diffusionCoef -= parms->floatIncr; break;
-    case COM_DIFFUSE_RST: parms->diffusionCoef = INITIAL_DIFF_COEF; break;
-    case COM_DIFFUSE_INC: parms->diffusionCoef += parms->floatIncr; break;
-    case COM_EXPAND_DEC: parms->expand -= parms->floatIncr; break;
-    case COM_EXPAND_RST: parms->expand = INITIAL_EXPAND; break;
-    case COM_EXPAND_INC: parms->expand += parms->floatIncr; break;
+    case COM_IMAGE: DBOOL(PE_POSTIMAGE) = !DBOOL(PE_POSTIMAGE); break;
+    case COM_FADE_DEC: DINT(PE_FADEINC)--; break;
+    case COM_FADE_INC: DINT(PE_FADEINC)++; break;
+    case COM_FADE_RST: DINT(PE_FADEINC) = INITIAL_FADEOUT_DEC; break;
+    case COM_DIFFUSE_DEC: DFLOAT(PE_DIFFUSECOEF) -= DFLOAT(PE_FLOATINC); break;
+    case COM_DIFFUSE_RST: DFLOAT(PE_DIFFUSECOEF) = INITIAL_DIFF_COEF; break;
+    case COM_DIFFUSE_INC: DFLOAT(PE_DIFFUSECOEF) += DFLOAT(PE_FLOATINC); break;
+    case COM_EXPAND_DEC: DFLOAT(PE_EXPAND) -= DFLOAT(PE_FLOATINC); break;
+    case COM_EXPAND_RST: DFLOAT(PE_EXPAND) = INITIAL_EXPAND; break;
+    case COM_EXPAND_INC: DFLOAT(PE_EXPAND) += DFLOAT(PE_FLOATINC); break;
     case COM_RANDOM_DEC:
-      parms->dotRandomness -= max(1, parms->dotRandomness / 50);
-      if (parms->dotRandomness < 1) parms->dotRandomness = 1;
+      DINT(PE_RANDOMDOTCOEF) -= max(1, DINT(PE_RANDOMDOTCOEF) / 50);
+      if (DINT(PE_RANDOMDOTCOEF) < 1) DINT(PE_RANDOMDOTCOEF) = 1;
       break;
-    case COM_RANDOM_RST: parms->dotRandomness = INITIAL_RAND_MOD; break;
+    case COM_RANDOM_RST: DINT(PE_RANDOMDOTCOEF) = INITIAL_RAND_MOD; break;
     case COM_RANDOM_INC:
-      parms->dotRandomness += max(1, parms->dotRandomness / 50);
-      if (parms->dotRandomness > 20000) parms->dotRandomness = 20000;
+      DINT(PE_RANDOMDOTCOEF) += max(1, DINT(PE_RANDOMDOTCOEF) / 50);
+      if (DINT(PE_RANDOMDOTCOEF) > 20000) DINT(PE_RANDOMDOTCOEF) = 20000;
       break;
-    case COM_POSTROT_DEC: parms->postRotationAngle -= parms->floatIncr; break;
-    case COM_POSTROT_RST: parms->postRotationAngle = INITIAL_POSTROT_ANGLE; break;
-    case COM_POSTROT_INC: parms->postRotationAngle += parms->floatIncr; break;
-    case COM_LOAD0: memcpy(patternSets[currentSet].fb, patternSets[0].fb, sizeof(unsigned char) * TENSOR_BYTES); break;
-    case COM_LOAD1: memcpy(patternSets[currentSet].fb, patternSets[1].fb, sizeof(unsigned char) * TENSOR_BYTES); break;
-    case COM_LOAD2: memcpy(patternSets[currentSet].fb, patternSets[2].fb, sizeof(unsigned char) * TENSOR_BYTES); break;
-    case COM_LOAD3: memcpy(patternSets[currentSet].fb, patternSets[3].fb, sizeof(unsigned char) * TENSOR_BYTES); break;
-    case COM_LOAD4: memcpy(patternSets[currentSet].fb, patternSets[4].fb, sizeof(unsigned char) * TENSOR_BYTES); break;
-    case COM_LOAD5: memcpy(patternSets[currentSet].fb, patternSets[5].fb, sizeof(unsigned char) * TENSOR_BYTES); break;
-    case COM_LOAD6: memcpy(patternSets[currentSet].fb, patternSets[6].fb, sizeof(unsigned char) * TENSOR_BYTES); break;
-    case COM_LOAD7: memcpy(patternSets[currentSet].fb, patternSets[7].fb, sizeof(unsigned char) * TENSOR_BYTES); break;
-    case COM_LOAD8: memcpy(patternSets[currentSet].fb, patternSets[8].fb, sizeof(unsigned char) * TENSOR_BYTES); break;
-    case COM_LOAD9: memcpy(patternSets[currentSet].fb, patternSets[9].fb, sizeof(unsigned char) * TENSOR_BYTES); break;
-    case COM_RAINDBOW_DEC: parms->rainbowInc--; break;
-    case COM_RAINDBOW_RST: parms->rainbowInc = INITIAL_RAINBOW_INC; break;
-    case COM_RAINDBOW_INC: parms->rainbowInc++; break;
-    case COM_CYCLE_MODE: parms->colorCycleMode = (parms->colorCycleMode + 1) % CM_COUNT; break;
+    case COM_POSTROT_DEC: DFLOAT(PE_POSTRZANGLE) -= DFLOAT(PE_FLOATINC); break;
+    case COM_POSTROT_RST: DFLOAT(PE_POSTRZANGLE) = INITIAL_POSTROT_ANGLE; break;
+    case COM_POSTROT_INC: DFLOAT(PE_POSTRZANGLE) += DFLOAT(PE_FLOATINC); break;
+    case COM_LOAD0: memcpy(DBUFFER(PE_FRAMEBUFFER), SBUFFER(PE_FRAMEBUFFER, 0), patternSet[PE_FRAMEBUFFER].size * sizeof(unsigned char)); break;
+    case COM_LOAD1: memcpy(DBUFFER(PE_FRAMEBUFFER), SBUFFER(PE_FRAMEBUFFER, 1), patternSet[PE_FRAMEBUFFER].size * sizeof(unsigned char)); break;
+    case COM_LOAD2: memcpy(DBUFFER(PE_FRAMEBUFFER), SBUFFER(PE_FRAMEBUFFER, 2), patternSet[PE_FRAMEBUFFER].size * sizeof(unsigned char)); break;
+    case COM_LOAD3: memcpy(DBUFFER(PE_FRAMEBUFFER), SBUFFER(PE_FRAMEBUFFER, 3), patternSet[PE_FRAMEBUFFER].size * sizeof(unsigned char)); break;
+    case COM_LOAD4: memcpy(DBUFFER(PE_FRAMEBUFFER), SBUFFER(PE_FRAMEBUFFER, 4), patternSet[PE_FRAMEBUFFER].size * sizeof(unsigned char)); break;
+    case COM_LOAD5: memcpy(DBUFFER(PE_FRAMEBUFFER), SBUFFER(PE_FRAMEBUFFER, 5), patternSet[PE_FRAMEBUFFER].size * sizeof(unsigned char)); break;
+    case COM_LOAD6: memcpy(DBUFFER(PE_FRAMEBUFFER), SBUFFER(PE_FRAMEBUFFER, 6), patternSet[PE_FRAMEBUFFER].size * sizeof(unsigned char)); break;
+    case COM_LOAD7: memcpy(DBUFFER(PE_FRAMEBUFFER), SBUFFER(PE_FRAMEBUFFER, 7), patternSet[PE_FRAMEBUFFER].size * sizeof(unsigned char)); break;
+    case COM_LOAD8: memcpy(DBUFFER(PE_FRAMEBUFFER), SBUFFER(PE_FRAMEBUFFER, 8), patternSet[PE_FRAMEBUFFER].size * sizeof(unsigned char)); break;
+    case COM_LOAD9: memcpy(DBUFFER(PE_FRAMEBUFFER), SBUFFER(PE_FRAMEBUFFER, 9), patternSet[PE_FRAMEBUFFER].size * sizeof(unsigned char)); break;
+    case COM_RAINDBOW_DEC: DINT(PE_RAINBOWINC)--; break;
+    case COM_RAINDBOW_RST: DINT(PE_RAINBOWINC) = INITIAL_RAINBOW_INC; break;
+    case COM_RAINDBOW_INC: DINT(PE_RAINBOWINC)++; break;
+    case COM_CYCLE_MODE: DENUM(PE_COLORCYCLEMODE) = (DENUM(PE_COLORCYCLEMODE) + 1) % CM_COUNT; break;
     case COM_CYCLE_MODE_DOWN:
-      parms->colorCycleMode--;
-      if (parms->colorCycleMode < 0) parms->colorCycleMode = CM_COUNT - 1;
+      DENUM(PE_COLORCYCLEMODE)--;
+      if (DENUM(PE_COLORCYCLEMODE) < 0) DENUM(PE_COLORCYCLEMODE) = CM_COUNT - 1;
       break;
-    case COM_PREROT_DEC: parms->preRotationAngle-= parms->floatIncr; break;
-    case COM_PREROT_RST: parms->preRotationAngle = INITIAL_PREROT_ANGLE; break;
-    case COM_PREROT_INC: parms->preRotationAngle+= parms->floatIncr; break;
+    case COM_PREROT_DEC: DFLOAT(PE_PRERZANGLE)-= DFLOAT(PE_FLOATINC); break;
+    case COM_PREROT_RST: DFLOAT(PE_PRERZANGLE) = INITIAL_PREROT_ANGLE; break;
+    case COM_PREROT_INC: DFLOAT(PE_PRERZANGLE)+= DFLOAT(PE_FLOATINC); break;
     case COM_SCROLL_UPC:
-      parms->scrollDirection = DIR_UP;
-      mode->scroller = YES;
+      DENUM(PE_SCROLLDIR) = DIR_UP;
+      DBOOL(PE_SCROLL) = YES;
       break;
     case COM_SCROLL_DOWNC:
-      parms->scrollDirection = DIR_DOWN;
-      mode->scroller = YES;
+      DENUM(PE_SCROLLDIR) = DIR_DOWN;
+      DBOOL(PE_SCROLL) = YES;
       break;
     case COM_SCROLL_LEFTC:
-      parms->scrollDirection = DIR_LEFT;
-      mode->scroller = YES;
+      DENUM(PE_SCROLLDIR) = DIR_LEFT;
+      DBOOL(PE_SCROLL) = YES;
       break;
     case COM_SCROLL_RIGHTC:
-      parms->scrollDirection = DIR_RIGHT;
-      mode->scroller = YES;
+      DENUM(PE_SCROLLDIR) = DIR_RIGHT;
+      DBOOL(PE_SCROLL) = YES;
       break;
     case COM_SCROLL_CYCLE_UP:
-      parms->scrollDirection = (parms->scrollDirection + 1) % DIR_COUNT;
-      mode->scroller = YES;
+      DENUM(PE_SCROLLDIR) = (DENUM(PE_SCROLLDIR) + 1) % DIR_COUNT;
+      DBOOL(PE_SCROLL) = YES;
       break;
     case COM_SCROLL_CYCLE_DOWN:
-      parms->scrollDirection--;
-      if (parms->scrollDirection < 0) parms->scrollDirection = DIR_COUNT - 1;
-      mode->scroller = YES;
+      DENUM(PE_SCROLLDIR)--;
+      if (DENUM(PE_SCROLLDIR) < 0) DENUM(PE_SCROLLDIR) = DIR_COUNT - 1;
+      DBOOL(PE_SCROLL) = YES;
       break;
-    case COM_MULT_DEC: parms->colorMultiplier -= parms->floatIncr; break;
-    case COM_MULT_RST: parms->colorMultiplier = INITIAL_COLOR_MULTIPLIER; break;
-    case COM_MULT_INC: parms->colorMultiplier += parms->floatIncr; break;
-    case COM_POSTSPEED_DEC: parms->postRotationIncr -= parms->floatIncr; break;
-    case COM_POSTSPEED_RST: parms->postRotationIncr = INITIAL_POSTROT_INC; break;
-    case COM_POSTSPEED_INC: parms->postRotationIncr += parms->floatIncr; break;
-    case COM_STEP_INC: parms->floatIncr *= 10; break;
-    case COM_STEP_RST: parms->floatIncr = INITIAL_FLOAT_INC; break;
-    case COM_STEP_DEC: parms->floatIncr /= 10; break;
-    case COM_SCROLL_UP: parms->scrollDirection = DIR_UP; break;
-    case COM_SCROLL_DOWN: parms->scrollDirection = DIR_DOWN; break;
-    case COM_SCROLL_LEFT: parms->scrollDirection = DIR_LEFT; break;
-    case COM_SCROLL_RIGHT: parms->scrollDirection = DIR_RIGHT; break;
+    case COM_MULT_DEC: DFLOAT(PE_MULTIPLYBY) -= DFLOAT(PE_FLOATINC); break;
+    case COM_MULT_RST: DFLOAT(PE_MULTIPLYBY) = INITIAL_MULTIPLIER; break;
+    case COM_MULT_INC: DFLOAT(PE_MULTIPLYBY) += DFLOAT(PE_FLOATINC); break;
+    case COM_POSTSPEED_DEC: DFLOAT(PE_POSTRZINC) -= DFLOAT(PE_FLOATINC); break;
+    case COM_POSTSPEED_RST: DFLOAT(PE_POSTRZINC) = INITIAL_POSTROT_INC; break;
+    case COM_POSTSPEED_INC: DFLOAT(PE_POSTRZINC) += DFLOAT(PE_FLOATINC); break;
+    case COM_STEP_INC: DFLOAT(PE_FLOATINC) *= 10; break;
+    case COM_STEP_RST: DFLOAT(PE_FLOATINC) = INITIAL_FLOAT_INC; break;
+    case COM_STEP_DEC: DFLOAT(PE_FLOATINC) /= 10; break;
+    case COM_SCROLL_UP: DENUM(PE_SCROLLDIR) = DIR_UP; break;
+    case COM_SCROLL_DOWN: DENUM(PE_SCROLLDIR) = DIR_DOWN; break;
+    case COM_SCROLL_LEFT: DENUM(PE_SCROLLDIR) = DIR_LEFT; break;
+    case COM_SCROLL_RIGHT: DENUM(PE_SCROLLDIR) = DIR_RIGHT; break;
     case COM_EXIT: return 1;
     case COM_BACKSPACE:
-      text->textIndex--;
-      if (text->textIndex < 0) text->textIndex = 0;
-      text->textBuffer[text->textIndex] = 0x00;
+      DINT(PE_TEXTINDEX)--;
+      if (DINT(PE_TEXTINDEX) < 0) DINT(PE_TEXTINDEX) = 0;
+      DSTRING(PE_TEXTBUFFER)[DINT(PE_TEXTINDEX)] = 0x00;
       break;
     case COM_RETURN:
-      text->textBuffer[text->textIndex] = '\n';
-      text->textBuffer[text->textIndex + 1] = 0x00;
-      text->textIndex++;
-      if (text->textIndex >= (sizeof(text->textBuffer) - 2)) {
-        text->textIndex--;
+      DSTRING(PE_TEXTBUFFER)[DINT(PE_TEXTINDEX)] = '\n';
+      DSTRING(PE_TEXTBUFFER)[DINT(PE_TEXTINDEX) + 1] = 0x00;
+      DINT(PE_TEXTINDEX)++;
+      if (DINT(PE_TEXTINDEX) >= (patternSet[PE_TEXTBUFFER].size - 2)) {
+        DINT(PE_TEXTINDEX)--;
       }
       break;
     case COM_DELETE:
-      text->textIndex = 0;
-      text->textBuffer[0] = 0x00;
+      DINT(PE_TEXTINDEX) = 0;
+      DSTRING(PE_TEXTBUFFER)[0] = 0x00;
       break;
-
-    //~ // <alt> <shift>
-    //~ } else if ((key_event->key.keysym.mod & KMOD_ALT) && (key_event->key.keysym.mod & KMOD_SHIFT)) {
-    //~ SavePatternSet(&key_event->key, &patternSets[0], currentSet);
-
-    //~ // <ctrl> <shift>
-    //~ } else if ((key_event->key.keysym.mod & KMOD_CTRL) && (key_event->key.keysym.mod & KMOD_SHIFT)) {
-    //~ LoadPatternSet(&key_event->key, &patternSets[0], NULL);
-
     case COM_INVALID: case COM_NONE: case COM_COUNT:
       break;
   }
@@ -1713,17 +1956,15 @@ color_t GetPixel(int x, int y, unsigned char *buffer) {
 // Send out the frame buffer to tensor and/or the display window.
 // 11/22/2009 - You know what was uncanny?  Walter looked a lot like FB the
 // other night at the decom, and spent most of his time there running Tensor...
-void UpdateDisplays(float intensity_limit, patternSet_t *patternSet) {
-  modes_t *mode = &patternSet->mode;
-  parms_t *parms = &patternSet->parm;
-  unsigned char *buffer = patternSet->fb;
+void UpdateDisplays(float intensity_limit) {
+  unsigned char *buffer = DBUFFER(PE_FRAMEBUFFER);
   unsigned char fba[TENSOR_BYTES];
   int i;
 
   // Output rotate (doesn't effect array values, but does effect the final image).
-  if (mode->postRotateZoom) {
-    parms->postRotationAngle = parms->postRotationAngle + parms->postRotationIncr;
-    Rotate(parms->postRotationAngle, parms->expand, mode->alias, &fba[0], &buffer[0]);
+  if (DBOOL(PE_POSTRZ)) {
+    DFLOAT(PE_POSTRZANGLE) += DFLOAT(PE_POSTRZINC);
+    Rotate(DFLOAT(PE_POSTRZANGLE), DFLOAT(PE_EXPAND), DBOOL(PE_ALIAS), &fba[0], &buffer[0]);
 
     UpdatePreview(PREVIEW_A_POSITION_X, PREVIEW_A_POSITION_Y, fba);
     //~ UpdatePreview(PREVIEW_B_POSITION_X, PREVIEW_B_POSITION_Y, fba);
@@ -1970,7 +2211,7 @@ void UpdateTensor(unsigned char *buffer) {
 
 
 // Write a slice of text.
-void WriteSlice(patternSet_t *patternSet) {
+void WriteSlice(void) {
   const unsigned char charColMasks[] = { 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80 };
   int sliceColOrRow;  // The seed target column / row (depending on direction).
   int sliceIndex;     // A pixel of the target slice we are working on.
@@ -1984,19 +2225,20 @@ void WriteSlice(patternSet_t *patternSet) {
   unsigned char horizontal;
   unsigned char pixelOn;
   unsigned char textDirection;
+  static unsigned char textStaggerFlag[TEXT_BUFFER_SIZE] = "a";
 
   // Initialize textStaggerFlag, if necessary.  This is used for 9 row stagger,
   // which is meant for an 8 pixel font height on a 9 pixel high display.
-  if (patternSet->text.textStaggerFlag[0] == 'a') {
+  if (textStaggerFlag[0] == 'a') {
     for (i = 0; i < TEXT_BUFFER_SIZE; i++) {
-      patternSet->text.textStaggerFlag[i] = rand() % 2;
+      textStaggerFlag[i] = rand() % 2;
     }
   }
 
 
   // Figure out which row or column to place the seed slice into depending on direction.
   horizontal = YES;
-  switch (patternSet->parm.scrollDirection) {
+  switch (DSENUM(PE_SCROLLDIR, dir_e)) {
     case DIR_LEFT:
       sliceColOrRow = tensorWidth - 1;
       break;
@@ -2017,7 +2259,7 @@ void WriteSlice(patternSet_t *patternSet) {
 
   // The pixel buffer correspends to the text buffer, but further subdivides
   // each text array index into a part for every pixel of the font width.
-  pixelBufferSize = strlen(patternSet->text.textBuffer) * FONT_WIDTH;
+  pixelBufferSize = strlen(DSTRING(PE_TEXTBUFFER)) * FONT_WIDTH;
 
   // Trivially, no text in the buffer.
   if (pixelBufferSize == 0) {
@@ -2029,8 +2271,8 @@ void WriteSlice(patternSet_t *patternSet) {
   // Prior to writing out a line, we increment the pixel buffer index to
   // point to the next part of the line to be written.  This depends on
   // scroll direction, text direction.
-  textDirection = patternSet->parm.scrollDirection;
-  if (patternSet->mode.fontDirection == BACKWARDS) {
+  textDirection = DENUM(PE_SCROLLDIR);
+  if (DBOOL(PE_FONTDIR) == BACKWARDS) {
     switch (textDirection) {
       case DIR_LEFT:
         textDirection = DIR_RIGHT;
@@ -2048,31 +2290,31 @@ void WriteSlice(patternSet_t *patternSet) {
         break;
     }
   }
-  if (patternSet->text.prevScrollDir != patternSet->parm.scrollDirection) {
+  if (DENUM(PE_SCROLLDIRLAST) != DENUM(PE_SCROLLDIR)) {
 
     // Looks like we changed direction.
-    patternSet->text.prevScrollDir = patternSet->parm.scrollDirection;
+    DENUM(PE_SCROLLDIRLAST) = DENUM(PE_SCROLLDIR);
 
     // tensorWidth is used here to preserve continuity of the text, even
     // across text buffer wrap-around, when the direction changes (but only
     // really between UP - DOWN or RIGHT - LEFT changes).
     switch(textDirection) {
       case DIR_LEFT:
-        patternSet->text.pixelIndex = (patternSet->text.pixelIndex + tensorWidth) % pixelBufferSize;
+        DINT(PE_PIXELINDEX) = (DINT(PE_PIXELINDEX) + tensorWidth) % pixelBufferSize;
         break;
       case DIR_RIGHT:
-        patternSet->text.pixelIndex = patternSet->text.pixelIndex - tensorWidth;
-        if (patternSet->text.pixelIndex < 0) {
-          patternSet->text.pixelIndex = pixelBufferSize + patternSet->text.pixelIndex;
+        DINT(PE_PIXELINDEX) = DINT(PE_PIXELINDEX) - tensorWidth;
+        if (DINT(PE_PIXELINDEX) < 0) {
+          DINT(PE_PIXELINDEX) = pixelBufferSize + DINT(PE_PIXELINDEX);
         }
         break;
       case DIR_DOWN:
-        patternSet->text.pixelIndex = (patternSet->text.pixelIndex + tensorHeight) % pixelBufferSize;
+        DINT(PE_PIXELINDEX) = (DINT(PE_PIXELINDEX) + tensorHeight) % pixelBufferSize;
         break;
       case DIR_UP:
-        patternSet->text.pixelIndex = patternSet->text.pixelIndex - tensorHeight;
-        if (patternSet->text.pixelIndex < 0) {
-          patternSet->text.pixelIndex = pixelBufferSize + patternSet->text.pixelIndex;
+        DINT(PE_PIXELINDEX) = DINT(PE_PIXELINDEX) - tensorHeight;
+        if (DINT(PE_PIXELINDEX) < 0) {
+          DINT(PE_PIXELINDEX) = pixelBufferSize + DINT(PE_PIXELINDEX);
         }
         break;
       default:
@@ -2084,13 +2326,13 @@ void WriteSlice(patternSet_t *patternSet) {
     switch(textDirection) {
       case DIR_LEFT:
       case DIR_DOWN:
-        patternSet->text.pixelIndex = (patternSet->text.pixelIndex + 1) % pixelBufferSize;
+        DINT(PE_PIXELINDEX) = (DINT(PE_PIXELINDEX) + 1) % pixelBufferSize;
         break;
       case DIR_RIGHT:
       case DIR_UP:
-        patternSet->text.pixelIndex--;
-        if ((patternSet->text.pixelIndex < 0) || (patternSet->text.pixelIndex >= pixelBufferSize)) {
-          patternSet->text.pixelIndex = pixelBufferSize - 1;
+        DINT(PE_PIXELINDEX)--;
+        if ((DINT(PE_PIXELINDEX) < 0) || (DINT(PE_PIXELINDEX) >= pixelBufferSize)) {
+          DINT(PE_PIXELINDEX) = pixelBufferSize - 1;
         }
         break;
       default:
@@ -2100,52 +2342,52 @@ void WriteSlice(patternSet_t *patternSet) {
 
   // Now using the pixel index, we find out where in the text buffer we are.
   // (Integer division.)
-  bufferIndex = patternSet->text.pixelIndex / FONT_WIDTH;
+  bufferIndex = DINT(PE_PIXELINDEX) / FONT_WIDTH;
 
   // And where in that character is the left over from above...
-  charCol = (FONT_WIDTH - 1) - (patternSet->text.pixelIndex % FONT_WIDTH);
+  charCol = (FONT_WIDTH - 1) - (DINT(PE_PIXELINDEX) % FONT_WIDTH);
 
   // What the character is.  What it is, man.
-  character = patternSet->text.textBuffer[bufferIndex];
+  character = DSTRING(PE_TEXTBUFFER)[bufferIndex];
 
   // First we draw the seed's background according to our textStagger mode.
   useRand = 0;
-  switch (patternSet->mode.textStagger) {
+  switch (DSENUM(PE_TEXTMODE, textStaggerMode_e)) {
     case TS_9ROWSTAGGER:
       // Stagger.  For landscape - 8 pixel font on 9 pixels high display.
       // Stagger the letter and fill in the pixel that isn't covered by the
       // letter with our background.
-      sliceIndex = patternSet->parm.textOffset;
-      if (!patternSet->text.textStaggerFlag[bufferIndex]) sliceIndex += 8;
+      sliceIndex = DINT(PE_TEXTOFFSET);
+      if (!textStaggerFlag[bufferIndex]) sliceIndex += 8;
       if (horizontal) {
         sliceIndex = sliceIndex % tensorHeight;
-        SetPixelA(sliceColOrRow, sliceIndex, patternSet->parm.bg, patternSet->fb);
+        SetPixelA(sliceColOrRow, sliceIndex, DCOLOR(PE_BGC), DBUFFER(PE_FRAMEBUFFER));
       } else {
         sliceIndex = sliceIndex % tensorWidth;
-        SetPixelA(sliceIndex, sliceColOrRow, patternSet->parm.bg, patternSet->fb);
+        SetPixelA(sliceIndex, sliceColOrRow, DCOLOR(PE_BGC), DBUFFER(PE_FRAMEBUFFER));
       }
-      useRand = patternSet->text.textStaggerFlag[bufferIndex];
+      useRand = textStaggerFlag[bufferIndex];
       break;
 
     case TS_10ROWBORDER:
       // No stagger. Draw a single line border on top & bottom of text with bg.
-      sliceIndex = patternSet->parm.textOffset - 1;
+      sliceIndex = DINT(PE_TEXTOFFSET) - 1;
       if (horizontal) {
         if (sliceIndex < 0) sliceIndex = tensorHeight - 1;
         sliceIndex %= tensorHeight;
-        SetPixelA(sliceColOrRow, sliceIndex, patternSet->parm.bg, patternSet->fb);
+        SetPixelA(sliceColOrRow, sliceIndex, DCOLOR(PE_BGC), DBUFFER(PE_FRAMEBUFFER));
       } else {
         if (sliceIndex < 0) sliceIndex = tensorWidth - 1;
         sliceIndex %= tensorWidth;
-        SetPixelA(sliceIndex, sliceColOrRow, patternSet->parm.bg, patternSet->fb);
+        SetPixelA(sliceIndex, sliceColOrRow, DCOLOR(PE_BGC), DBUFFER(PE_FRAMEBUFFER));
       }
-      sliceIndex = patternSet->parm.textOffset + 8;
+      sliceIndex = DINT(PE_TEXTOFFSET) + 8;
       if (horizontal) {
         sliceIndex %= tensorHeight;
-        SetPixelA(sliceColOrRow, sliceIndex, patternSet->parm.bg, patternSet->fb);
+        SetPixelA(sliceColOrRow, sliceIndex, DCOLOR(PE_BGC), DBUFFER(PE_FRAMEBUFFER));
       } else {
         sliceIndex %= tensorWidth;
-        SetPixelA(sliceIndex, sliceColOrRow, patternSet->parm.bg, patternSet->fb);
+        SetPixelA(sliceIndex, sliceColOrRow, DCOLOR(PE_BGC), DBUFFER(PE_FRAMEBUFFER));
       }
       break;
 
@@ -2153,11 +2395,11 @@ void WriteSlice(patternSet_t *patternSet) {
       // No stagger, but background on the whole image.
       if (horizontal) {
         for (i = 0; i < tensorHeight; i++) {
-          SetPixelA(sliceColOrRow, i, patternSet->parm.bg, patternSet->fb);
+          SetPixelA(sliceColOrRow, i, DCOLOR(PE_BGC), DBUFFER(PE_FRAMEBUFFER));
         }
       } else {
         for (i = 0; i < tensorWidth; i++) {
-          SetPixelA(i, sliceColOrRow, patternSet->parm.bg, patternSet->fb);
+          SetPixelA(i, sliceColOrRow, DCOLOR(PE_BGC), DBUFFER(PE_FRAMEBUFFER));
         }
       }
       break;
@@ -2170,20 +2412,20 @@ void WriteSlice(patternSet_t *patternSet) {
 
   // Now go through each pixel value to find out what to write.
   for (i = 0; i < FONT_HEIGHT; i++) {
-    if (patternSet->mode.fontFlip) {
+    if (DBOOL(PE_FONTFLIP)) {
       j = (FONT_HEIGHT - 1) - i;
     } else {
       j = i;
     }
     fontPixelIndex = (j * FONT_CHARACTER_COUNT) + character;
-    sliceIndex = i + useRand + patternSet->parm.textOffset;
+    sliceIndex = i + useRand + DINT(PE_TEXTOFFSET);
     pixelOn = myfont[fontPixelIndex] & charColMasks[charCol];
     if (horizontal) {
       sliceIndex = sliceIndex % tensorHeight;
-      SetPixelA(sliceColOrRow, sliceIndex, pixelOn ? patternSet->parm.fg : patternSet->parm.bg, patternSet->fb);
+      SetPixelA(sliceColOrRow, sliceIndex, pixelOn ? DCOLOR(PE_FGC) : DCOLOR(PE_BGC), DBUFFER(PE_FRAMEBUFFER));
     } else {
       sliceIndex = sliceIndex % tensorWidth;
-      SetPixelA(sliceIndex, sliceColOrRow, pixelOn ? patternSet->parm.fg : patternSet->parm.bg, patternSet->fb);
+      SetPixelA(sliceIndex, sliceColOrRow, pixelOn ? DCOLOR(PE_FGC) : DCOLOR(PE_BGC), DBUFFER(PE_FRAMEBUFFER));
     }
   }
 
@@ -2225,19 +2467,19 @@ void RandomDots(color_t color, unsigned int rFreq, unsigned char *buffer) {
 
 
 
-void ColorCycle(parms_t *parms, int fb_mode) {
+void ColorCycle(int fb_mode) {
   color_t colorTemp = cBlack;
   int inpos, inposo;
-  colorCycleModes_e cycleMode = parms->colorCycleMode;
+  colorCycleModes_e cycleMode = DENUM(PE_COLORCYCLEMODE);
   int *cycleSaver;
-  int rainbowInc = parms->rainbowInc;
+  int rainbowInc = DINT(PE_RAINBOWINC);
 
   // Position in the cycle must be saved in the patternSet to ensure reload is
   // identical to save.
   if (fb_mode == FOREGROUND) {
-    cycleSaver = &parms->cycleSaveForegound;
+    cycleSaver = &DINT(PE_CYCLESAVEFG);
   } else {
-    cycleSaver = &parms->cycleSaveBackground;
+    cycleSaver = &DINT(PE_CYCLESAVEBG);
   }
 
   // If the mode changed, we should reset our position in the cycle.
@@ -2325,9 +2567,9 @@ void ColorCycle(parms_t *parms, int fb_mode) {
 
   // We used to return it...
   if (fb_mode == FOREGROUND) {
-    parms->fg = colorTemp;
+    DCOLOR(PE_FGC) = colorTemp;
   } else {
-    parms->bg = colorTemp;
+    DCOLOR(PE_BGC) = colorTemp;
   }
 }
 
@@ -2336,20 +2578,20 @@ void ColorCycle(parms_t *parms, int fb_mode) {
 void InitDisplayTexts(void) {
   int i;
   // DrawBox(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT, cDkGray);
-  for (i = 0; i < DISPLAY_COMMAND_SIZE; i++) {
-    WriteCommand(i, mouseCommands, DISPLAY_COLOR_TEXTS, DISPLAY_COLOR_TEXTSBG);
+  for (i = 0; i < DISPLAYCOMMAND_SIZE; i++) {
+    WriteCommand(i, displayCommand, DISPLAY_COLOR_TEXTS, DISPLAY_COLOR_TEXTSBG);
   }
 
-  for (i = 0; i < HEAD_TEXT_SIZE; i++) {
+  for (i = 0; i < HEADERTEXT_SIZE; i++) {
     WriteLine(headerText[i].text, headerText[i].line, headerText[i].col, DISPLAY_COLOR_TITLES, DISPLAY_COLOR_TITLESBG);
   }
 
-  for (i = 0; i < OTHER_COMMAND_SIZE; i++) {
-    WriteCommand(i, otherCommands, DISPLAY_COLOR_TEXTS, DISPLAY_COLOR_TEXTSBG);
+  for (i = 0; i < OTHERCOMMAND_SIZE; i++) {
+    WriteCommand(i, otherCommand, DISPLAY_COLOR_TEXTS, DISPLAY_COLOR_TEXTSBG);
   }
 
-  for (i = 0; i < OTHER_TEXT_SIZE; i++) {
-    WriteLine(otherText[i].text, otherText[i].line, otherText[i].col, DISPLAY_COLOR_TEXTS, DISPLAY_COLOR_TEXTSBG);
+  for (i = 0; i < DISPLAYTEXT_SIZE; i++) {
+    WriteLine(displayText[i].text, displayText[i].line, displayText[i].col, DISPLAY_COLOR_TEXTS, DISPLAY_COLOR_TEXTSBG);
   }
 }
 
@@ -2359,7 +2601,7 @@ void WriteCommand(int index, const command_t *comList, color_t fg, color_t bg) {
   char * const end = text + sizeof(text);
   int i;
 
-  if (mouseCommands[index].line == -1) {
+  if (displayCommand[index].line == -1) {
     return;
   }
 
@@ -2387,7 +2629,7 @@ void WriteCommand(int index, const command_t *comList, color_t fg, color_t bg) {
 
   if (strlen(text)) ind += snprintf(ind, end - ind, "- ");
 
-  // Add the text from the mouseCommands structure.
+  // Add the text from the displayCommand structure.
   ind += snprintf(ind, end - ind, "%s", comList[index].text);
 
   // Write it.
@@ -2396,71 +2638,68 @@ void WriteCommand(int index, const command_t *comList, color_t fg, color_t bg) {
 
 
 // Update the values of the text on the display window.
-void UpdateInfoDisplay(patternSet_t *patternSet, int setIndex) {
+void UpdateInfoDisplay(void) {
 
   char text[102], mybuff[102];
   int length;
-  parms_t *parms = &patternSet->parm;
-  modes_t *mode = &patternSet->mode;
-  textBuffer_t *scrollText = &patternSet->text;
 
   // First column
   WriteInt(previewFPS, 21, 1, 3);
   WriteInt(guiFPS, 22, 1, 3);
-  WriteBool(mode->cellAutoFun, 23, 1);
-  WriteBool(mode->bouncer, 24, 1);
-  WriteBool(mode->fadeout, 25, 1);
-  WriteBool(mode->diffuse, 26, 1);
-  WriteBool(mode->textSeed, 27, 1);
-  WriteBool(mode->rollOver, 28, 1);
-  WriteBool(mode->scroller, 29, 1);
-  WriteBool(mode->randomDots, 34, 1);
-  WriteBool(mode->cycleForeground, 35, 1);
-  WriteBool(mode->cycleBackground, 36, 1);
+  WriteBool(DBOOL(PE_CELLFUN), 23, 1);
+  WriteBool(DBOOL(PE_BOUNCER), 24, 1);
+  WriteBool(DBOOL(PE_FADE), 25, 1);
+  WriteBool(DBOOL(PE_DIFFUSE), 26, 1);
+  WriteBool(DBOOL(PE_TEXTSEED), 27, 1);
+  WriteBool(DBOOL(PE_ROLLOVER), 28, 1);
+  WriteBool(DBOOL(PE_SCROLL), 29, 1);
+  WriteBool(DBOOL(PE_RANDOMDOT), 34, 1);
+  WriteBool(DBOOL(PE_CYCLEFG), 35, 1);
+  WriteBool(DBOOL(PE_CYCLEBG), 36, 1);
   WriteBool(cyclePatternSets, 37, 1);
-  WriteString(fadeModeText[mode->fadeMode], 38, 1, 3);
-  WriteBool(mode->postRotateZoom, 40, 1);
-  WriteBool(mode->preRotateZoom, 42, 1);
-  WriteBool(mode->alias, 43, 1);
-  WriteBool(mode->multiply, 44, 1);
-  WriteBool(mode->sidebar, 45, 1);
-  WriteBool(mode->clearRed, 46, 1);
-  WriteBool(mode->clearGreen, 47, 1);
-  WriteBool(mode->clearBlue, 48, 1);
-  WriteBool(mode->postImage, 49, 1);
+  WriteString(fadeModeText[DENUM(PE_FADEMODE)], 38, 1, 3);
+  WriteBool(DBOOL(PE_POSTRZ), 40, 1);
+  WriteBool(DBOOL(PE_PRERZ), 42, 1);
+  WriteBool(DBOOL(PE_ALIAS), 43, 1);
+  WriteBool(DBOOL(PE_MULTIPLY), 44, 1);
+  WriteBool(DBOOL(PE_BARSEED), 45, 1);
+  WriteBool(DBOOL(PE_NORED), 46, 1);
+  WriteBool(DBOOL(PE_NOGREEN), 47, 1);
+  WriteBool(DBOOL(PE_NOBLUE), 48, 1);
+  WriteBool(DBOOL(PE_POSTIMAGE), 49, 1);
 
   // Second column
-  WriteFloat(parms->floatIncr, 2, 3, 14, 6);
-  WriteFloat(parms->diffusionCoef, 4, 3, 14, 6);
-  WriteFloat(parms->expand, 5, 3, 14, 6);
-  WriteInt(parms->fadeAllIncr, 6, 3, 14);
-  WriteFloat(parms->preRotationAngle, 7, 3, 14, 6);
-  WriteInt(parms->rainbowInc, 8, 3, 14);
-  WriteFloat(parms->postRotationAngle, 9, 3, 14, 6);
-  WriteFloat(parms->colorMultiplier, 10, 3, 14, 6);
-  WriteFloat(parms->postRotationIncr, 11, 3, 14, 6);
-  WriteFloat((1.0 / parms->dotRandomness), 12, 3, 14, 6);
-  WriteString(colorCycleText[parms->colorCycleMode], 13, 3, 14);
-  WriteString(dirText[parms->scrollDirection], 14, 3, 14);
-  WriteInt(parms->delay, 15, 3, 14);
-  WriteString(namedPalette[parms->foreground].name, 20, 3, 14);
-  WriteString(namedPalette[parms->background].name, 21, 3, 14);
-  WriteInt(setIndex, 26, 3, 14);
-  WriteBool(mode->fontDirection, 35, 4);
-  WriteBool(mode->fontFlip, 36, 4);
-  WriteInt(parms->textOffset, 37, 3, 14);
-  WriteString(staggerText[mode->textStagger], 38, 3, 14);
-  WriteInt((int) strlen(scrollText->textBuffer), 39, 3, 14);
-  WriteString(shiftText[mode->shiftRed], 44, 3, 14);
-  WriteString(shiftText[mode->shiftGreen], 45, 3, 14);
-  WriteString(shiftText[mode->shiftBlue], 46, 3, 14);
-  WriteString(shiftText[mode->shiftCyan], 47, 3, 14);
-  WriteString(shiftText[mode->shiftYellow], 48, 3, 14);
-  WriteString(shiftText[mode->shiftMagenta], 49, 3, 14);
+  WriteFloat(DFLOAT(PE_FLOATINC), 2, 3, 14, 6);
+  WriteFloat(DFLOAT(PE_DIFFUSECOEF), 4, 3, 14, 6);
+  WriteFloat(DFLOAT(PE_EXPAND), 5, 3, 14, 6);
+  WriteInt(DINT(PE_FADEINC), 6, 3, 14);
+  WriteFloat(DFLOAT(PE_PRERZANGLE), 7, 3, 14, 6);
+  WriteInt(DINT(PE_RAINBOWINC), 8, 3, 14);
+  WriteFloat(DFLOAT(PE_POSTRZANGLE), 9, 3, 14, 6);
+  WriteFloat(DFLOAT(PE_MULTIPLYBY), 10, 3, 14, 6);
+  WriteFloat(DFLOAT(PE_POSTRZINC), 11, 3, 14, 6);
+  WriteInt(DINT(PE_RANDOMDOTCOEF), 12, 3, 14);
+  WriteString(colorCycleText[DENUM(PE_COLORCYCLEMODE)], 13, 3, 14);
+  WriteString(dirText[DENUM(PE_SCROLLDIR)], 14, 3, 14);
+  WriteInt(DINT(PE_DELAY), 15, 3, 14);
+  WriteString(namedPalette[DENUM(PE_FGE)].name, 20, 3, 14);
+  WriteString(namedPalette[DENUM(PE_BGE)].name, 21, 3, 14);
+  WriteInt(currentSet, 24, 3, 14);
+  WriteBool(DBOOL(PE_FONTDIR), 35, 4);
+  WriteBool(DBOOL(PE_FONTFLIP), 36, 4);
+  WriteInt(DINT(PE_TEXTOFFSET), 37, 3, 14);
+  WriteString(staggerText[DENUM(PE_TEXTMODE)], 38, 3, 14);
+  WriteInt((int) strlen(DSTRING(PE_TEXTBUFFER)), 39, 3, 14);
+  WriteString(shiftText[DENUM(PE_SHIFTRED)], 44, 3, 14);
+  WriteString(shiftText[DENUM(PE_SHIFTGREEN)], 45, 3, 14);
+  WriteString(shiftText[DENUM(PE_SHIFTBLUE)], 46, 3, 14);
+  WriteString(shiftText[DENUM(PE_SHIFTCYAN)], 47, 3, 14);
+  WriteString(shiftText[DENUM(PE_SHIFTYELLOW)], 48, 3, 14);
+  WriteString(shiftText[DENUM(PE_SHIFTMAGENTA)], 49, 3, 14);
 
   // Show the last 100 bytes of the text buffer.
-  length = strlen(scrollText->textBuffer);
-  strncpy(mybuff, scrollText->textBuffer + (length > 100 ? length - 100 : 0), 101);
+  length = strlen(DSTRING(PE_TEXTBUFFER));
+  strncpy(mybuff, DSTRING(PE_TEXTBUFFER) + (length > 100 ? length - 100 : 0), 101);
   // The extra snprintf takes care of overwriting longer lines.
   snprintf(text, sizeof(text), "%-100s", mybuff );
   WriteLine(text, 52, 0, DISPLAY_COLOR_PARMS, DISPLAY_COLOR_PARMSBG);
@@ -2640,130 +2879,358 @@ void DrawPreviewBorder(int x, int y) {
 }
 
 // Or not.
-void CellFun(patternSet_t *patternSet) {
+void CellFun(void) {
   int x, y;
   color_t pixelColor, oldColor;
 
-  patternSet->parm.cellAutoCount++;
+  DINT(PE_CELLFUNCOUNT)++;
 
   for(x = 0 ; x < tensorWidth ; x++) {
     for(y = 0 ; y < tensorHeight ; y++) {
-      oldColor = GetPixel(x, y, patternSet->fb);
+      oldColor = GetPixel(x, y, DBUFFER(PE_FRAMEBUFFER));
       pixelColor.r = ((x + 1) * (y + 1)) + (oldColor.r / 2);
       pixelColor.g = oldColor.g + pixelColor.r;
-      pixelColor.b = patternSet->parm.cellAutoCount;
-      SetPixel(x, y, pixelColor,  patternSet->fb);
+      pixelColor.b = DINT(PE_CELLFUNCOUNT);
+      SetPixel(x, y, pixelColor,  DBUFFER(PE_FRAMEBUFFER));
     }
   }
 }
 
-void SavePatternSet(SDL_KeyboardEvent *key, patternSet_t *patternSet, int setIndex) {
-  int thiskey = key->keysym.sym;
+// Saves a pattern set to a file.
+void SavePatternSet(char key, int set) {
+  char filename[8] = "";
   FILE *fp;
-  char filename[6];
-  size_t count;
+  int i,j;
 
-  if (((thiskey >= SDLK_0) && (thiskey <= SDLK_9)) ||
-      ((thiskey >= SDLK_a) && (thiskey <= SDLK_z))) {
+  // Filename
+  snprintf(filename, sizeof(filename), "%c.now", key);
+  fprintf(stdout, "Save filename: %s\n", filename);
 
-    snprintf(filename, sizeof(filename), "%s.now", SDL_GetKeyName(key->keysym.sym));
-    printf( "Saving pattern set to file \"%s\"\n", filename);
-
-    fp = fopen(filename, "wb");
-    if (fp == NULL) {
-      perror("Failed to open file.");
-      return;
-    }
-
-    count = fwrite(patternSet, sizeof(patternSet_t), PATTERN_SET_COUNT, fp);
-    printf("Wrote %i records of %lu bytes each for a total of %lu bytes.\n", (int) count, sizeof(patternSet_t), count * sizeof(patternSet_t));
-    printf("fclose(fp) %s.\n", fclose(fp) == 0 ? "succeeded" : "failed");
+  // Open the file for write.
+  fp = fopen(filename, "w");
+  if (!fp) {
+    fprintf(stderr, "Failed to open file for output: %s", filename);
+    return;
   }
+
+  // Write the version information to the file just in case we ever use this.
+  fprintf(fp, "Tensor pattern parameter set file\n");
+  fprintf(fp, "Version %s.%s.%s.%s\n", MAJOR_VERSION, MINOR_VERSION, PATCH_VERSION, PRERELEASE_VERSION);
+
+  // Write the file according to the structure
+  for (i = 0; i < PSET_SIZE; i++) {
+    //~ printf("Saving element %i - %s\n", i, patternSet[i].name);
+    fprintf(fp, "%s ", patternSet[i].name);
+    switch(patternSet[i].type) {
+      case ET_BOOL:
+        fprintf(fp, "%s", SBOOL(i, set) ? "YES" : "NO");
+        break;
+      case ET_INT: case ET_ENUM:
+        fprintf(fp, "%i", SINT(i, set));
+        break;
+      case ET_FLOAT:
+        fprintf(fp, "%f", SFLOAT(i, set));
+        break;
+      case ET_COLOR:
+        fprintf(fp, "%i %i %i %i", SCOLOR(i, set).r, SCOLOR(i, set).g, SCOLOR(i, set).b, SCOLOR(i, set).a);
+        break;
+      case ET_STRING:
+        fprintf(fp, "%s", SSTRING(i, set));
+        break;
+      case ET_BUFFER:
+        for (j = 0; j < patternSet[i].size; j++) {
+          fprintf(fp, "%02x ", SBUFFER(i, set)[j]);
+        }
+        break;
+      default:
+      case ET_INVALID:
+      case ET_COUNT:
+        fprintf(stderr, "Error!\n");
+        break;
+    }
+    fprintf(fp, "\n");
+  }
+  fclose(fp);
 }
 
-void LoadPatternSet(SDL_KeyboardEvent *key, patternSet_t *patternSet, char *fn) {
-  int thiskey;
+// Loads a pattern set from a file.
+void LoadPatternSet(char key, int set) {
+  char filename[8] = "";
   FILE *fp;
-  char filename[6] = "";
-  size_t count;
-  if (fn != NULL) {
+  char *ikey = NULL;
+  char *value = NULL;
+  char *saveptr = NULL;
+  char *tmp = NULL;
+  int keySize = 0;
+  int valueSize = 0;
+  int keyCount = 0;
+  int valueCount = 0;
+  int inChar;
+  int result;
+  typedef enum processing_e { P_KEY, P_VALUE, P_EOL } processing_e;
+  processing_e lookingFor = P_KEY;
+  int i;
+  int parameterIndex = INVALID;
+  int z, y, x, w;
+  color_t temp;
+  char *token;
+  unsigned char * bufferData;
 
-    snprintf(filename, sizeof(filename), "%s", fn);
-    thiskey = SDLK_0;
-  } else {
-    thiskey = key->keysym.sym;
-    snprintf(filename, sizeof(filename), "%s.now", SDL_GetKeyName(key->keysym.sym));
+  // Filename
+  snprintf(filename, sizeof(filename), "%c.now", key);
+  fprintf(stdout, "Load filename: %s\n", filename);
+
+  // Open file.
+  fp = fopen(filename, "r");
+  if (!fp) {
+    fprintf(stderr, "Failed to open file %s\n", filename);
+    return;
   }
-  if (((thiskey >= SDLK_0) && (thiskey <= SDLK_9)) ||
-      ((thiskey >= SDLK_a) && (thiskey <= SDLK_z))) {
 
-    printf( "Loading pattern set from file \"%s\"\n", filename);
+  // Read file.  We'll do it character by character.  At the start of a line,
+  // we read in characters until we hit a space or newline.  If its a space,
+  // we'll check the read characters against known tokens.  If its recognized,
+  // we'll read the rest of the line and process the input, otherwise we'll drop
+  // the rest until the next newline.
+  FOREVER {
 
-    fp = fopen(filename, "rb");
-    if (fp == NULL) {
-      perror("Failed to open file!");
-      return;
+    // Get a character from the file.
+    inChar = fgetc(fp);
+
+    // EOF? Done.
+    if (inChar == EOF) break;
+
+    // If we are currently looking for a key...
+    if (lookingFor == P_KEY) {
+
+      // A space denotes the end of a key.
+      if (inChar == ' ') {
+
+        // Key done, check it against the known keys.
+        for (i = 0; i < PSET_SIZE; i++) {
+          result = strcasecmp(ikey, patternSet[i].name);
+          // If it was found, stop checking.
+          if (result == 0) break;
+        }
+
+        if (result == 0) {
+          // The key was found amongst our known keys.
+          //~ printf("Key found (%i - %s) = \"%s\"\n", i, patternSet[i].name, ikey);
+          parameterIndex = i;  // Save aside the parameter we're working on.
+          keyCount = 0;  // Reset for next key processing.
+          lookingFor = P_VALUE;  // Gather the parameter's value.
+
+        } else {
+          // This is an unknown key.
+          //~ printf("Key unknown - \"%s\"\n", ikey);
+          // Look for the end of the line, ignoring the rest of the characters.
+          lookingFor = P_EOL;
+          keyCount = 0;  // Reset for next key processing.
+        }
+
+      // A newline while looking for a key denotes a valueless key.  There are
+      // none of these, so we'll start looking for the next key.
+      } else if (inChar == '\n') {
+        //~ printf("Key, no value: \"%s\"\n", ikey);
+        keyCount = 0;
+        lookingFor = P_KEY;
+
+      // Any other letter is part of the key we are looking for.  Add it to the
+      // key string.
+      } else {
+
+        // See if there's room.
+        keyCount++;
+        if (keyCount >= keySize) {
+          //~ printf("Allocating key memory. Initial size: %i ", keySize);
+          keySize+=100;  // Allocate memory in chunks.
+          //~ printf("New size: %i\n", keySize);
+          ikey = realloc(ikey, keySize * sizeof(char));
+          if (!ikey) {
+            fprintf(stderr, "Unable to allocate key memory!\n");
+            break;
+          }
+        }
+
+        // Add the character on to the end of the string and terminate it.
+        ikey[keyCount - 1] = inChar;
+        ikey[keyCount] = '\0';
+      }
+
+    // Looking for the end of line, but ignoring the rest of the text.
+    } else if (lookingFor == P_EOL) {
+      if (inChar == '\n') {
+        lookingFor = P_KEY;
+      }
+
+    // Looking for the value
+    } else {
+
+      // Newline denotes end of the value string.  Process the result.
+      if (inChar == '\n') {
+        //~ printf("Value of %s (type %i) = \"%s\"\n", patternSet[parameterIndex].name, patternSet[parameterIndex].type, value);
+        // Process the result by parameter type.
+        switch(patternSet[parameterIndex].type) {
+          case ET_INT: case ET_ENUM:
+            SINT(parameterIndex, set) = atoi(value);
+            break;
+          case ET_BOOL:
+            if (strncasecmp(value, "YES", 3) == 0) {
+              SBOOL(parameterIndex, set) = YES;
+            } else if (strncasecmp(value, "NO", 2) == 0) {
+              SBOOL(parameterIndex, set) = NO;
+            } else {
+              fprintf(stderr, "Ignoring invalid value for boolean parameter %s. (\"%s\")\n", patternSet[parameterIndex].name, value);
+            }
+            break;
+          case ET_FLOAT:
+            SFLOAT(parameterIndex, set) = atof(value);
+            break;
+          case ET_STRING:
+            strncpy(SSTRING(parameterIndex, set), value, patternSet[parameterIndex].size);
+            // Just in case...
+            SSTRING(parameterIndex, set)[patternSet[parameterIndex].size - 1] = '\0';
+            break;
+          case ET_COLOR:
+            z = y = x = w = INVALID;
+            if (sscanf(value, "%i %i %i %i", &z, &y, &x, &w) == 4) {
+              if (z >= 0 && z <= 255 && y >= 0 && y <= 255 &&
+                  x >= 0 && x <= 255 && w >= 0 && w <= 255) {
+                temp.r = z;
+                temp.g = y;
+                temp.b = x;
+                temp.a = w;
+                SCOLOR(parameterIndex, set) = temp;
+              } else {
+                fprintf(stderr, "Ignoring inappropriate format for color of %s: \"%s\"\n", patternSet[parameterIndex].name, value);
+              }
+            } else {
+              fprintf(stderr, "Ignoring inappropriate format for color of %s: \"%s\"\n", patternSet[parameterIndex].name, value);
+            }
+            break;
+          case ET_BUFFER:
+            // Count the input bytes, check for valid values, save aside the data.
+            tmp = value;
+            y = w = 0;
+            token = strtok_r(tmp, " ", &saveptr);
+            bufferData = malloc(patternSet[parameterIndex].size * sizeof(unsigned char));
+            if (!bufferData) {
+              fprintf(stderr, "Couldn't allocate space for buffer input!\n");
+              break;
+            }
+            while (token) {
+              //~ printf("Process token %s as #%i\n", token, y);
+              z = INVALID;
+              x = sscanf(token, "%x", &z);
+              if (z >= 0 && z <= 255 && x == 1) {
+                bufferData[y] = z;
+                y++;
+              } else {
+                w = INVALID;
+                break;
+              }
+              token = strtok_r(NULL, " ", &saveptr);
+            }
+
+            // If the data was valid, apply it to the buffer.
+            if (w != INVALID && y == patternSet[parameterIndex].size) {
+              //~ printf("Valid buffer input found.\n");
+              for (i = 0; i < patternSet[parameterIndex].size; i++) {
+                SBUFFER(parameterIndex, set)[i] = bufferData[i];
+              }
+            } else {
+              fprintf(stderr, "Ignoring invalid buffer data for %s.\n", patternSet[parameterIndex].name);
+            }
+            free(bufferData);
+            break;
+          case ET_COUNT: case ET_INVALID:
+            fprintf(stderr, "What?\n");
+            break;
+        }
+        lookingFor = P_KEY;
+        valueCount = 0;
+
+      // Get the next character and add it to the value string.
+      } else {
+
+        // Check to make sure we have room to add a character.
+        valueCount++;
+        if (valueCount >= valueSize) {
+
+          // Allocate more memory for the value.
+          //~ printf("Allocating value memory. Initial size: %i ", valueSize);
+          valueSize+=100;
+          //~ printf("New size: %i\n", valueSize);
+          value = realloc(value, valueSize * sizeof(char));
+          if (!value) {
+            fprintf(stderr, "Unable to allocate value memory!\n");
+            break;
+          }
+        }
+
+        // Add the character on to the end of the string and terminate it.
+        value[valueCount - 1] = inChar;
+        value[valueCount] = '\0';
+      }
     }
-
-    count = fread(patternSet, sizeof(patternSet_t), PATTERN_SET_COUNT, fp);
-    printf("Read %i records of %lu bytes each for a total of %lu bytes.\n", (int) count, sizeof(patternSet_t), count * sizeof(patternSet_t));
-    printf("fclose(fp) %s.\n", fclose(fp) == 0 ? "succeeded" : "failed");
   }
+
+  free(ikey);
+  free(value);
+  fclose(fp);
 }
 
 
-void DrawSideBar(patternSet_t *patternSet) {
+void DrawSideBar(void) {
   int i;
 
-  switch (patternSet->parm.scrollDirection) {
+  switch (DSENUM(PE_SCROLLDIR, dir_e)) {
     case DIR_LEFT:
       for (i = 0; i < tensorHeight; i++) {
-              SetPixel(tensorWidth - 1, i, patternSet->parm.fg, patternSet->fb);
+              SetPixel(tensorWidth - 1, i, DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
             }
             break;
 
     case DIR_RIGHT:
       for (i = 0; i < tensorHeight; i++) {
-              SetPixel(0, i, patternSet->parm.fg, patternSet->fb);
+              SetPixel(0, i, DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
             }
             break;
 
     case DIR_UP:
       for (i = 0; i < tensorWidth; i++) {
-              SetPixel(i, tensorHeight - 1, patternSet->parm.fg, patternSet->fb);
+              SetPixel(i, tensorHeight - 1, DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
             }
             break;
 
     case DIR_DOWN:
       for (i = 0; i < tensorWidth; i++) {
-              SetPixel(i, 0, patternSet->parm.fg, patternSet->fb);
+              SetPixel(i, 0, DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
             }
             break;
-
-
     default:
       break;
   }
 }
 
-void ClearRed(patternSet_t *currentMoment) {
+void ClearRed(void) {
   int i;
   for(i = 0; i < TENSOR_BYTES; i++) {
-    currentMoment->fb[(i * 3) + 0] = 0;
+    DBUFFER(PE_FRAMEBUFFER)[(i * 3) + 0] = 0;
   }
 }
 
-void ClearGreen(patternSet_t *currentMoment) {
+void ClearGreen(void) {
   int i;
   for(i = 0; i < TENSOR_BYTES; i++) {
-    currentMoment->fb[(i * 3) + 1] = 0;
+    DBUFFER(PE_FRAMEBUFFER)[(i * 3) + 1] = 0;
   }
 }
 
-void ClearBlue(patternSet_t *currentMoment) {
+void ClearBlue(void) {
   int i;
   for(i = 0; i < TENSOR_BYTES; i++) {
-    currentMoment->fb[(i * 3) + 2] = 0;
+    DBUFFER(PE_FRAMEBUFFER)[(i * 3) + 2] = 0;
   }
 }
 
@@ -2788,5 +3255,24 @@ unsigned char SameRectangle(SDL_Rect a, SDL_Rect b) {
     return YES;
   } else {
     return NO;
+  }
+}
+
+// Copy a pattern set to another.  Gotta be done element by element because
+// pattern sets aren't internally contiguous.
+void CopyPatternSet(int dst, int src) {
+  int i;
+  if (src == dst) return;
+  for (i = 0; i < PSET_SIZE; i++) {
+    switch(patternSet[i].type) {
+      case ET_BOOL: SBOOL(i, dst) = SBOOL(i, src); break;
+      case ET_INT: SINT(i, dst) = SINT(i, src); break;
+      case ET_FLOAT: SFLOAT(i, dst) = SFLOAT(i, src); break;
+      case ET_COLOR: SCOLOR(i, dst) = SCOLOR(i, src); break;
+      case ET_ENUM: SENUM(i, dst) = SENUM(i, src); break;
+      case ET_STRING: memcpy(SSTRING(i, dst), SSTRING(i, src), patternSet[i].size); break;
+      case ET_BUFFER: memcpy(SBUFFER(i, dst), SBUFFER(i, src), patternSet[i].size); break;
+      case ET_COUNT: case ET_INVALID: break;
+    }
   }
 }

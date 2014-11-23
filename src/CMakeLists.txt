@@ -11,6 +11,7 @@ add_library(drv-tensor drv-tensor.c)
 
 # Included directories
 include_directories(${PROJECT_BINARY_DIR} ${SDL2_INCLUDE_DIRS} ${SDL2TTF_INCLUDE_DIRS} ${SDL2IMAGE_INCLUDE_DIRS})
+include_directories(${PROJECT_BINARY_DIR}/src)
 
 # Linked Libraries
 target_link_libraries(tensorSDL drv-tensor ${SDL2_LIBRARIES} ${SDL2TTF_LIBRARIES} ${SDL2IMAGE_LIBRARIES} SDL2_gfx)

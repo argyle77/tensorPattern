@@ -1,4 +1,4 @@
-Tensor pattern generation - Version 5.0.0
+Tensor pattern generation - Version 5.1.0
   
 "Frostbyte was an enigineer."
 
@@ -28,7 +28,4 @@ Build instructions:
 
 The binary must be run from the build directory, or the font won't be found.
   ./tensorSDL
-
-Known Issues:
-Some key assignments may interfere with your windowing environment.  Sorry.
 
