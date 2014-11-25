@@ -1,4 +1,4 @@
-Tensor pattern generation - Version 5.1.0
+Tensor pattern generation - Version 6.0.0
   
 "Frostbyte was an enigineer."
 
@@ -7,7 +7,11 @@ window shows the pattern and interface using SDL2.
 
 Controls keys are listed next to the preview. Modes and parameters
 can be adjusted with the mouse and mouse wheel.  Unmodified keys,
-backspace, and esc alter the text buffer.
+backspace, and esc alter the text buffer.  Pattern sets can be saved
+and loaded from disk.  Saved patterns 0-9 are loaded automatically
+at startup.  Images can be loaded by placing them in the build 
+directory and editing the ImageName value in the *.now save files.
+Patterns can be edited live or in the alternate preview.
 
 Required libraries:
 libsdl2-dev (>=2.0.2)

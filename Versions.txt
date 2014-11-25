@@ -62,3 +62,7 @@ Version 5.0:
 
 Version 5.1:
   Re-added save / load feature with text based pattern set files.
+
+Version 6.0:
+  Added alternate preview, reorganized command list.  Images
+  can be loaded by editing *.now files.
