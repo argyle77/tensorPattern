@@ -21,23 +21,19 @@
 #include <string.h>  // memcpy
 #include "version.h"
 #include <errno.h>
+
 // Defines
 #define NO 0
 #define YES 1
 #define OFF 0
 #define ON 1
-#define FOREGROUND 0
-#define BACKGROUND 1
+//~ #define FOREGROUND 0
+//~ #define BACKGROUND 1
 #define FORWARDS 0
 #define BACKWARDS 1
 #define INVALID (-1)
 #define FOREVER for(;;)
-#define CYCLE_FRAME_LIMIT 1000
 #define GUIFRAMEDELAY 25
-
-// Tensor output
-#define USE_TENSOR
-#define DEF_IMAGE "Fbyte-01.jpg"
 
 // Preview window definitions
 #define WINDOW_WIDTH 1024
@@ -58,17 +54,25 @@
 // Initial Values
 #define INITIAL_MULTIPLIER 1.0
 #define INITIAL_DIFF_COEF 0.002
-#define INITIAL_FADEOUT_DEC -1
+#define INITIAL_FADE_INC -1
 #define INITIAL_RAND_MOD 100
 #define INITIAL_RAINBOW_INC 8
 #define INITIAL_EXPAND 1
 #define INITIAL_FLOAT_INC 0.1
 #define INITIAL_POSTROT_INC 0
 #define INITIAL_POSTROT_ANGLE 0
-#define INITIAL_PREROT_ANGLE 10
+#define INITIAL_PREROT_ANGLE 0
 #define INITIAL_DELAY 60
 #define INITIAL_TEXT "Frostbyte was an engineer. "
 #define INITIAL_DIR DIR_LEFT
+#define INITIAL_PREEXPAND 1.0
+#define INITIAL_FRAMECYCLECOUNT 1000
+#define INITIAL_IMAGE_ANGLE 0.0
+#define INITIAL_IMAGE_EXPAND 1.0
+#define INITIAL_IMAGE_INC 0.0
+#define INITIAL_IMAGE_XOFFSET 0.5
+#define INITIAL_IMAGE_YOFFSET 0.5
+#define INITIAL_IMAGE "Fbyte-01.jpg"
 
 // Color plane flags - I'm unsatified with the way the cym color planes worked
 // out.  I should be using a different color space or something.
@@ -138,12 +142,14 @@ const color_t cBlack = CD_BLACK;
 #define DISPLAY_COLOR_TEXTSBG cBlack
 #define DISPLAY_COLOR_TEXTS_HL cBlack
 #define DISPLAY_COLOR_TEXTSBG_HL cWhite
-
-
+#define DISPLAY_COLOR_TBUF cRed
+#define DISPLAY_COLOR_TBUFBG cBlack
+#define DISPLAY_COLOR_INFO cGreen
+#define DISPLAY_COLOR_INFOBG cBlack
 
 // Named color palette structures and constants
 
-// If you change color_e, change the namedPalette array too.
+// If you change color_e, change namedPalette and colorsText too.
 typedef enum color_e {
   CE_INVALID = -1,
   CE_RED = 0, CE_ORANGE, CE_YELLOW, CE_CHARTREUSE, CE_GREEN, CE_AQUA, CE_CYAN,
@@ -151,37 +157,36 @@ typedef enum color_e {
   CE_GRAY, CE_DKGRAY, CE_BLACK,
   CE_COUNT // Last.
 } color_e;
-
-// Palette typedef - a string name, the color constant, and the array index /
-// enumeration for verification.
+// Palette typedef - the enumeration, the color constant
 typedef struct palette_t {
-  char *name;
-  color_t color;
   color_e index;
+  color_t color;
 } palette_t;
-
-// This palette order should line up with color_e enumeration values.
+// This palette order should line up with color_e enumeration values, and colorsText.
 const palette_t namedPalette[] = {
-  { "red", CD_RED, CE_RED },
-  { "orange", CD_ORANGE, CE_ORANGE },
-  { "yellow", CD_YELLOW, CE_YELLOW },
-  { "chartreuse", CD_CHARTREUSE, CE_CHARTREUSE },
-  { "green", CD_GREEN, CE_GREEN },
-  { "aqua", CD_AQUA, CE_AQUA },
-  { "cyan", CD_CYAN, CE_CYAN },
-  { "azure", CD_AZURE, CE_AZURE },
-  { "blue", CD_BLUE, CE_BLUE },
-  { "violet", CD_VIOLET, CE_VIOLET },
-  { "magenta", CD_MAGENTA, CE_MAGENTA },
-  { "rose", CD_ROSE, CE_ROSE },
-  { "white", CD_WHITE, CE_WHITE },
-  { "lt gray", CD_LTGRAY, CE_LTGRAY },
-  { "gray", CD_GRAY, CE_GRAY },
-  { "dk gray", CD_DKGRAY, CE_DKGRAY },
-  { "black", CD_BLACK, CE_BLACK }
+  { CE_RED,        CD_RED },
+  { CE_ORANGE,     CD_ORANGE },
+  { CE_YELLOW,     CD_YELLOW },
+  { CE_CHARTREUSE, CD_CHARTREUSE },
+  { CE_GREEN,      CD_GREEN },
+  { CE_AQUA,       CD_AQUA },
+  { CE_CYAN,       CD_CYAN },
+  { CE_AZURE,      CD_AZURE },
+  { CE_BLUE,       CD_BLUE },
+  { CE_VIOLET,     CD_VIOLET },
+  { CE_MAGENTA,    CD_MAGENTA },
+  { CE_ROSE,       CD_ROSE },
+  { CE_WHITE,      CD_WHITE },
+  { CE_LTGRAY,     CD_LTGRAY },
+  { CE_GRAY,       CD_GRAY },
+  { CE_DKGRAY,     CD_DKGRAY },
+  { CE_BLACK,      CD_BLACK }
 };
 #define NAMEDPALETTE_SIZE (sizeof(namedPalette) / sizeof(palette_t))
-
+const char *colorsText[] = { "red", "orange", "yellow", "chartreuse", "green",
+  "aqua", "cyan", "azure", "blue", "violet", "magenta", "rose", "white",
+  "lt gray", "gray", "dk gray", "black" };
+#define COLORSTEXT_SIZE (sizeof(colorsText) / sizeof(const char *))
 
 // Enumerations and Strings.
 
@@ -192,6 +197,7 @@ typedef enum dir_e {
   DIR_COUNT // Last.
 } dir_e;
 const char *dirText[] = { "Up", "Left", "Down", "Right" };
+#define DIRTEXT_SIZE (sizeof(dirText) / sizeof(const char *))
 
 // Fade modes
 typedef enum fadeModes_e{
@@ -200,6 +206,7 @@ typedef enum fadeModes_e{
   FM_COUNT // Last.
 } fadeModes_e;
 const char *fadeModeText[] = { "Limited", "Modular" };
+#define FADEMODETEXT_SIZE (sizeof(fadeModeText) / sizeof(const char *))
 
 // Color plane shift modes.
 typedef enum shiftModes_e {
@@ -208,27 +215,60 @@ typedef enum shiftModes_e {
   SM_COUNT // Last.
 } shiftModes_e;
 const char *shiftText[] = { "Hold", "Up", "Left", "Down", "Right" };
+#define SHIFTTEXT_SIZE (sizeof(shiftText) / sizeof(const char *))
 
 // Text background modes
-typedef enum textStaggerMode_e {
+typedef enum textMode_e {
   TS_INVALID = -1,
   TS_8ROW = 0, TS_9ROWSTAGGER, TS_10ROWBORDER, TS_FULLBG,
   TS_COUNT // Last.
-} textStaggerMode_e;
-char *staggerText[] = { "8 Row", "9RowStagger", "10RowBorder", "FullBG" };
+} textMode_e;
+const char *textModeText[] = { "8 Row", "9 Row Stag", "10 Row", "Full BG" };
+#define TEXTMODETEXT_SIZE (sizeof(textModeText) / sizeof(const char *))
 
 // Color palette cycle modes
 typedef enum colorCycleModes_e{
   CM_INVALID = -1,
-  CM_RGB = 0, CM_CMY, CM_SECONDARY, CM_TERTIARY, CM_GRAY, CM_RAINBOW, CM_RANDOM,
+  CM_NONE = 0, CM_RGB, CM_CMY, CM_SECONDARY, CM_TERTIARY, CM_GRAY, CM_RAINBOW,
+  CM_RANDOM, CM_FGBGFADE,
   CM_COUNT // Last.
 } colorCycleModes_e;
-const char *colorCycleText[] = { "R-G-B", "C-M-Y", "Secondary", "Tertiary", "Gray", "Rainbow", "Random" };
+const char *colorCycleText[] = { "None", "R-G-B", "C-M-Y", "Secondary", "Tertiary", "Graystep", "Rainbow", "Random", "FG-BG Fade" };
+#define COLORCYCLETEXT_SIZE (sizeof(colorCycleText) / sizeof(const char *))
+
+typedef enum operateOn_e {
+  OO_INVALID = -1,
+  OO_CURRENT = 0, OO_ALTERNATE = 1,
+  OO_COUNT // Last
+} operateOn_e;
+const char *operateText[] = { "Live", "Alternate" };
+#define OPERATETEXT_SIZE (sizeof(operateText) / sizeof(const char *))
+
+// Connect enumeration types to their strings.
+typedef enum enums_e {
+  E_INVALID = -1,
+  E_DIRECTIONS = 0, E_FADEMODES, E_SHIFTMODES, E_TEXTMODES, E_COLORCYCLES, E_COLORS, E_OPERATE,
+  E_COUNT // Last.
+} enums_e;
+typedef struct enums_t {
+  enums_e type;
+  const char **texts;
+} enums_t;
+const enums_t enumerations[] = {
+  { E_DIRECTIONS, dirText},
+  { E_FADEMODES, fadeModeText},
+  { E_SHIFTMODES, shiftText},
+  { E_TEXTMODES, textModeText},
+  { E_COLORCYCLES, colorCycleText},
+  { E_COLORS, colorsText },
+  { E_OPERATE, operateText },
+};
+#define ENUMERATIONS_SIZE (sizeof(enumerations) / sizeof(enums_t))
 
 // A way to keep track of palette size.
 typedef struct cyclePalette_t {
   const color_e *palette;
-  int size;
+  const int size;
 } cyclePalette_t;
 
 // Some color palettes for cycling
@@ -264,22 +304,26 @@ typedef enum patternElement_e {
   PE_INVALID = -1,
   // Modes
   PE_CELLFUN = 0, PE_BOUNCER, PE_FADE, PE_DIFFUSE, PE_ROLLOVER,
-  PE_SCROLL, PE_HBARS, PE_VBARS, PE_FGCOLORALL, PE_BGCOLORALL, PE_RANDOMDOT,
-  PE_CYCLEFG, PE_CYCLEBG, PE_FADEMODE, PE_POSTRZ, PE_PRERZ, PE_ALIAS,
+  PE_SCROLL, PE_HBARS, PE_VBARS, PE_FGCOLORALL, PE_BGCOLORALL, PE_IMAGEALL,
+  PE_RANDOMDOT, PE_FADEMODE, PE_POSTRZ, PE_PRERZ, PE_ALIAS,
   PE_MULTIPLY, PE_BARSEED, PE_NORED, PE_NOGREEN, PE_NOBLUE, PE_SHIFTRED,
   PE_SHIFTGREEN, PE_SHIFTBLUE, PE_SHIFTCYAN, PE_SHIFTYELLOW, PE_SHIFTMAGENTA,
   PE_POSTIMAGE,
   // Parameters
   PE_FGE, PE_BGE, PE_FADEINC, PE_DIFFUSECOEF, PE_SCROLLDIR, PE_RANDOMDOTCOEF,
-  PE_COLORCYCLEMODE, PE_RAINBOWINC, PE_EXPAND, PE_FLOATINC, PE_POSTRZANGLE,
-  PE_PRERZANGLE, PE_POSTRZINC, PE_MULTIPLYBY, PE_DELAY,
+  PE_FGCYCLE, PE_BGCYCLE, PE_FGRAINBOW, PE_BGRAINBOW, PE_POSTEXP, PE_FLOATINC,
+  PE_POSTRZANGLE, PE_POSTRZINC, PE_MULTIPLYBY, PE_DELAY,
   // Internal parameters
-  PE_CYCLESAVEFG, PE_CYCLESAVEBG, PE_FGC, PE_BGC, PE_CELLFUNCOUNT,
+  PE_CYCLESAVEFG, PE_CYCLESAVEBG, PE_FGC, PE_BGC, PE_CELLFUNCOUNT, PE_BOUNCESCR,
   // Text
   PE_TEXTBUFFER, PE_TEXTMODE, PE_FONTFLIP, PE_FONTDIR, PE_TEXTOFFSET,
   PE_TEXTINDEX, PE_PIXELINDEX, PE_SCROLLDIRLAST, PE_TEXTSEED,
   // Frame buffer
   PE_FRAMEBUFFER,
+  //
+  PE_PRERZANGLE, PE_PRERZALIAS, PE_PRERZINC, PE_PRERZEXPAND, PE_FRAMECOUNT,
+  PE_IMAGEANGLE, PE_IMAGEALIAS, PE_IMAGEINC, PE_IMAGEEXP,
+  PE_IMAGEXOFFSET, PE_IMAGEYOFFSET, PE_IMAGENAME,
   PE_COUNT // LAst
 } patternElement_e;
 
@@ -310,6 +354,7 @@ typedef struct patternElement_t {
   const elementType_e type;      // Element type.
   const default_u initial;       // Initial value.
   const int size;                // Size of array elements (string, buffer)
+  const enums_e etype;            // Enumeration type for ET_ENUM.
   void *data;                    // Pointer to the element's data.  Allocated later.
 } patternElement_t;
 
@@ -325,10 +370,9 @@ patternElement_t patternSet[] = {
   { PE_VBARS,       "Vbars",       ET_BOOL,   {.b = NO} },
   { PE_FGCOLORALL,  "FGColorAll",  ET_BOOL,   {.b = NO} },
   { PE_BGCOLORALL,  "BGColorAll",  ET_BOOL,   {.b = NO} },
+  { PE_IMAGEALL,    "ImageAll",    ET_BOOL,   {.b = NO} },
   { PE_RANDOMDOT,   "RandomDots",  ET_BOOL,   {.b = NO} },
-  { PE_CYCLEFG,     "CycleFG",     ET_BOOL,   {.b = YES} },
-  { PE_CYCLEBG,     "CycleBG",     ET_BOOL,   {.b = NO} },
-  { PE_FADEMODE,    "FadeMode",    ET_ENUM,   {.e = FM_LIMIT} },
+  { PE_FADEMODE,    "FadeMode",    ET_ENUM,   {.e = FM_LIMIT}, .etype = E_FADEMODES },
   { PE_POSTRZ,      "PostRotZoom", ET_BOOL,   {.b = NO} },
   { PE_PRERZ,       "PreRotZoom",  ET_BOOL,   {.b = NO} },
   { PE_ALIAS,       "AntiAlias",   ET_BOOL,   {.b = NO} },
@@ -337,25 +381,26 @@ patternElement_t patternSet[] = {
   { PE_NORED,       "NoRed",       ET_BOOL,   {.b = NO} },
   { PE_NOGREEN,     "NoGreen",     ET_BOOL,   {.b = NO} },
   { PE_NOBLUE,      "NoBlue",      ET_BOOL,   {.b = NO} },
-  { PE_SHIFTRED,    "ShiftRed",    ET_ENUM,   {.e = SM_HOLD} },
-  { PE_SHIFTGREEN,  "ShiftGreen",  ET_ENUM,   {.e = SM_HOLD} },
-  { PE_SHIFTBLUE,   "ShiftBlue",   ET_ENUM,   {.e = SM_HOLD} },
-  { PE_SHIFTCYAN,   "ShiftCyan",   ET_ENUM,   {.e = SM_HOLD} },
-  { PE_SHIFTYELLOW, "ShiftYellow", ET_ENUM,   {.e = SM_HOLD} },
-  { PE_SHIFTMAGENTA,"ShiftMagenta",ET_ENUM,   {.e = SM_HOLD} },
+  { PE_SHIFTRED,    "ShiftRed",    ET_ENUM,   {.e = SM_HOLD}, .etype = E_SHIFTMODES },
+  { PE_SHIFTGREEN,  "ShiftGreen",  ET_ENUM,   {.e = SM_HOLD}, .etype = E_SHIFTMODES },
+  { PE_SHIFTBLUE,   "ShiftBlue",   ET_ENUM,   {.e = SM_HOLD}, .etype = E_SHIFTMODES },
+  { PE_SHIFTCYAN,   "ShiftCyan",   ET_ENUM,   {.e = SM_HOLD}, .etype = E_SHIFTMODES },
+  { PE_SHIFTYELLOW, "ShiftYellow", ET_ENUM,   {.e = SM_HOLD}, .etype = E_SHIFTMODES },
+  { PE_SHIFTMAGENTA,"ShiftMagenta",ET_ENUM,   {.e = SM_HOLD}, .etype = E_SHIFTMODES },
   { PE_POSTIMAGE,   "PostImage",   ET_BOOL,   {.b = NO} },
-  { PE_FGE,         "FGColorE",    ET_ENUM,   {.e = CE_RED} },
-  { PE_BGE,         "BGColorE",    ET_ENUM,   {.e = CE_BLACK} },
-  { PE_FADEINC,     "FadeIncr",    ET_INT,    {.i = INITIAL_FADEOUT_DEC} },
+  { PE_FGE,         "FGColorE",    ET_ENUM,   {.e = CE_RED}, .etype = E_COLORS },
+  { PE_BGE,         "BGColorE",    ET_ENUM,   {.e = CE_BLACK}, .etype = E_COLORS },
+  { PE_FADEINC,     "FadeIncr",    ET_INT,    {.i = INITIAL_FADE_INC} },
   { PE_DIFFUSECOEF, "DiffuseCoef", ET_FLOAT,  {.f = INITIAL_DIFF_COEF} },
-  { PE_SCROLLDIR,   "ScrollDir",   ET_ENUM,   {.e = INITIAL_DIR} },
+  { PE_SCROLLDIR,   "ScrollDir",   ET_ENUM,   {.e = INITIAL_DIR}, .etype = E_DIRECTIONS },
   { PE_RANDOMDOTCOEF,"DotCoef",    ET_INT,    {.i = INITIAL_RAND_MOD} },
-  { PE_COLORCYCLEMODE,"CycleMode", ET_ENUM,   {.e = CM_RAINBOW} },
-  { PE_RAINBOWINC,  "RainbowInc",  ET_INT,    {.i = INITIAL_RAINBOW_INC} },
-  { PE_EXPAND,      "Expansion",   ET_FLOAT,  {.f = INITIAL_EXPAND} },
+  { PE_FGCYCLE,     "FGCycleMode", ET_ENUM,   {.e = CM_NONE}, .etype = E_COLORCYCLES },
+  { PE_BGCYCLE,     "BGCycleMode", ET_ENUM,   {.e = CM_NONE}, .etype = E_COLORCYCLES },
+  { PE_FGRAINBOW,   "RainbowFG",   ET_INT,    {.i = INITIAL_RAINBOW_INC} },
+  { PE_BGRAINBOW,   "RainbowBG",   ET_INT,    {.i = INITIAL_RAINBOW_INC} },
+  { PE_POSTEXP,     "Expansion",   ET_FLOAT,  {.f = INITIAL_EXPAND} },
   { PE_FLOATINC,    "FloatInc",    ET_FLOAT,  {.f = INITIAL_FLOAT_INC} },
   { PE_POSTRZANGLE, "PostRotAngle",ET_FLOAT,  {.f = INITIAL_POSTROT_ANGLE} },
-  { PE_PRERZANGLE,  "PreRotAngle", ET_FLOAT,  {.f = INITIAL_PREROT_ANGLE} },
   { PE_POSTRZINC,   "PostRotInc",  ET_FLOAT,  {.f = INITIAL_POSTROT_INC} },
   { PE_MULTIPLYBY,  "MultiplyBy",  ET_FLOAT,  {.f = INITIAL_MULTIPLIER} },
   { PE_DELAY,       "Delay",       ET_INT,    {.i = INITIAL_DELAY} },
@@ -364,62 +409,74 @@ patternElement_t patternSet[] = {
   { PE_FGC,         "FGColorC",    ET_COLOR,  {.c = CD_RED} },
   { PE_BGC,         "BGColorC",    ET_COLOR,  {.c = CD_BLACK} },
   { PE_CELLFUNCOUNT,"CellFunCt",   ET_INT,    {.i = 0} },
+  { PE_BOUNCESCR,   "BounceScr",   ET_ENUM,   {.e = DIR_UP}, .etype = E_DIRECTIONS },
   { PE_TEXTBUFFER,  "TextBuffer",  ET_STRING, {.s = INITIAL_TEXT}, TEXT_BUFFER_SIZE },
-  { PE_TEXTMODE,    "TextMode",    ET_ENUM,   {.e = TS_FULLBG} },
+  { PE_TEXTMODE,    "TextMode",    ET_ENUM,   {.e = TS_FULLBG}, .etype = E_TEXTMODES },
   { PE_FONTFLIP,    "FontFlip",    ET_BOOL,   {.b = NO } },
   { PE_FONTDIR,     "FontDir",     ET_BOOL,   {.b = FORWARDS} },
   { PE_TEXTOFFSET,  "TextOffset",  ET_INT,    {.i = TENSOR_HEIGHT / 3 - 1} },
   { PE_TEXTINDEX,   "TextIndex",   ET_INT,    {.i = sizeof(INITIAL_TEXT) - 1} },
   { PE_PIXELINDEX,  "PixelIndex",  ET_INT,    {.i = INVALID} },
-  { PE_SCROLLDIRLAST,"ScrollDirLast",ET_ENUM, {.e = INITIAL_DIR} },
+  { PE_SCROLLDIRLAST,"ScrollDirLast",ET_ENUM, {.e = INITIAL_DIR}, .etype = E_DIRECTIONS },
   { PE_TEXTSEED,    "TextSeed",    ET_BOOL,   {.b = YES} },
-  { PE_FRAMEBUFFER, "FrameBuffer", ET_BUFFER, .size = TENSOR_BYTES }
+  { PE_FRAMEBUFFER, "FrameBuffer", ET_BUFFER, .size = TENSOR_BYTES },
+  { PE_PRERZANGLE,  "PreRotAngle", ET_FLOAT,  {.f = INITIAL_PREROT_ANGLE} },
+  { PE_PRERZALIAS,  "PreRotAlias", ET_BOOL,   {.b = NO} },
+  { PE_PRERZINC,    "PreRotInc",   ET_FLOAT,  {.f = INITIAL_POSTROT_INC} },
+  { PE_PRERZEXPAND, "PreRotExp",   ET_FLOAT,  {.f = INITIAL_PREEXPAND} },
+  { PE_FRAMECOUNT,  "CycleFCount", ET_INT,    {.i = INITIAL_FRAMECYCLECOUNT} },
+  { PE_IMAGEANGLE,  "ImageAngle",  ET_FLOAT,  {.f = INITIAL_IMAGE_ANGLE} },
+  { PE_IMAGEALIAS,  "ImageAlias",  ET_BOOL,   {.b = NO} },
+  { PE_IMAGEINC,    "ImageInc",    ET_FLOAT,  {.f = INITIAL_IMAGE_INC} },
+  { PE_IMAGEEXP,    "ImageExp",    ET_FLOAT,  {.f = INITIAL_IMAGE_EXPAND} },
+  { PE_IMAGEXOFFSET,"ImageXOffset",ET_FLOAT,  {.f = INITIAL_IMAGE_XOFFSET} },
+  { PE_IMAGEYOFFSET,"ImageYOffset",ET_FLOAT,  {.f = INITIAL_IMAGE_YOFFSET} },
+  { PE_IMAGENAME,   "ImageName",   ET_STRING, {.s = INITIAL_IMAGE}, 1024},
 };
 #define PSET_SIZE (sizeof(patternSet) / sizeof(patternElement_t))
 #define GLOBAL_PATTERN_ELEMENT_ARRAY patternSet
 
 // Data element access macros - with patternElement array, element, and set selection.
-#define ABOOL(varName, varElement, varSet) ( ((unsigned char *)varName[varElement].data)[varSet] )
-#define AINT(varName, varElement, varSet) ( ((int *)varName[varElement].data)[varSet] )
-#define AFLOAT(varName, varElement, varSet) ( ((float *)varName[varElement].data)[varSet] )
-#define ACOLOR(varName, varElement, varSet) ( ((color_t *)varName[varElement].data)[varSet] )
-#define AENUM(varName, varElement, varSet) ( ((int *)varName[varElement].data)[varSet] )
-#define ASENUM(varName, varElement, varSet, varType) ( ((varType *)varName[varElement].data)[varSet] )
-#define ASTRING(varName, varElement, varSet) ( &((char *)varName[varElement].data)[varSet * varName[varElement].size] )
-#define ABUFFER(varName, varElement, varSet) ( &((unsigned char *)varName[varElement].data)[varSet * varName[varElement].size] )
+#define ABOOL(varName, varSet, varElement) ( ((unsigned char *)varName[varElement].data)[varSet] )
+#define AINT(varName, varSet, varElement) ( ((int *)varName[varElement].data)[varSet] )
+#define AFLOAT(varName, varSet, varElement) ( ((float *)varName[varElement].data)[varSet] )
+#define ACOLOR(varName, varSet, varElement) ( ((color_t *)varName[varElement].data)[varSet] )
+#define AENUM(varName, varSet, varElement) ( ((int *)varName[varElement].data)[varSet] )
+#define ASENUM(varName, varSet, varElement, varType) ( ((varType *)varName[varElement].data)[varSet] )
+#define ASTRING(varName, varSet, varElement) ( &((char *)varName[varElement].data)[varSet * varName[varElement].size] )
+#define ABUFFER(varName, varSet, varElement) ( &((unsigned char *)varName[varElement].data)[varSet * varName[varElement].size] )
 
 // Data element access macros - using the global patternElement array, with element and set selection.
-#define SBOOL(varElement, varSet) ( ABOOL(GLOBAL_PATTERN_ELEMENT_ARRAY, varElement, varSet) )
-#define SINT(varElement, varSet) ( AINT(GLOBAL_PATTERN_ELEMENT_ARRAY, varElement, varSet) )
-#define SFLOAT(varElement, varSet) ( AFLOAT(GLOBAL_PATTERN_ELEMENT_ARRAY, varElement, varSet) )
-#define SCOLOR(varElement, varSet) ( ACOLOR(GLOBAL_PATTERN_ELEMENT_ARRAY, varElement, varSet) )
-#define SENUM(varElement, varSet) ( AENUM(GLOBAL_PATTERN_ELEMENT_ARRAY, varElement, varSet) )
-#define SSENUM(varElement, varSet, varType) ( ASENUM(GLOBAL_PATTERN_ELEMENT_ARRAY, varElement, varSet, varType) )
-#define SSTRING(varElement, varSet) ( ASTRING(GLOBAL_PATTERN_ELEMENT_ARRAY, varElement, varSet) )
-#define SBUFFER(varElement, varSet) ( ABUFFER(GLOBAL_PATTERN_ELEMENT_ARRAY, varElement, varSet) )
+#define SBOOL(varSet, varElement) ( ABOOL(GLOBAL_PATTERN_ELEMENT_ARRAY, varSet, varElement) )
+#define SINT(varSet, varElement) ( AINT(GLOBAL_PATTERN_ELEMENT_ARRAY, varSet, varElement) )
+#define SFLOAT(varSet, varElement) ( AFLOAT(GLOBAL_PATTERN_ELEMENT_ARRAY, varSet, varElement) )
+#define SCOLOR(varSet, varElement) ( ACOLOR(GLOBAL_PATTERN_ELEMENT_ARRAY, varSet, varElement) )
+#define SENUM(varSet, varElement) ( AENUM(GLOBAL_PATTERN_ELEMENT_ARRAY, varSet, varElement) )
+#define SSENUM(varSet, varElement, varType) ( ASENUM(GLOBAL_PATTERN_ELEMENT_ARRAY, varSet, varElement, varType) )
+#define SSTRING(varSet, varElement) ( ASTRING(GLOBAL_PATTERN_ELEMENT_ARRAY, varSet, varElement) )
+#define SBUFFER(varSet, varElement) ( ABUFFER(GLOBAL_PATTERN_ELEMENT_ARRAY, varSet, varElement) )
 
 // Data element access macros - using the global patternElement array and the currentSet, with element selection.
-#define DBOOL(varElement) ( SBOOL(varElement, currentSet) )
-#define DINT(varElement) ( SINT(varElement, currentSet) )
-#define DFLOAT(varElement) ( SFLOAT(varElement, currentSet) )
-#define DCOLOR(varElement) ( SCOLOR(varElement, currentSet) )
-#define DENUM(varElement) ( SENUM(varElement, currentSet) )
-#define DSENUM(varElement, varType) ( SSENUM(varElement, currentSet, varType) )
-#define DSTRING(varElement) ( SSTRING(varElement, currentSet) )
-#define DBUFFER(varElement) ( SBUFFER(varElement, currentSet) )
+#define DBOOL(varElement) ( SBOOL(currentSet, varElement) )
+#define DINT(varElement) ( SINT(currentSet, varElement) )
+#define DFLOAT(varElement) ( SFLOAT(currentSet, varElement) )
+#define DCOLOR(varElement) ( SCOLOR(currentSet, varElement) )
+#define DENUM(varElement) ( SENUM(currentSet, varElement) )
+#define DSENUM(varElement, varType) ( SSENUM(currentSet, varElement, varType) )
+#define DSTRING(varElement) ( SSTRING(currentSet, varElement) )
+#define DBUFFER(varElement) ( SBUFFER(currentSet, varElement) )
 
 // User Commands
 typedef enum command_e {
   COM_INVALID = -1, COM_NONE = 0,
   COM_CELL = 1, COM_BOUNCE, COM_FADE, COM_DIFFUSE, COM_TEXT, COM_ROLL,
-  COM_SCROLL, COM_HBAR, COM_VBAR, COM_FGALL, COM_BGALL, COM_RDOT, COM_FGCYCLE,
-  COM_BGCYCLE, COM_CYCLESET, COM_FADEMODE, COM_TEXTRESET, COM_POSTROTATE,
+  COM_SCROLL, COM_HBAR, COM_VBAR, COM_FGALL, COM_BGALL, COM_RDOT,
+  COM_CYCLESET, COM_FADEMODE, COM_TEXTRESET, COM_POSTROTATE,
   COM_MODEOFF, COM_PREROTATE, COM_AA, COM_MULTIPLY, COM_SIDEBAR, COM_NORED,
   COM_NOGREEN, COM_NOBLUE, COM_IMAGE, COM_STEP_INC, COM_STEP_DEC, COM_STEP_RST,
   COM_DIFFUSE_INC, COM_DIFFUSE_DEC, COM_DIFFUSE_RST, COM_EXPAND_INC,
   COM_EXPAND_DEC, COM_EXPAND_RST, COM_FADE_INC, COM_FADE_DEC, COM_FADE_RST,
-  COM_PREROT_INC, COM_PREROT_DEC, COM_PREROT_RST, COM_RAINDBOW_INC,
-  COM_RAINDBOW_DEC, COM_RAINDBOW_RST, COM_POSTROT_INC, COM_POSTROT_DEC,
+  COM_PREROT_INC, COM_PREROT_DEC, COM_PREROT_RST, COM_POSTROT_INC, COM_POSTROT_DEC,
   COM_POSTROT_RST, COM_MULT_INC, COM_MULT_DEC, COM_MULT_RST, COM_POSTSPEED_INC,
   COM_POSTSPEED_DEC, COM_POSTSPEED_RST, COM_RANDOM_INC, COM_RANDOM_DEC,
   COM_RANDOM_RST, COM_CYCLE_MODE, COM_CYCLE_MODE_DOWN,
@@ -435,7 +492,25 @@ typedef enum command_e {
   COM_LOADSET4, COM_LOADSET5, COM_LOADSET6, COM_LOADSET7, COM_LOADSET8,
   COM_LOADSET9, COM_COPYSET0, COM_COPYSET1, COM_COPYSET2, COM_COPYSET3,
   COM_COPYSET4, COM_COPYSET5, COM_COPYSET6, COM_COPYSET7, COM_COPYSET8,
-  COM_COPYSET9,
+  COM_COPYSET9, COM_PREROTINC_RST, COM_PREROTINC_INC, COM_PREROTINC_DEC,
+  COM_PREEXP_INC, COM_PREEXP_DEC, COM_PREEXP_RST, COM_PREALIAS,
+  COM_RP_RST, COM_GP_RST, COM_BP_RST, COM_MP_RST, COM_YP_RST, COM_CP_RST,
+  COM_FGRAINBOW_INC, COM_FGRAINBOW_DEC, COM_FGRAINBOW_RST,
+  COM_BGRAINBOW_INC, COM_BGRAINBOW_DEC, COM_BGRAINBOW_RST,
+  COM_FGCYCLE_RST, COM_FGCYCLE_UP, COM_FGCYCLE_DOWN,
+  COM_BGCYCLE_RST, COM_BGCYCLE_UP, COM_BGCYCLE_DOWN,
+  COM_IMAGEALL,
+  COM_FCOUNT_RST, COM_FCOUNT_INC, COM_FCOUNT_DEC,
+  COM_IMANGLE_RST, COM_IMANGLE_INC, COM_IMANGLE_DEC,
+  COM_IMINC_RST, COM_IMINC_INC, COM_IMINC_DEC,
+  COM_IMEXP_RST, COM_IMEXP_INC, COM_IMEXP_DEC, COM_IMALIAS,
+  COM_IMXOFFSET_RST, COM_IMXOFFSET_INC, COM_IMXOFFSET_DEC,
+  COM_IMYOFFSET_RST, COM_IMYOFFSET_INC, COM_IMYOFFSET_DEC,
+  COM_ALTERNATE_INC, COM_ALTERNATE_DEC,
+  COM_LIVE_INC, COM_LIVE_DEC, COM_OPERATE, COM_EXCHANGE,
+  COM_BLEND_RST, COM_BLEND_INC, COM_BLEND_DEC,
+  COM_BLENDINC_RST, COM_BLENDINC_INC, COM_BLENDINC_DEC,
+  COM_BLENDSWITCH,
   COM_COUNT // Last
 } command_e;
 
@@ -460,108 +535,189 @@ typedef struct command_t {
   int line;
   int col;
   char *text;
+  patternElement_e dat;  // Pattern set data to display after text.  PE_INVALID disables.
   keyCommand_t commands[MOUSE_COUNT];
 } command_t;
 
 const command_t displayCommand[] = {
-  {23, 0, "Cell pattern", {{KMOD_CTRL, SDLK_q, COM_CELL}}},
-  {24, 0, "Bouncer", {{KMOD_CTRL, SDLK_w, COM_BOUNCE}}},
-  {25, 0, "Fader", {{KMOD_CTRL, SDLK_e,  COM_FADE}}},
-  {26, 0, "Diffuser", {{KMOD_CTRL, SDLK_r, COM_DIFFUSE}}},
-  {27, 0, "Text seed", {{KMOD_CTRL, SDLK_t, COM_TEXT}}},
-  {28, 0, "Scroll rollover", {{KMOD_CTRL, SDLK_y, COM_ROLL}}},
-  {29, 0, "Scroller", {{KMOD_CTRL, SDLK_u, COM_SCROLL}}},
-  {30, 0, "Horizontal bars!", {{KMOD_CTRL, SDLK_i, COM_HBAR}}},
-  {31, 0, "Vertical bars!", {{KMOD_CTRL, SDLK_o, COM_VBAR}}},
-  {32, 0, "Foreground color all!", {{KMOD_CTRL, SDLK_p, COM_FGALL}}},
-  {33, 0, "Background color all!", {{KMOD_CTRL, SDLK_a, COM_BGALL}}},
-  {34, 0, "Random dot seed", {{KMOD_CTRL, SDLK_s, COM_RDOT}}},
-  {35, 0, "FG cycle", {{KMOD_CTRL, SDLK_d, COM_FGCYCLE}}},
-  {36, 0, "BG cycle", {{KMOD_CTRL, SDLK_f, COM_BGCYCLE}}},
-  {37, 0, "Cycle pattern sets", {{KMOD_CTRL, SDLK_g, COM_CYCLESET}}},
-  {38, 0, "Fader mode", {{KMOD_CTRL, SDLK_h, COM_FADEMODE}}},
-  {39, 0, "Reset text to start", {{KMOD_CTRL, SDLK_j, COM_TEXTRESET}}},
-  {40, 0, "Post-rotate/zoom", {{KMOD_CTRL, SDLK_k, COM_POSTROTATE}}},
-  {41, 0, "All modes off", {{KMOD_CTRL, SDLK_l, COM_MODEOFF}}},
-  {42, 0, "Pre-rotate/zoom", {{KMOD_CTRL, SDLK_z, COM_PREROTATE}}},
-  {43, 0, "Rotate/zoom anti-alias", {{KMOD_CTRL, SDLK_x, COM_AA}}},
-  {44, 0, "Multiplier", {{KMOD_CTRL, SDLK_c, COM_MULTIPLY}}},
-  {45, 0, "Sidebar seed", {{KMOD_CTRL, SDLK_n, COM_SIDEBAR}}},
-  {46, 0, "Supress red", {{KMOD_CTRL, SDLK_m, COM_NORED}}},
-  {47, 0, "Supress green", {{KMOD_CTRL, SDLK_COMMA, COM_NOGREEN}}},
-  {48, 0, "Supress blue", {{KMOD_CTRL, SDLK_PERIOD, COM_NOBLUE}}},
-  {49, 0, "Image overlay", {{KMOD_CTRL | KMOD_ALT, SDLK_p, COM_IMAGE}}},
-  {13, 2, "Color cycle mode", {{KMOD_ALT, SDLK_SEMICOLON, COM_CYCLE_MODE}, {}, {0, 0, COM_CYCLE_MODE_DOWN}}},
-  {14, 2, "(<alt>) <arrows> - Scroll direction", {{0, 0, COM_SCROLL_CYCLE_UP}, {}, {0, 0, COM_SCROLL_CYCLE_DOWN}}},
-  {33, 2, "<backspace> - Delete last letter.", {{KMOD_NONE, SDLK_BACKSPACE, COM_BACKSPACE}}},
-  {34, 2, "Erase all text.", {{KMOD_NONE, SDLK_DELETE, COM_DELETE}}},
-  {35, 2, "Reverse text.", {{KMOD_CTRL, SDLK_QUOTE, COM_TEXT_REVERSE}}},
-  {36, 2, "Flip text.", {{KMOD_CTRL, SDLK_SEMICOLON, COM_TEXT_FLIP}}},
-  {38, 2, "Text mode:", {{KMOD_CTRL, SDLK_b, COM_TEXT_MODE_UP}, {}, {0, 0, COM_TEXT_MODE_DOWN}}},
-  {44, 2, "Red plane:", {{KMOD_CTRL, SDLK_LEFTBRACKET, COM_RP_UP}, {}, {0, 0, COM_RP_DOWN}}},
-  {45, 2, "Green plane:", {{KMOD_CTRL, SDLK_RIGHTBRACKET, COM_GP_UP}, {}, {0, 0, COM_GP_DOWN}}},
-  {46, 2, "Blue plane:", {{KMOD_CTRL, SDLK_BACKSLASH, COM_BP_UP}, {}, {0, 0, COM_BP_DOWN}}},
-  {47, 2, "Cyan plane:", {{KMOD_CTRL | KMOD_ALT, SDLK_LEFTBRACKET, COM_CP_UP}, {}, {0, 0, COM_CP_DOWN}}},
-  {48, 2, "Yellow plane:", {{KMOD_CTRL | KMOD_ALT, SDLK_RIGHTBRACKET, COM_YP_UP}, {}, {0, 0, COM_YP_DOWN}}},
-  {49, 2, "Magenta plane:", {{KMOD_CTRL | KMOD_ALT, SDLK_BACKSLASH, COM_MP_UP}, {}, {0, 0, COM_MP_DOWN}}},
-  {51, 2, "Quit.", {{KMOD_NONE, SDLK_ESCAPE, COM_EXIT}}},
-  {2, 2, "Float step size", {{KMOD_ALT, SDLK_COMMA, COM_STEP_RST}, {KMOD_ALT, SDLK_m, COM_STEP_INC}, {KMOD_ALT, SDLK_PERIOD, COM_STEP_DEC}}},
-  {4, 2, "Diffusion", {{KMOD_ALT, SDLK_w, COM_DIFFUSE_RST}, {KMOD_ALT, SDLK_q, COM_DIFFUSE_INC}, {KMOD_ALT, SDLK_e, COM_DIFFUSE_DEC}}},
-  {5, 2, "Expansion", {{KMOD_ALT, SDLK_s, COM_EXPAND_RST}, {KMOD_ALT, SDLK_a, COM_EXPAND_INC}, {KMOD_ALT, SDLK_d, COM_EXPAND_DEC}}},
-  {6, 2, "Fade amount", {{KMOD_ALT, SDLK_x, COM_FADE_RST}, {KMOD_ALT, SDLK_z, COM_FADE_INC}, {KMOD_ALT, SDLK_c, COM_FADE_DEC}}},
-  {7, 2, "Pre rotation angle", {{KMOD_ALT, SDLK_t, COM_PREROT_RST}, {KMOD_ALT, SDLK_r, COM_PREROT_INC}, {KMOD_ALT, SDLK_y, COM_PREROT_DEC}}},
-  {8, 2, "Rainbow Speed", {{KMOD_ALT, SDLK_g, COM_RAINDBOW_RST}, {KMOD_ALT, SDLK_f, COM_RAINDBOW_INC}, {KMOD_ALT, SDLK_h, COM_RAINDBOW_DEC}}},
-  {9, 2, "Post rotation angle", {{KMOD_ALT, SDLK_b, COM_POSTROT_RST}, {KMOD_ALT, SDLK_v, COM_POSTROT_INC}, {KMOD_ALT, SDLK_n, COM_POSTROT_DEC}}},
-  {10, 2, "Multiplier", {{KMOD_ALT, SDLK_i, COM_MULT_RST}, {KMOD_ALT, SDLK_u, COM_MULT_INC}, {KMOD_ALT, SDLK_o, COM_MULT_DEC}}},
-  {11, 2, "Post rotation incr", {{KMOD_ALT, SDLK_k, COM_POSTSPEED_RST}, {KMOD_ALT, SDLK_j, COM_POSTSPEED_INC}, {KMOD_ALT, SDLK_l, COM_POSTSPEED_DEC}}},
-  {12, 2, "Dot randomness", {{KMOD_ALT, SDLK_LEFTBRACKET, COM_RANDOM_RST}, {KMOD_ALT, SDLK_p, COM_RANDOM_INC}, {KMOD_ALT, SDLK_RIGHTBRACKET, COM_RANDOM_DEC}}},
-  {15, 2, "Frame delay(ms)", {{KMOD_ALT | KMOD_CTRL, SDLK_i, COM_DELAY_RST}, {KMOD_ALT | KMOD_CTRL, SDLK_u, COM_DELAY_INC}, {KMOD_ALT | KMOD_CTRL, SDLK_o, COM_DELAY_DEC}}},
-  {20, 2, "foreground:", {{KMOD_ALT | KMOD_CTRL, SDLK_q, COM_FG_INC}, {}, {KMOD_ALT | KMOD_CTRL, SDLK_w, COM_FG_DEC}}},
-  {21, 2, "background:", {{KMOD_ALT | KMOD_CTRL, SDLK_a, COM_BG_INC}, {}, {KMOD_ALT | KMOD_CTRL, SDLK_s, COM_BG_DEC}}},
-  {37, 2, "Offset:", {{KMOD_ALT | KMOD_CTRL, SDLK_z, COM_TEXTO_INC}, {}, {KMOD_ALT | KMOD_CTRL, SDLK_x, COM_TEXTO_DEC}}},
+  // Pattern sets
+  #define ROW_PA 0
+  #define COL_PA 2
+  {ROW_PA + 1, COL_PA, "Pattern set cycle:",   PE_INVALID,  {{KMOD_CTRL, SDLK_g, COM_CYCLESET}}},
+  {ROW_PA + 2, COL_PA, "Frames until cycle:", PE_FRAMECOUNT, {{0, 0, COM_FCOUNT_RST}, {0, 0, COM_FCOUNT_INC}, {0, 0, COM_FCOUNT_DEC}}},
+  {ROW_PA + 8, COL_PA, "Live pattern set:",PE_INVALID, {{0, 0, COM_LIVE_INC}, {}, {0, 0, COM_LIVE_DEC}}},
+  {ROW_PA + 9, COL_PA, "Alternate preview:",PE_INVALID, {{0, 0, COM_ALTERNATE_INC}, {}, {0, 0, COM_ALTERNATE_DEC}}},
+  {ROW_PA + 10,COL_PA, "Control set:",     PE_INVALID, {{0, 0, COM_OPERATE}}},
+  {ROW_PA + 11,COL_PA, "Exchange live and alternate sets", PE_INVALID, {{0, 0, COM_EXCHANGE}}},
+  {ROW_PA + 12,COL_PA, "Alternate blend amount", PE_INVALID, {{0, 0, COM_BLEND_RST}, {0, 0, COM_BLEND_INC}, {0, 0, COM_BLEND_DEC}}},
+  {ROW_PA + 13,COL_PA, "Auto blend rate", PE_INVALID, {{0, 0, COM_BLENDINC_RST},{0, 0, COM_BLENDINC_INC}, {0, 0, COM_BLENDINC_DEC}}},
+  {ROW_PA + 14,COL_PA, "Auto blend & switch", PE_INVALID, {{0, 0, COM_BLENDSWITCH}}},
+
+  // Auxillary
+  #define ROW_A 46
+  #define COL_A 4
+  {ROW_A + 1, COL_A, "Delay(ms):", PE_DELAY,    {{KMOD_ALT | KMOD_CTRL, SDLK_i, COM_DELAY_RST}, {KMOD_ALT | KMOD_CTRL, SDLK_u, COM_DELAY_INC}, {KMOD_ALT | KMOD_CTRL, SDLK_o, COM_DELAY_DEC}}},
+  {ROW_A + 2, COL_A, "Float step:", PE_FLOATINC, {{KMOD_ALT, SDLK_COMMA, COM_STEP_RST}, {KMOD_ALT, SDLK_m, COM_STEP_INC}, {KMOD_ALT, SDLK_PERIOD, COM_STEP_DEC}}},
+  {ROW_A + 3, COL_A, "All modes off",   PE_INVALID,  {{KMOD_CTRL, SDLK_l, COM_MODEOFF}}},
+
+  // Plane suppression
+  #define ROW_P 35
+  #define COL_P 0
+  {ROW_P + 1, COL_P, "Supress red:",     PE_NORED,    {{KMOD_CTRL, SDLK_m, COM_NORED}}},
+  {ROW_P + 2, COL_P, "Supress green:",   PE_NOGREEN,  {{KMOD_CTRL, SDLK_COMMA, COM_NOGREEN}}},
+  {ROW_P + 3, COL_P, "Supress blue:",    PE_NOBLUE,   {{KMOD_CTRL, SDLK_PERIOD, COM_NOBLUE}}},
+
+  // Diffusion
+  #define ROW_D 20
+  #define COL_D 2
+  {ROW_D + 1, COL_D, "Enable:",      PE_DIFFUSE,     {{KMOD_CTRL, SDLK_r, COM_DIFFUSE}}},
+  {ROW_D + 2, COL_D, "Coefficient:", PE_DIFFUSECOEF, {{KMOD_ALT, SDLK_w, COM_DIFFUSE_RST}, {KMOD_ALT, SDLK_q, COM_DIFFUSE_INC}, {KMOD_ALT, SDLK_e, COM_DIFFUSE_DEC}}},
+
+  // Random Dots
+  #define ROW_R 16
+  #define COL_R 2
+  {ROW_R + 1, COL_R, "Enable:",     PE_RANDOMDOT,     {{KMOD_CTRL, SDLK_s, COM_RDOT}}},
+  {ROW_R + 2, COL_R, "Randomness:", PE_RANDOMDOTCOEF, {{KMOD_ALT, SDLK_LEFTBRACKET, COM_RANDOM_RST}, {KMOD_ALT, SDLK_p, COM_RANDOM_INC}, {KMOD_ALT, SDLK_RIGHTBRACKET, COM_RANDOM_DEC}}},
+
+  // One shot seeds
+  #define ROW_O 23
+  #define COL_O 0
+  {ROW_O + 1, COL_O, "Horizontal bars", PE_INVALID,  {{KMOD_CTRL, SDLK_i, COM_HBAR}}},
+  {ROW_O + 2, COL_O, "Vertical bars",   PE_INVALID,  {{KMOD_CTRL, SDLK_o, COM_VBAR}}},
+  {ROW_O + 3, COL_O, "Foreground all",  PE_INVALID,  {{KMOD_CTRL, SDLK_p, COM_FGALL}}},
+  {ROW_O + 4, COL_O, "Background all",  PE_INVALID,  {{KMOD_CTRL, SDLK_a, COM_BGALL}}},
+  {ROW_O + 5, COL_O, "Image seed",      PE_INVALID,  {{0, 0, COM_IMAGEALL}}},
+
+    // Misc
+  #define ROW_MI (ROW_O + 7)
+  #define COL_MI COL_O
+  {ROW_MI + 1, COL_MI, "Cell pattern:",    PE_CELLFUN,  {{KMOD_CTRL, SDLK_q, COM_CELL}}},
+  {ROW_MI + 2, COL_MI, "Bouncer:",         PE_BOUNCER,  {{KMOD_CTRL, SDLK_w, COM_BOUNCE}}},
+  {ROW_MI + 3, COL_MI, "Sidebar seed:",    PE_BARSEED,  {{KMOD_CTRL, SDLK_n, COM_SIDEBAR}}},
+
+  // Fader
+  #define ROW_F 24
+  #define COL_F 2
+  {ROW_F + 1, COL_F, "Enable:",           PE_FADE,     {{KMOD_CTRL, SDLK_e,  COM_FADE}}},
+  {ROW_F + 2, COL_F, "Amount:",     PE_FADEINC,  {{KMOD_ALT, SDLK_x, COM_FADE_RST}, {KMOD_ALT, SDLK_z, COM_FADE_INC}, {KMOD_ALT, SDLK_c, COM_FADE_DEC}}},
+  {ROW_F + 3, COL_F, "Mode:",      PE_FADEMODE, {{KMOD_CTRL, SDLK_h, COM_FADEMODE}}},
+
+  // Multiplier
+  #define ROW_M 29
+  #define COL_M 2
+  {ROW_M + 1, COL_M, "Enable:",      PE_MULTIPLY, {{KMOD_CTRL, SDLK_c, COM_MULTIPLY}}},
+  {ROW_M + 2, COL_M, "Multiply by:", PE_MULTIPLYBY, {{KMOD_ALT, SDLK_i, COM_MULT_RST}, {KMOD_ALT, SDLK_u, COM_MULT_INC}, {KMOD_ALT, SDLK_o, COM_MULT_DEC}}},
+
+  // Colors
+  #define ROW_C 33
+  #define COL_C 2
+  {ROW_C + 1, COL_C, "Foreground:",    PE_FGE,       {{KMOD_ALT | KMOD_CTRL, SDLK_q, COM_FG_INC}, {}, {KMOD_ALT | KMOD_CTRL, SDLK_w, COM_FG_DEC}}},
+  {ROW_C + 2, COL_C, "Background:",    PE_BGE,       {{KMOD_ALT | KMOD_CTRL, SDLK_a, COM_BG_INC}, {}, {KMOD_ALT | KMOD_CTRL, SDLK_s, COM_BG_DEC}}},
+  {ROW_C + 3, COL_C, "FG cycle mode:", PE_FGCYCLE,   {{0, 0, COM_FGCYCLE_RST}, {KMOD_CTRL, SDLK_d, COM_FGCYCLE_UP}, {0, 0, COM_FGCYCLE_DOWN}}},
+  {ROW_C + 4, COL_C, "BG cycle mode:", PE_BGCYCLE,   {{0, 0, COM_BGCYCLE_RST}, {KMOD_CTRL, SDLK_f, COM_BGCYCLE_UP}, {0, 0, COM_BGCYCLE_DOWN}}},
+  {ROW_C + 5, COL_C, "FG Delta:",      PE_FGRAINBOW, {{KMOD_ALT, SDLK_g, COM_FGRAINBOW_RST}, {KMOD_ALT, SDLK_f, COM_FGRAINBOW_INC}, {KMOD_ALT, SDLK_h, COM_FGRAINBOW_DEC}}},
+  {ROW_C + 6, COL_C, "BG Delta:",      PE_BGRAINBOW ,{{0, 0, COM_BGRAINBOW_RST}, {0, 0, COM_BGRAINBOW_INC}, {0, 0, COM_BGRAINBOW_DEC}}},
+
+  // Scrollers
+  #define ROW_S 41
+  #define COL_S 2
+  {ROW_S + 1, COL_S, "Scroller:",        PE_SCROLL,       {{KMOD_CTRL, SDLK_u, COM_SCROLL}}},
+  {ROW_S + 2, COL_S, "(<a>) <arrows> - Scroll dir:", PE_SCROLLDIR, {{0, 0, COM_SCROLL_CYCLE_UP}, {}, {0, 0, COM_SCROLL_CYCLE_DOWN}}},
+  {ROW_S + 3, COL_S, "Scroll rollover:", PE_ROLLOVER, {{KMOD_CTRL, SDLK_y, COM_ROLL}}},
+  {ROW_S + 4, COL_S, "Red plane:",       PE_SHIFTRED,     {{0, 0, COM_RP_RST}, {KMOD_CTRL, SDLK_LEFTBRACKET, COM_RP_UP}, {0, 0, COM_RP_DOWN}}},
+  {ROW_S + 5, COL_S, "Green plane:",     PE_SHIFTGREEN,   {{0, 0, COM_GP_RST}, {KMOD_CTRL, SDLK_RIGHTBRACKET, COM_GP_UP}, {0, 0, COM_GP_DOWN}}},
+  {ROW_S + 6, COL_S, "Blue plane:",      PE_SHIFTBLUE,    {{0, 0, COM_BP_RST}, {KMOD_CTRL, SDLK_BACKSLASH, COM_BP_UP}, {0, 0, COM_BP_DOWN}}},
+  {ROW_S + 7, COL_S, "Cyan plane:",      PE_SHIFTCYAN,    {{0, 0, COM_CP_RST}, {KMOD_CTRL | KMOD_ALT, SDLK_LEFTBRACKET, COM_CP_UP}, {0, 0, COM_CP_DOWN}}},
+  {ROW_S + 8, COL_S, "Yellow plane:",    PE_SHIFTYELLOW,  {{0, 0, COM_YP_RST}, {KMOD_CTRL | KMOD_ALT, SDLK_RIGHTBRACKET, COM_YP_UP}, {0, 0, COM_YP_DOWN}}},
+  {ROW_S + 9, COL_S, "Magenta plane:",   PE_SHIFTMAGENTA, {{0, 0, COM_MP_RST}, {KMOD_CTRL | KMOD_ALT, SDLK_BACKSLASH, COM_MP_UP}, {0, 0, COM_MP_DOWN}}},
+
+  // Post rotozoom
+  #define ROW_PR (23)
+  #define COL_PR (4)
+  {ROW_PR + 1, COL_PR, "Enable:",     PE_POSTRZ,      {{KMOD_CTRL, SDLK_k, COM_POSTROTATE}}},
+  {ROW_PR + 2, COL_PR, "Angle:",      PE_POSTRZANGLE, {{KMOD_ALT, SDLK_b, COM_POSTROT_RST}, {KMOD_ALT, SDLK_v, COM_POSTROT_INC}, {KMOD_ALT, SDLK_n, COM_POSTROT_DEC}}},
+  {ROW_PR + 3, COL_PR, "Angle Inc:",  PE_POSTRZINC,   {{KMOD_ALT, SDLK_k, COM_POSTSPEED_RST}, {KMOD_ALT, SDLK_j, COM_POSTSPEED_INC}, {KMOD_ALT, SDLK_l, COM_POSTSPEED_DEC}}},
+  {ROW_PR + 4, COL_PR, "Expansion:",  PE_POSTEXP,      {{KMOD_ALT, SDLK_s, COM_EXPAND_RST}, {KMOD_ALT, SDLK_a, COM_EXPAND_INC}, {KMOD_ALT, SDLK_d, COM_EXPAND_DEC}}},
+  {ROW_PR + 5, COL_PR, "Anti-alias:", PE_ALIAS,       {{KMOD_CTRL, SDLK_x, COM_AA}}},
+
+  // Pre rotozoom
+  #define ROW_PE (ROW_PR + 7)
+  #define COL_PE (COL_PR)
+  {ROW_PE + 1, COL_PE, "Enable:",    PE_PRERZ,      {{KMOD_CTRL, SDLK_z, COM_PREROTATE}}},
+  {ROW_PE + 2, COL_PE, "Angle:",     PE_PRERZANGLE, {{KMOD_ALT, SDLK_t, COM_PREROT_RST}, {KMOD_ALT, SDLK_r, COM_PREROT_INC}, {KMOD_ALT, SDLK_y, COM_PREROT_DEC}}},
+  {ROW_PE + 3, COL_PE, "Angle Inc:", PE_PRERZINC,   {{0, 0, COM_PREROTINC_RST}, {0, 0, COM_PREROTINC_INC}, {0, 0, COM_PREROTINC_DEC}}},
+  {ROW_PE + 4, COL_PE, "Expansion:", PE_PRERZEXPAND,{{0, 0, COM_PREEXP_RST}, {0, 0, COM_PREEXP_INC}, {0, 0, COM_PREEXP_DEC}}},
+  {ROW_PE + 5, COL_PE, "Anti-alias:",PE_PRERZALIAS, {{0, 0, COM_PREALIAS}}},
+
+  // Image stuff
+  #define ROW_I (ROW_PE + 7)
+  #define COL_I COL_PE
+  {ROW_I + 1, COL_I, "Image overlay:", PE_POSTIMAGE,  {{KMOD_CTRL | KMOD_ALT, SDLK_p, COM_IMAGE}}},
+  {ROW_I + 2, COL_I, "Angle:",         PE_IMAGEANGLE, {{0, 0, COM_IMANGLE_RST}, {0, 0, COM_IMANGLE_INC}, {0, 0, COM_IMANGLE_DEC}}},
+  {ROW_I + 3, COL_I, "Angle Inc:",     PE_IMAGEINC,   {{0, 0, COM_IMINC_RST},   {0, 0, COM_IMINC_INC},   {0, 0, COM_IMINC_DEC}}},
+  {ROW_I + 4, COL_I, "Expansion:",     PE_IMAGEEXP,   {{0, 0, COM_IMEXP_RST},   {0, 0, COM_IMEXP_INC},   {0, 0, COM_IMEXP_DEC}}},
+  {ROW_I + 5, COL_I, "Xoffset:",       PE_IMAGEXOFFSET, {{0, 0, COM_IMXOFFSET_RST}, {0, 0, COM_IMXOFFSET_INC}, {0, 0, COM_IMXOFFSET_DEC}}},
+  {ROW_I + 6, COL_I, "Yoffset:",       PE_IMAGEYOFFSET, {{0, 0, COM_IMYOFFSET_RST}, {0, 0, COM_IMYOFFSET_INC}, {0, 0, COM_IMYOFFSET_DEC}}},
+  {ROW_I + 7, COL_I, "Anti-alias:",    PE_IMAGEALIAS, {{0, 0, COM_IMALIAS}}},
+
+  // Text
+  #define ROW_T (40)
+  #define COL_T (0)
+  {ROW_T + 1, COL_T, "Text seed:",         PE_TEXTSEED,   {{KMOD_CTRL, SDLK_t, COM_TEXT}}},
+  {ROW_T + 3, COL_T, "Delete last letter", PE_INVALID,    {{KMOD_NONE, SDLK_BACKSPACE, COM_BACKSPACE}}},
+  {ROW_T + 4, COL_T, "Erase all text",     PE_INVALID,    {{KMOD_NONE, SDLK_DELETE, COM_DELETE}}},
+  {ROW_T + 5, COL_T, "Reverse text:",      PE_FONTDIR,    {{KMOD_CTRL, SDLK_QUOTE, COM_TEXT_REVERSE}}},
+  {ROW_T + 6, COL_T, "Flip text.",         PE_FONTFLIP,   {{KMOD_CTRL, SDLK_SEMICOLON, COM_TEXT_FLIP}}},
+  {ROW_T + 7, COL_T, "Text mode:",         PE_TEXTMODE,   {{KMOD_CTRL, SDLK_b, COM_TEXT_MODE_UP}, {}, {0, 0, COM_TEXT_MODE_DOWN}}},
+  {ROW_T + 8, COL_T, "Edge Offset:",       PE_TEXTOFFSET, {{KMOD_ALT | KMOD_CTRL, SDLK_z, COM_TEXTO_INC}, {}, {KMOD_ALT | KMOD_CTRL, SDLK_x, COM_TEXTO_DEC}}},
+  {ROW_T + 9, COL_T, "Restart text",       PE_INVALID,    {{KMOD_CTRL, SDLK_j, COM_TEXTRESET}}},
+
+  // Quit
+  {53, 4, "Quit",           PE_INVALID,  {{KMOD_NONE, SDLK_ESCAPE, COM_EXIT}}},
 };
 #define DISPLAYCOMMAND_SIZE (sizeof(displayCommand) / sizeof(command_t))
 
+// These commands correspond to key presses, but aren't displayed as mouse-over items.
 const command_t otherCommand[] = {
-  {-1, 0, "Orientation", {{KMOD_CTRL, SDLK_v, COM_ORIENTATION}}},
-  {-1, 2, "Scroll Up", {{KMOD_NONE, SDLK_UP, COM_SCROLL_UP}}},
-  {-1, 2, "Scroll Down", {{KMOD_NONE, SDLK_DOWN, COM_SCROLL_DOWN}}},
-  {-1, 2, "Scroll Left", {{KMOD_NONE, SDLK_LEFT, COM_SCROLL_LEFT}}},
-  {-1, 2, "Scroll Right", {{KMOD_NONE, SDLK_RIGHT, COM_SCROLL_RIGHT}}},
-  {-1, 2, "Activate & Scroll Up", {{KMOD_ALT, SDLK_UP, COM_SCROLL_UPC}}},
-  {-1, 2, "Activate & Scroll Down", {{KMOD_ALT, SDLK_DOWN, COM_SCROLL_DOWNC}}},
-  {-1, 2, "Activate & Scroll Left", {{KMOD_ALT, SDLK_LEFT, COM_SCROLL_LEFTC}}},
-  {-1, 2, "Activate & Scroll Right", {{KMOD_ALT, SDLK_RIGHT, COM_SCROLL_RIGHTC}}},
-  {-1, 0, "Load image buffer 0", {{KMOD_ALT,  SDLK_0, COM_LOAD0 }}},
-  {-1, 0, "Load image buffer 1", {{KMOD_ALT,  SDLK_1, COM_LOAD1 }}},
-  {-1, 0, "Load image buffer 2", {{KMOD_ALT,  SDLK_2, COM_LOAD2 }}},
-  {-1, 0, "Load image buffer 3", {{KMOD_ALT,  SDLK_3, COM_LOAD3 }}},
-  {-1, 0, "Load image buffer 4", {{KMOD_ALT,  SDLK_4, COM_LOAD4 }}},
-  {-1, 0, "Load image buffer 5", {{KMOD_ALT,  SDLK_5, COM_LOAD5 }}},
-  {-1, 0, "Load image buffer 6", {{KMOD_ALT,  SDLK_6, COM_LOAD6 }}},
-  {-1, 0, "Load image buffer 7", {{KMOD_ALT,  SDLK_7, COM_LOAD7 }}},
-  {-1, 0, "Load image buffer 8", {{KMOD_ALT,  SDLK_8, COM_LOAD8 }}},
-  {-1, 0, "Load image buffer 9", {{KMOD_ALT,  SDLK_9, COM_LOAD9 }}},
-  {-1, 0, "Load pattern set 0", {{KMOD_CTRL,  SDLK_0, COM_LOADSET0 }}},
-  {-1, 0, "Load pattern set 1", {{KMOD_CTRL,  SDLK_1, COM_LOADSET1 }}},
-  {-1, 0, "Load pattern set 2", {{KMOD_CTRL,  SDLK_2, COM_LOADSET2 }}},
-  {-1, 0, "Load pattern set 3", {{KMOD_CTRL,  SDLK_3, COM_LOADSET3 }}},
-  {-1, 0, "Load pattern set 4", {{KMOD_CTRL,  SDLK_4, COM_LOADSET4 }}},
-  {-1, 0, "Load pattern set 5", {{KMOD_CTRL,  SDLK_5, COM_LOADSET5 }}},
-  {-1, 0, "Load pattern set 6", {{KMOD_CTRL,  SDLK_6, COM_LOADSET6 }}},
-  {-1, 0, "Load pattern set 7", {{KMOD_CTRL,  SDLK_7, COM_LOADSET7 }}},
-  {-1, 0, "Load pattern set 8", {{KMOD_CTRL,  SDLK_8, COM_LOADSET8 }}},
-  {-1, 0, "Load pattern set 9", {{KMOD_CTRL,  SDLK_9, COM_LOADSET9 }}},
-  {-1, 0, "Copy to set 0", {{KMOD_CTRL | KMOD_ALT,  SDLK_0, COM_COPYSET0 }}},
-  {-1, 0, "Copy to set 1", {{KMOD_CTRL | KMOD_ALT,  SDLK_1, COM_COPYSET1 }}},
-  {-1, 0, "Copy to set 2", {{KMOD_CTRL | KMOD_ALT,  SDLK_2, COM_COPYSET2 }}},
-  {-1, 0, "Copy to set 3", {{KMOD_CTRL | KMOD_ALT,  SDLK_3, COM_COPYSET3 }}},
-  {-1, 0, "Copy to set 4", {{KMOD_CTRL | KMOD_ALT,  SDLK_4, COM_COPYSET4 }}},
-  {-1, 0, "Copy to set 5", {{KMOD_CTRL | KMOD_ALT,  SDLK_5, COM_COPYSET5 }}},
-  {-1, 0, "Copy to set 6", {{KMOD_CTRL | KMOD_ALT,  SDLK_6, COM_COPYSET6 }}},
-  {-1, 0, "Copy to set 7", {{KMOD_CTRL | KMOD_ALT,  SDLK_7, COM_COPYSET7 }}},
-  {-1, 0, "Copy to set 8", {{KMOD_CTRL | KMOD_ALT,  SDLK_8, COM_COPYSET8 }}},
-  {-1, 0, "Copy to set 9", {{KMOD_CTRL | KMOD_ALT,  SDLK_9, COM_COPYSET9 }}},
+  {-1, 0, "Orientation", PE_INVALID, {{KMOD_CTRL, SDLK_v, COM_ORIENTATION}}},
+  {-1, 2, "Scroll Up", PE_INVALID, {{KMOD_NONE, SDLK_UP, COM_SCROLL_UP}}},
+  {-1, 2, "Scroll Down", PE_INVALID, {{KMOD_NONE, SDLK_DOWN, COM_SCROLL_DOWN}}},
+  {-1, 2, "Scroll Left", PE_INVALID, {{KMOD_NONE, SDLK_LEFT, COM_SCROLL_LEFT}}},
+  {-1, 2, "Scroll Right", PE_INVALID, {{KMOD_NONE, SDLK_RIGHT, COM_SCROLL_RIGHT}}},
+  {-1, 2, "Activate & Scroll Up", PE_INVALID, {{KMOD_ALT, SDLK_UP, COM_SCROLL_UPC}}},
+  {-1, 2, "Activate & Scroll Down", PE_INVALID, {{KMOD_ALT, SDLK_DOWN, COM_SCROLL_DOWNC}}},
+  {-1, 2, "Activate & Scroll Left", PE_INVALID, {{KMOD_ALT, SDLK_LEFT, COM_SCROLL_LEFTC}}},
+  {-1, 2, "Activate & Scroll Right", PE_INVALID, {{KMOD_ALT, SDLK_RIGHT, COM_SCROLL_RIGHTC}}},
+  {-1, 0, "Load image buffer 0", PE_INVALID, {{KMOD_ALT,  SDLK_0, COM_LOAD0 }}},
+  {-1, 0, "Load image buffer 1", PE_INVALID, {{KMOD_ALT,  SDLK_1, COM_LOAD1 }}},
+  {-1, 0, "Load image buffer 2", PE_INVALID, {{KMOD_ALT,  SDLK_2, COM_LOAD2 }}},
+  {-1, 0, "Load image buffer 3", PE_INVALID, {{KMOD_ALT,  SDLK_3, COM_LOAD3 }}},
+  {-1, 0, "Load image buffer 4", PE_INVALID, {{KMOD_ALT,  SDLK_4, COM_LOAD4 }}},
+  {-1, 0, "Load image buffer 5", PE_INVALID, {{KMOD_ALT,  SDLK_5, COM_LOAD5 }}},
+  {-1, 0, "Load image buffer 6", PE_INVALID, {{KMOD_ALT,  SDLK_6, COM_LOAD6 }}},
+  {-1, 0, "Load image buffer 7", PE_INVALID, {{KMOD_ALT,  SDLK_7, COM_LOAD7 }}},
+  {-1, 0, "Load image buffer 8", PE_INVALID, {{KMOD_ALT,  SDLK_8, COM_LOAD8 }}},
+  {-1, 0, "Load image buffer 9", PE_INVALID, {{KMOD_ALT,  SDLK_9, COM_LOAD9 }}},
+  {-1, 0, "Load pattern set 0", PE_INVALID, {{KMOD_CTRL,  SDLK_0, COM_LOADSET0 }}},
+  {-1, 0, "Load pattern set 1", PE_INVALID, {{KMOD_CTRL,  SDLK_1, COM_LOADSET1 }}},
+  {-1, 0, "Load pattern set 2", PE_INVALID, {{KMOD_CTRL,  SDLK_2, COM_LOADSET2 }}},
+  {-1, 0, "Load pattern set 3", PE_INVALID, {{KMOD_CTRL,  SDLK_3, COM_LOADSET3 }}},
+  {-1, 0, "Load pattern set 4", PE_INVALID, {{KMOD_CTRL,  SDLK_4, COM_LOADSET4 }}},
+  {-1, 0, "Load pattern set 5", PE_INVALID, {{KMOD_CTRL,  SDLK_5, COM_LOADSET5 }}},
+  {-1, 0, "Load pattern set 6", PE_INVALID, {{KMOD_CTRL,  SDLK_6, COM_LOADSET6 }}},
+  {-1, 0, "Load pattern set 7", PE_INVALID, {{KMOD_CTRL,  SDLK_7, COM_LOADSET7 }}},
+  {-1, 0, "Load pattern set 8", PE_INVALID, {{KMOD_CTRL,  SDLK_8, COM_LOADSET8 }}},
+  {-1, 0, "Load pattern set 9", PE_INVALID, {{KMOD_CTRL,  SDLK_9, COM_LOADSET9 }}},
+  {-1, 0, "Copy to set 0", PE_INVALID, {{KMOD_CTRL | KMOD_ALT,  SDLK_0, COM_COPYSET0 }}},
+  {-1, 0, "Copy to set 1", PE_INVALID, {{KMOD_CTRL | KMOD_ALT,  SDLK_1, COM_COPYSET1 }}},
+  {-1, 0, "Copy to set 2", PE_INVALID, {{KMOD_CTRL | KMOD_ALT,  SDLK_2, COM_COPYSET2 }}},
+  {-1, 0, "Copy to set 3", PE_INVALID, {{KMOD_CTRL | KMOD_ALT,  SDLK_3, COM_COPYSET3 }}},
+  {-1, 0, "Copy to set 4", PE_INVALID, {{KMOD_CTRL | KMOD_ALT,  SDLK_4, COM_COPYSET4 }}},
+  {-1, 0, "Copy to set 5", PE_INVALID, {{KMOD_CTRL | KMOD_ALT,  SDLK_5, COM_COPYSET5 }}},
+  {-1, 0, "Copy to set 6", PE_INVALID, {{KMOD_CTRL | KMOD_ALT,  SDLK_6, COM_COPYSET6 }}},
+  {-1, 0, "Copy to set 7", PE_INVALID, {{KMOD_CTRL | KMOD_ALT,  SDLK_7, COM_COPYSET7 }}},
+  {-1, 0, "Copy to set 8", PE_INVALID, {{KMOD_CTRL | KMOD_ALT,  SDLK_8, COM_COPYSET8 }}},
+  {-1, 0, "Copy to set 9", PE_INVALID, {{KMOD_CTRL | KMOD_ALT,  SDLK_9, COM_COPYSET9 }}},
 };
 #define OTHERCOMMAND_SIZE (sizeof(otherCommand) / sizeof(command_t))
 
@@ -573,25 +729,35 @@ typedef struct displayText_t {
 } displayText_t;
 
 displayText_t displayText[] = {
-  {39, 2, "Text buffer size:"},
-  {32, 2, "<Unmodified keys> - Add text."},
-  {25, 2, "<ctrl> 0-9 - Change set #"},
-  {26, 2, "<ctrl> <alt> 0-9 - Copy to set #"},
-  {27, 2, "<alt> 0-9 - Load buffer from set #"},
-  {28, 2, "<alt> <shift> 0-9, a-z - Save to disk."},
-  {29, 2, "<ctrl> <shift> 0-9, a-z - Load saved set."},
+  {ROW_T + 2, COL_T, "<Unmodified keys> - Add text."},
+  {ROW_PA + 3, COL_PA, "<c> 0-9 - Change to set #"},
+  {ROW_PA + 4, COL_PA, "<c> <a> 0-9 - Copy set to #"},
+  {ROW_PA + 5, COL_PA, "<a> 0-9 - Load buffer from set #"},
+  {ROW_PA + 6, COL_PA, "<a> <s> 0-9, a-z - Save to disk."},
+  {ROW_PA + 7, COL_PA, "<c> <s> 0-9, a-z - Load saved set."},
 };
 #define DISPLAYTEXT_SIZE (sizeof(displayText) / sizeof(displayText_t))
 
 displayText_t headerText[] = {
-  {21, 0,  "Modes:               PREVIEW FPS:"},
-  {22, 0, "                         GUI FPS:"},
-  {51, 0,  "Text buffer:"},
-  {0, 2,   "Coeffs: (3 keys = increment / reset / decrement)"},
-  {18, 2, "Colors:"},
-  {24, 2, "Pattern Sets:            Current:"},
-  {31, 2, "Text entry:"},
-  {42, 2, "More modes:"}
+  {21, 0,          "Live Preview          FPS:"},
+  {21, 4,          "Alternate Preview     FPS:"},
+  {51, 4,          "                 GUI  FPS:"},
+  {51, 0,          "Text buffer:"},
+  {ROW_PA, COL_PA, "Pattern sets:"},
+  {ROW_P, COL_P,   "Plane suppression:"},
+  {ROW_A, COL_A,   "Auxiliary:"},
+  {ROW_MI, COL_MI, "Misc:"},
+  {ROW_I, COL_I,   "Image:"},
+  {ROW_R, COL_R,   "Random dots:"},
+  {ROW_C, COL_C,   "Colors:"},
+  {ROW_D, COL_D,   "Diffusion:"},
+  {ROW_O, COL_O,   "One-shot seeds:"},
+  {ROW_F, COL_F,   "Fader:"},
+  {ROW_M, COL_M,   "Multiplier:"},
+  {ROW_T, COL_T,   "Text entry:"},
+  {ROW_S, COL_S,   "Scrollers:"},
+  {ROW_PR, COL_PR, "Post rotation:"},
+  {ROW_PE, COL_PE, "Pre rotation:"}
 };
 #define HEADERTEXT_SIZE (sizeof(headerText) / sizeof(displayText_t))
 
@@ -599,23 +765,36 @@ displayText_t headerText[] = {
 TTF_Font *screenFont;
 SDL_Window *mainWindow = NULL;
 SDL_Renderer *mwRenderer = NULL;
-SDL_Surface *scratchSurface = NULL;
-SDL_Surface *imageSeed = NULL;
+SDL_Surface *imageSeed[PATTERN_SET_COUNT];
 int tensorWidth, tensorHeight;
-int cyclePatternSets = NO;  // cyclePatternSets mode is a global (for now).
+unsigned char cyclePatternSets = NO;  // cyclePatternSets mode is a global (for now).
+int cycleFrameCount = INITIAL_FRAMECYCLECOUNT;    // Frame Count for cycling.
+unsigned char enableTensor = YES;
 int currentSet = 0;
+int alternateSet = 7;
+operateOn_e displaySet = OO_CURRENT;
 float global_intensity_limit = 1.0;
-int previewFrameCount = 0, previewFPS = 0;
+int previewFrameCountA = 0, previewFPSA = 0;
+int previewFrameCountB = 0, previewFPSB = 0;
 int guiFrameCount = 0, guiFPS = 0;
-#define THISCOL 595
-#define THATCOL (THISCOL + 88)
-const int colToPixel[] = {0, 275, 331, THISCOL, THATCOL, WINDOW_WIDTH};
-Uint32 FPSEventType, DRAWEventType, GUIEventType;
+float alternateBlend = 0, alternateBlendRate = 0.01;
+unsigned char autoBlend = NO;
+#define CHAR_W (8)
+#define ACOL (0)
+#define BCOL (ACOL + 26 * CHAR_W)
+#define CCOL (BCOL + 12 * CHAR_W)
+#define DCOL (CCOL + 40 * CHAR_W)
+#define ECOL (DCOL + 13 * CHAR_W)
+#define FCOL (ECOL + 26 * CHAR_W)
+const int colToPixel[] = {ACOL, BCOL, CCOL, DCOL, ECOL, FCOL, WINDOW_WIDTH};
+Uint32 FPSEventType, DRAWEventTypeA, DRAWEventTypeB, GUIEventType;
+unsigned char fbb[TENSOR_BYTES];
 
 // Prototypes
-void DrawNewFrame(void);
-void ProcessModes(void);
-Uint32 TriggerFrameDraw(Uint32 interval, void *param);
+void DrawNewFrame(int set, unsigned char primary);
+void ProcessModes(int set);
+Uint32 TriggerFrameDrawA(Uint32 interval, void *param);
+Uint32 TriggerFrameDrawB(Uint32 interval, void *param);
 Uint32 TriggerFrameCount(Uint32 interval, void *param);
 Uint32 TriggerGUIUpdate(Uint32 interval, void *param);
 void SetPixelByPlane(int x, int y, color_t color, unsigned char plane, unsigned char *buffer);
@@ -624,28 +803,28 @@ void SetPixel(int x, int y, color_t color, unsigned char *fb);
 color_t GetPixel(int x, int y, unsigned char *buffer);
 void FadeAll(int inc, fadeModes_e fadeMode, unsigned char *buffer);
 void Scroll (dir_e direction, int rollovermode, unsigned char *fb, unsigned char plane);
-void WriteSlice(void);
-void CellFun(void);
-void DrawSideBar(void);
+void WriteSlice(int set);
+void CellFun(int set);
+void DrawSideBar(int set);
 void Diffuse(float diffusionCoeff, unsigned char *buffer);
 void HorizontalBars(color_t color, unsigned char *buffer);
 void VerticalBars(color_t color, unsigned char *buffer);
 void SavePatternSet(char key, int set);
 void LoadPatternSet(char key, int set);
 void RandomDots(color_t color, unsigned int rFreq, unsigned char *buffer);
-void ColorCycle(int fb_mode);
+color_t ColorCycle(int set, colorCycleModes_e cycleMode, int *cycleSaver, int cycleInc);
 void ColorAll(color_t color, unsigned char *fb);
 void SetDims(void);
-void UpdateDisplays(float intensity_limit);
+void UpdateDisplays(int set, unsigned char sendToTensor, float intensity_limit);
 void UpdateGUI(void);
 void UpdateTensor(unsigned char *buffer);
 void DrawPreviewBorder(int x, int y);
 void UpdatePreview(int xOffset, int yOffset, unsigned char *buffer);
 void InitDisplayTexts(void);
-void UpdateInfoDisplay(void);
+void UpdateInfoDisplay(int set);
 void ClearWindow(void);
 void WriteLine(char * thisText, int line, int col, color_t color, color_t bgColor);
-void WriteBool(int value, int row, int col);
+void WriteBool(int value, int row, int col, int width);
 void WriteInt(int value, int row, int col, int width);
 void WriteFloat(float value, int row, int col, int width, int precision);
 void WriteString(const char *text, int line, int col, int width);
@@ -656,18 +835,19 @@ void Rotate(double angle, double expansion, int aliasmode, unsigned char *fb_dst
 void Multiply(float multiplier, unsigned char *buffer);
 void DrawRectangle(int x, int y, int w, int h, color_t color);
 void DrawBox(int x, int y, int w, int h, color_t color);
-void ClearRed(void);
-void ClearGreen(void);
-void ClearBlue(void);
-void DrawImage(double angle, double expansion, int aliasmode, unsigned char *fb_dst);
+void ClearRed(int set);
+void ClearGreen(int set);
+void ClearBlue(int set);
+void DrawImage(int set, double angle, float xoffset, float yoffset, double expansion, int aliasmode, unsigned char *fb_dst);
 int min(int a, int b);
 int max(int a, int b);
 unsigned char SameRectangle(SDL_Rect a, SDL_Rect b);
 int HandleCommand(command_e command);
 int HandleKey(SDL_Keycode key, SDL_Keymod mod);
 void AllocatePatternData(void);
-void VerifyStructureIntegrity(void);
+void VerifyStructuralIntegrity(void);
 void CopyPatternSet(int dst, int src);
+void BlendAlternate(unsigned char *fba);
 
 // Main
 int main(int argc, char *argv[]) {
@@ -677,7 +857,8 @@ int main(int argc, char *argv[]) {
   unsigned char exitProgram = NO;
   char caption_temp[100];
   SDL_Event event;
-  unsigned char drawNewFrame = NO;
+  unsigned char drawNewFrameA = NO;
+  unsigned char drawNewFrameB = NO;
   int x, y;
   int thisHover = INVALID;
   int lastHover = INVALID;
@@ -698,7 +879,7 @@ int main(int argc, char *argv[]) {
 
   // Verify the integrity of some of the data structures.  This is to enforce
   // consistency for enumerated array access.
-  VerifyStructureIntegrity();
+  VerifyStructuralIntegrity();
 
   // Allocate pattern set memory
   AllocatePatternData();
@@ -737,52 +918,56 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  // Load an image. (Testing)
-  imageSeed = IMG_Load(DEF_IMAGE);
-  if (!imageSeed) {
-    fprintf(stderr, "Unable to load image: %s\n", DEF_IMAGE);
-    exit(EXIT_FAILURE);
+  // Initialize the image array.
+  for (i = 0; i < PATTERN_SET_COUNT; i++) {
+    imageSeed[i] = NULL;
   }
 
   // Initialize tensor communications and aspect.
-#ifdef USE_TENSOR
   tensor_init();
   //tensor_landscape_p = 1;  // Landscape mode (good for single panel).
   tensor_landscape_p = 0;  // Portrait mode (normal).
-#endif
 
   // Set the widths / heights
   SetDims();  // After set tensor_landscape_p.
 
   // Draw a border around the preview
   DrawPreviewBorder(PREVIEW_A_POSITION_X, PREVIEW_A_POSITION_Y);
-  //~ DrawPreviewBorder(PREVIEW_B_POSITION_X, PREVIEW_B_POSITION_Y);
+  DrawPreviewBorder(PREVIEW_B_POSITION_X, PREVIEW_B_POSITION_Y);
 
   // Further patternSet initializations
   for (i = 0; i < PATTERN_SET_COUNT; i++) {
-    SINT(PE_TEXTOFFSET, i) = tensorHeight / 3 - 1;  // After SetDims()
+    SINT(i, PE_TEXTOFFSET) = tensorHeight / 3 - 1;  // After SetDims()
   }
 
-  // Attempt to load startup pattern sets from disk.  These are 0.now - 9.now
-  // files.  Its okay if they don't exist.
+  // Attempt to load startup pattern sets from disk.  These are 0-9.now
+  // files.  Its okay if they don't exist.  Otherwise, default will be loaded
+  // into those pattern sets.
   for (i = 0; i < PATTERN_SET_COUNT; i++) {
     LoadPatternSet(i + '0', i);
   }
+  cycleFrameCount = DINT(PE_FRAMECOUNT);
 
   // Bam - Show the (blank) preview.
-  UpdateDisplays(global_intensity_limit);
+  UpdateDisplays(currentSet, alternateSet, global_intensity_limit);
 
   // Add the text to the window
   InitDisplayTexts();
 
   // Initialize the user events
   FPSEventType = SDL_RegisterEvents(1);
-  DRAWEventType = SDL_RegisterEvents(1);
+  DRAWEventTypeA = SDL_RegisterEvents(1);
+  DRAWEventTypeB = SDL_RegisterEvents(1);
   GUIEventType = SDL_RegisterEvents(1);
 
   // Init the processing timer.
-  if (!SDL_AddTimer(DINT(PE_DELAY), TriggerFrameDraw, NULL)) {
+  if (!SDL_AddTimer(DINT(PE_DELAY), TriggerFrameDrawA, NULL)) {
     fprintf(stderr, "Can't initialize the processing timer! %s\n", SDL_GetError());
+    exit(EXIT_FAILURE);
+  }
+
+  if (!SDL_AddTimer(SINT(alternateSet, PE_DELAY), TriggerFrameDrawB, NULL)) {
+    fprintf(stderr, "Can't initialize the 2nd processing timer! %s\n", SDL_GetError());
     exit(EXIT_FAILURE);
   }
 
@@ -825,7 +1010,7 @@ int main(int argc, char *argv[]) {
             // precompute these if timing were important.
             box.x = colToPixel[displayCommand[i].col];
             box.y = displayCommand[i].line * DISPLAY_TEXT_HEIGHT;
-            box.w = colToPixel[displayCommand[i].col + 1] - box.x;
+            box.w = colToPixel[displayCommand[i].col + 2] - box.x;
             box.h = (displayCommand[i].line + 1) * DISPLAY_TEXT_HEIGHT - box.y + 1;
 
             // Is it in the rectangle of command i?
@@ -897,14 +1082,18 @@ int main(int argc, char *argv[]) {
         case SDL_MOUSEBUTTONUP:
           // Mouse button unpushed.  Consider this a click.  If we're over
           // the same item we down clicked on, execute a command.
-          if ((thisHover != INVALID) && (thisHover == mouseDownOn)) {
-            exitProgram = HandleCommand(displayCommand[thisHover].commands[MOUSE_CLICK].command);
+          if (event.button.button == SDL_BUTTON_LEFT) {
+            if ((thisHover != INVALID) && (thisHover == mouseDownOn)) {
+              exitProgram = HandleCommand(displayCommand[thisHover].commands[MOUSE_CLICK].command);
+            }
           }
           break;
 
         case SDL_MOUSEBUTTONDOWN:
           // Mouse button pushed.  Make a note of the item it was pushed over.
-          mouseDownOn = thisHover;
+          if (event.button.button == SDL_BUTTON_LEFT) {
+            mouseDownOn = thisHover;
+          }
           break;
 
         case SDL_QUIT:
@@ -921,7 +1110,7 @@ int main(int argc, char *argv[]) {
             ClearWindow();
             InitDisplayTexts();
             DrawPreviewBorder(PREVIEW_A_POSITION_X, PREVIEW_A_POSITION_Y);
-            //~ DrawPreviewBorder(PREVIEW_B_POSITION_X, PREVIEW_B_POSITION_Y);
+            DrawPreviewBorder(PREVIEW_B_POSITION_X, PREVIEW_B_POSITION_Y);
           }
           break;
 
@@ -929,20 +1118,26 @@ int main(int argc, char *argv[]) {
           // There are two registered user events to check for here.  They can't
           // be tested in the case statement because they are not compile-time
           // integer constants.
-          if (event.type == DRAWEventType) {
+          if (event.type == DRAWEventTypeA) {
             // The frame timer expired.  Set a new frame to draw.
-            drawNewFrame = YES;
+            drawNewFrameA = YES;
+
+          } else if (event.type == DRAWEventTypeB) {
+            // The alternate frame timer expired.  Set a new frame to draw.
+            drawNewFrameB = YES;
 
           } else if (event.type == FPSEventType) {
             // The fps timer expired.  Set fps and reset the frame count.
-            previewFPS = previewFrameCount;
+            previewFPSA = previewFrameCountA;
+            previewFPSB = previewFrameCountB;
             guiFPS = guiFrameCount;
             guiFrameCount = 0;
-            previewFrameCount = 0;
+            previewFrameCountA = 0;
+            previewFrameCountB = 0;
 
           } else if (event.type == GUIEventType) {
             // Update the text display.
-            UpdateInfoDisplay();
+            UpdateInfoDisplay(displaySet ? alternateSet : currentSet);
             UpdateGUI();
             guiFrameCount++;
 
@@ -954,19 +1149,32 @@ int main(int argc, char *argv[]) {
     }
 
     // Draw a new frame once every n ms, where n defaults to 60.
-    if (drawNewFrame) {
-      drawNewFrame = NO;
-      previewFrameCount++;
-      DrawNewFrame();
-
+    if ((drawNewFrameA) || (drawNewFrameB)) {
+      if (drawNewFrameA) {
+        drawNewFrameA = NO;
+        previewFrameCountA++;
+        DrawNewFrame(currentSet, YES);
+        if (cyclePatternSets) {
+          cycleFrameCount--;
+          if (cycleFrameCount < 0) {
+            currentSet = (currentSet + 1) % PATTERN_SET_COUNT;
+            cycleFrameCount = DINT(PE_FRAMECOUNT);
+          }
+          if (cycleFrameCount > DINT(PE_FRAMECOUNT)) {
+            cycleFrameCount = DINT(PE_FRAMECOUNT);
+          }
+        }
+      }
+      if (drawNewFrameB) {
+        drawNewFrameB = NO;
+        previewFrameCountB++;
+        DrawNewFrame(alternateSet, NO);
+      }
     } else {
       // Large delays make the CPU spin. Its because we;re stuck in a tight
       // loop, polling for events that never occur.  Best to get out of the way...
-      if (DINT(PE_DELAY) > 10) {
-
-        // Idle the processor for 1 ms.
-        nanosleep((struct timespec[]) {{0,1000000}}, NULL);
-      }
+      // Idle the processor for 1 ms.
+      nanosleep((struct timespec[]) {{0,1000000}}, NULL);
     }
 
     if (exitProgram) break;
@@ -981,19 +1189,35 @@ int main(int argc, char *argv[]) {
 }
 
 // Event that triggers a frame to be drawn.
-Uint32 TriggerFrameDraw(Uint32 interval, void *param) {
+Uint32 TriggerFrameDrawA(Uint32 interval, void *param) {
   SDL_Event event;
 
   // Make a new event for frame drawing and push it to the queue.
   SDL_zero(event);
-  event.type = DRAWEventType;
+  event.type = DRAWEventTypeA;
   event.user.code = 0;
   event.user.data1 = NULL;
   event.user.data2 = NULL;
   SDL_PushEvent(&event);
 
   // Returning the next delay sets the timer to fire again.
-  return(DINT(PE_DELAY));
+  return(SINT(currentSet, PE_DELAY));
+}
+
+// Event that triggers a frame to be drawn.
+Uint32 TriggerFrameDrawB(Uint32 interval, void *param) {
+  SDL_Event event;
+
+  // Make a new event for frame drawing and push it to the queue.
+  SDL_zero(event);
+  event.type = DRAWEventTypeB;
+  event.user.code = 0;
+  event.user.data1 = NULL;
+  event.user.data2 = NULL;
+  SDL_PushEvent(&event);
+
+  // Returning the next delay sets the timer to fire again.
+  return(SINT(alternateSet, PE_DELAY));
 }
 
 // Event that triggers the fps to be updated.
@@ -1031,7 +1255,7 @@ Uint32 TriggerGUIUpdate(Uint32 interval, void *param) {
 // Check to make sure that some of the program's data sets are built correctly.
 // This is done to ensure that certain arrays can be accessed via enumeration
 // values rather than indicies (i.e. enumerations must match indecies).
-void VerifyStructureIntegrity(void) {
+void VerifyStructuralIntegrity(void) {
   int i;
 
   // patternElement_e and patternSet array.
@@ -1042,14 +1266,61 @@ void VerifyStructureIntegrity(void) {
       exit(EXIT_FAILURE);
     }
   }
+  if (PSET_SIZE != PE_COUNT) {
+    fprintf(stderr, "Programmer error: Mismatched patternSet(%i) != patternElement_e(%i)!\n", (int) PSET_SIZE, PE_COUNT);
+    exit(EXIT_FAILURE);
+  }
 
   // color_e and namedPalette array.
   for (i = 0; i < NAMEDPALETTE_SIZE; i++) {
     if (i != namedPalette[i].index) {
       fprintf(stderr, "Programmer error: color_e does not match namedPalette array!\n");
-      fprintf(stderr, "Element %i, \"%s\" has incorrect enumeration value %i!\n", i, namedPalette[i].name, namedPalette[i].index);
+      fprintf(stderr, "Element %i, has incorrect enumeration value %i!\n", i, namedPalette[i].index);
       exit(EXIT_FAILURE);
     }
+  }
+  if (CE_COUNT != NAMEDPALETTE_SIZE) {
+    fprintf(stderr, "Programmer error: Mismatched namedPalette(%i) != color_e(%i)!\n", (int) NAMEDPALETTE_SIZE, CE_COUNT);
+    exit(EXIT_FAILURE);
+  }
+  if (CE_COUNT != COLORSTEXT_SIZE) {
+    fprintf(stderr, "Programmer error: Mismatched color_e(%i) != colorText(%i)!\n", CE_COUNT, (int) COLORSTEXT_SIZE);
+    exit(EXIT_FAILURE);
+  }
+
+  // enums_e and enumerations array.
+  for (i = 0; i < ENUMERATIONS_SIZE; i++) {
+    if (i != enumerations[i].type) {
+      fprintf(stderr, "Programmer error: enums_e does not match enumerations array!\n");
+      fprintf(stderr, "Element %i, has incorrect enumeration value %i!\n", i, enumerations[i].type);
+      exit(EXIT_FAILURE);
+    }
+  }
+  if (E_COUNT != ENUMERATIONS_SIZE) {
+    fprintf(stderr, "Programmer error: Mismatched enums_e(%i) != enumerations(%i)!\n", E_COUNT, (int) ENUMERATIONS_SIZE);
+    exit(EXIT_FAILURE);
+  }
+
+  // Texts - we can only do a count on these.
+  if (DIR_COUNT != DIRTEXT_SIZE) {
+    fprintf(stderr, "Programmer error: Mismatched dir_e(%i) != dirText(%i)!\n", DIR_COUNT, (int) DIRTEXT_SIZE);
+    exit(EXIT_FAILURE);
+  }
+  if (FM_COUNT != FADEMODETEXT_SIZE) {
+    fprintf(stderr, "Programmer error: Mismatched fadeModes_e(%i) != fadeModeText(%i)!\n", FM_COUNT, (int) FADEMODETEXT_SIZE);
+    exit(EXIT_FAILURE);
+  }
+  if (SM_COUNT != SHIFTTEXT_SIZE) {
+    fprintf(stderr, "Programmer error: Mismatched shiftModes_e(%i) != shiftText(%i)!\n", SM_COUNT, (int) SHIFTTEXT_SIZE);
+    exit(EXIT_FAILURE);
+  }
+  if (TS_COUNT != TEXTMODETEXT_SIZE) {
+    fprintf(stderr, "Programmer error: Mismatched textMode_e(%i) != textModeText(%i)!\n", TS_COUNT, (int) TEXTMODETEXT_SIZE);
+    exit(EXIT_FAILURE);
+  }
+  if (CM_COUNT != COLORCYCLETEXT_SIZE) {
+    fprintf(stderr, "Programmer error: Mismatched colorCycleModes_e(%i) != colorCycleText(%i)!\n", CM_COUNT, (int) COLORCYCLETEXT_SIZE);
+    exit(EXIT_FAILURE);
   }
 }
 
@@ -1069,7 +1340,7 @@ void AllocatePatternData(void) {
           exit(EXIT_FAILURE);
         } else {
           for(j = 0; j < PATTERN_SET_COUNT; j++) {
-            SINT(i, j) = patternSet[i].initial.i;
+            SINT(j, i) = patternSet[i].initial.i;
           }
         }
         break;
@@ -1081,7 +1352,7 @@ void AllocatePatternData(void) {
           exit(EXIT_FAILURE);
         } else {
           for(j = 0; j < PATTERN_SET_COUNT; j++) {
-            SFLOAT(i, j) = patternSet[i].initial.f;
+            SFLOAT(j, i) = patternSet[i].initial.f;
           }
         }
         break;
@@ -1093,7 +1364,7 @@ void AllocatePatternData(void) {
           exit(EXIT_FAILURE);
         } else {
           for(j = 0; j < PATTERN_SET_COUNT; j++) {
-            SCOLOR(i, j) = patternSet[i].initial.c;
+            SCOLOR(j, i) = patternSet[i].initial.c;
           }
         }
         break;
@@ -1105,7 +1376,7 @@ void AllocatePatternData(void) {
           exit(EXIT_FAILURE);
         } else {
           for(j = 0; j < PATTERN_SET_COUNT; j++) {
-            SBOOL(i, j) = patternSet[i].initial.b;
+            SBOOL(j, i) = patternSet[i].initial.b;
           }
         }
         break;
@@ -1121,8 +1392,8 @@ void AllocatePatternData(void) {
           exit(EXIT_FAILURE);
         } else {
           for (j = 0; j < PATTERN_SET_COUNT; j++) {
-            strncpy(SSTRING(i, j), patternSet[i].initial.s, patternSet[i].size);
-            SSTRING(i, j)[patternSet[i].size - 1] = '\0';
+            strncpy(SSTRING(j, i), patternSet[i].initial.s, patternSet[i].size);
+            SSTRING(j, i)[patternSet[i].size - 1] = '\0';
           }
         }
         break;
@@ -1153,22 +1424,22 @@ void AllocatePatternData(void) {
     //~ for (i = 0; i < PSET_SIZE; i++) {
       //~ switch(patternSet[i].type) {
         //~ case ET_INT:
-          //~ printf("Element %i - %i (%s) of type int is %i\n", i, patternSet[i].index, patternSet[i].name, SINT(i,j));
+          //~ printf("Element %i - %i (%s) of type int is %i\n", i, patternSet[i].index, patternSet[i].name, SINT(set, i,j));
           //~ break;
         //~ case ET_FLOAT:
-          //~ printf("Element %i - %i (%s) of type float is %f\n", i, patternSet[i].index, patternSet[i].name, SFLOAT(i, j));
+          //~ printf("Element %i - %i (%s) of type float is %f\n", i, patternSet[i].index, patternSet[i].name, SFLOAT(set, i, j));
           //~ break;
         //~ case ET_COLOR:
-          //~ printf("Element %i - %i (%s) of type color is (%i, %i, %i, %i)\n", i, patternSet[i].index, patternSet[i].name, SCOLOR(i, j).r, SCOLOR(i, j).g, SCOLOR(i, j).b, SCOLOR(i, j).a);
+          //~ printf("Element %i - %i (%s) of type color is (%i, %i, %i, %i)\n", i, patternSet[i].index, patternSet[i].name, SCOLOR(set, i, j).r, SCOLOR(set, i, j).g, SCOLOR(set, i, j).b, SCOLOR(set, i, j).a);
           //~ break;
         //~ case ET_ENUM:
-          //~ printf("Element %i - %i (%s) of type enum is %i\n", i, patternSet[i].index, patternSet[i].name, SINT( i, j));
+          //~ printf("Element %i - %i (%s) of type enum is %i\n", i, patternSet[i].index, patternSet[i].name, SINT(set,  i, j));
           //~ break;
         //~ case ET_BOOL:
-          //~ printf("Element %i - %i (%s) of type bool is %s\n", i, patternSet[i].index, patternSet[i].name, SBOOL( i, j) ? "YES" : "NO");
+          //~ printf("Element %i - %i (%s) of type bool is %s\n", i, patternSet[i].index, patternSet[i].name, SBOOL(j, i) ? "YES" : "NO");
           //~ break;
         //~ case ET_STRING:
-          //~ printf("Element %i - %i (%s) of type string is \"%s\"\n", i, patternSet[i].index, patternSet[i].name, SSTRING( i, j));
+          //~ printf("Element %i - %i (%s) of type string is \"%s\"\n", i, patternSet[i].index, patternSet[i].name, SSTRING(set,  i, j));
           //~ break;
         //~ case ET_BUFFER:
           //~ printf("Element %i - %i (%s) of type buffer is %i bytes.\n", i, patternSet[i].index, patternSet[i].name, patternSet[i].size);
@@ -1182,38 +1453,35 @@ void AllocatePatternData(void) {
   //~ }
 }
 // The thing that happens at every frame.
-void DrawNewFrame(void) {
-  // Update the buffer. (I.E. make pattern)
-  ProcessModes();
-
-  // Update the preview and tensor.
-  UpdateDisplays(global_intensity_limit);
-}
-
-// Time to make a mess of the array.
-void ProcessModes(void) {
-  static int cycleFrameCount = 0;    // Frame Count.
-  static dir_e scrDir = DIR_UP;
+void DrawNewFrame(int set, unsigned char primary) {
 
   // Cycles through the pattern sets.  Allows you to set up a bunch of pattern
   // sets and switch between them one at a time at some interval.
-  if (cyclePatternSets) {
-    cycleFrameCount++;
-    if (cycleFrameCount >= CYCLE_FRAME_LIMIT) {
-      cycleFrameCount = 0;
+  if (primary) {
+    ProcessModes(set);
 
-      currentSet = (currentSet + 1) % PATTERN_SET_COUNT;
+    UpdateDisplays(set, primary, global_intensity_limit);
+  } else {
+    if (currentSet != alternateSet) {
+      ProcessModes(set);
     }
+    UpdateDisplays(set, primary, global_intensity_limit);
   }
 
-  // Change foreground color.
-  if (DBOOL(PE_CYCLEFG)) {
-    ColorCycle(FOREGROUND);
+}
+
+// Time to make a mess of the array.
+void ProcessModes(int set) {
+  int currentSet = set; // Overrides global used in D* macros.
+
+  // Foreground color cycle.
+  if (DENUM(PE_FGCYCLE)) {
+    DCOLOR(PE_FGC) = ColorCycle(currentSet, DENUM(PE_FGCYCLE), &DINT(PE_CYCLESAVEFG), DINT(PE_FGRAINBOW));
   }
 
   // Change background color.
-  if (DBOOL(PE_CYCLEBG)) {
-    ColorCycle(BACKGROUND);
+  if (DENUM(PE_BGCYCLE)) {
+    DCOLOR(PE_BGC) = ColorCycle(currentSet, DENUM(PE_BGCYCLE), &DINT(PE_CYCLESAVEBG), DINT(PE_BGRAINBOW));
   }
 
   // Seed the entire array with the foreground color.
@@ -1259,31 +1527,39 @@ void ProcessModes(void) {
 
   // Draw a solid bar up the side we are scrolling from.
   if (DBOOL(PE_BARSEED)) {
-    DrawSideBar();
+    DrawSideBar(currentSet);
   }
 
   // First stab experimental image drawing.  Needs work.
   if (DBOOL(PE_POSTIMAGE)) {
-    DrawImage(DFLOAT(PE_POSTRZANGLE), DFLOAT(PE_EXPAND), DBOOL(PE_ALIAS), DBUFFER(PE_FRAMEBUFFER));
-    DFLOAT(PE_POSTRZANGLE) += DFLOAT(PE_POSTRZINC);
+    DrawImage(set, DFLOAT(PE_IMAGEANGLE), DFLOAT(PE_IMAGEXOFFSET), DFLOAT(PE_IMAGEYOFFSET),
+      DFLOAT(PE_IMAGEEXP), DBOOL(PE_IMAGEALIAS), DBUFFER(PE_FRAMEBUFFER));
+    DFLOAT(PE_IMAGEANGLE) += DFLOAT(PE_IMAGEINC);
+  }
+
+  // Image one-shot
+  if (DBOOL(PE_IMAGEALL)) {
+    DrawImage(set, DFLOAT(PE_IMAGEANGLE), DFLOAT(PE_IMAGEXOFFSET), DFLOAT(PE_IMAGEYOFFSET),
+      DFLOAT(PE_IMAGEEXP), DBOOL(PE_IMAGEALIAS), DBUFFER(PE_FRAMEBUFFER));
+    DBOOL(PE_IMAGEALL) = NO;
   }
 
   // Write a column of text on the side opposite of the scroll direction.
   if (DBOOL(PE_TEXTSEED)) {
     // Scroll provided by scroller if its on.
-    WriteSlice();
+    WriteSlice(currentSet);
   }
 
   // Cellular automata manips?  Not actually cellular auto.  Never finished this.
   if (DBOOL(PE_CELLFUN)) {
     // Give each pixel a color value.
-    CellFun();
+    CellFun(currentSet);
   }
 
   // Bouncy bouncy (ick).
   if (DBOOL(PE_BOUNCER)) {
-    scrDir = (scrDir + 1) % 4;
-    Scroll(scrDir, DBOOL(PE_ROLLOVER), DBUFFER(PE_FRAMEBUFFER), PLANE_ALL);
+    DENUM(PE_BOUNCESCR) = (DENUM(PE_BOUNCESCR) + 1) % DIR_COUNT;
+    Scroll(DENUM(PE_BOUNCESCR), DBOOL(PE_ROLLOVER), DBUFFER(PE_FRAMEBUFFER), PLANE_ALL);
   }
 
   // Bam!  Draw some horizontal bars.
@@ -1324,24 +1600,30 @@ void ProcessModes(void) {
     Multiply(DFLOAT(PE_MULTIPLYBY), DBUFFER(PE_FRAMEBUFFER));
   }
 
-  // Experimental Rotozoomer
+  // Rotozoomer
   if (DBOOL(PE_PRERZ)) {
-    Rotate(DFLOAT(PE_PRERZANGLE), DFLOAT(PE_EXPAND), DBOOL(PE_ALIAS), DBUFFER(PE_FRAMEBUFFER), DBUFFER(PE_FRAMEBUFFER));
+    Rotate(DFLOAT(PE_PRERZANGLE), DFLOAT(PE_PRERZEXPAND), DBOOL(PE_PRERZALIAS), DBUFFER(PE_FRAMEBUFFER), DBUFFER(PE_FRAMEBUFFER));
+    DFLOAT(PE_PRERZANGLE) += DFLOAT(PE_PRERZINC);
   }
 
   // Zero the red.
   if (DBOOL(PE_NORED)) {
-    ClearRed();
+    ClearRed(currentSet);
   }
 
   // Zero the blue.
   if (DBOOL(PE_NOBLUE)) {
-    ClearBlue();
+    ClearBlue(currentSet);
   }
 
   // Zero the green.
   if (DBOOL(PE_NOGREEN)) {
-    ClearGreen();
+    ClearGreen(currentSet);
+  }
+
+  // Post rotation increment.
+  if (DBOOL(PE_POSTRZ)) {
+    DFLOAT(PE_POSTRZANGLE) += DFLOAT(PE_POSTRZINC);
   }
 }
 
@@ -1446,70 +1728,82 @@ int HandleKey(SDL_Keycode key, SDL_Keymod mod) {
 int HandleCommand(command_e command) {
   int i;
 
+  // Support for operating on selected sets.
+  int set = currentSet;
+  if (displaySet == OO_ALTERNATE) {
+    set = alternateSet;
+  }
+
   switch(command) {
-    case COM_CELL: DBOOL(PE_CELLFUN) = !DBOOL(PE_CELLFUN); break;
-    case COM_TEXT_FLIP: DBOOL(PE_FONTFLIP) = !DBOOL(PE_FONTFLIP); break;
-    case COM_TEXT_REVERSE: DBOOL(PE_FONTDIR) = !DBOOL(PE_FONTDIR); break;
-    case COM_TEXT: DBOOL(PE_TEXTSEED) = !DBOOL(PE_TEXTSEED); break;
-    case COM_BOUNCE: DBOOL(PE_BOUNCER) = !DBOOL(PE_BOUNCER); break;
-    case COM_FADE: DBOOL(PE_FADE) = !DBOOL(PE_FADE); break;
-    case COM_DIFFUSE: DBOOL(PE_DIFFUSE) = !DBOOL(PE_DIFFUSE); break;
-    case COM_ROLL: DBOOL(PE_ROLLOVER) = !DBOOL(PE_ROLLOVER); break;
-    case COM_SCROLL: DBOOL(PE_SCROLL) = !DBOOL(PE_SCROLL); break;
-    case COM_HBAR: DBOOL(PE_HBARS) = YES; break;
-    case COM_VBAR: DBOOL(PE_VBARS) = YES; break;
-    case COM_FGALL: DBOOL(PE_FGCOLORALL) = YES; break;
-    case COM_BGALL: DBOOL(PE_BGCOLORALL) = YES; break;
-    case COM_RDOT: DBOOL(PE_RANDOMDOT) = !DBOOL(PE_RANDOMDOT); break;
-    case COM_FGCYCLE: DBOOL(PE_CYCLEFG) = !DBOOL(PE_CYCLEFG); break;
-    case COM_BGCYCLE: DBOOL(PE_CYCLEBG) = !DBOOL(PE_CYCLEBG); break;
-    case COM_CYCLESET: cyclePatternSets = !cyclePatternSets; break;
+    case COM_BLEND_RST: alternateBlend = 0; break;
+    case COM_BLEND_INC:
+      alternateBlend += SFLOAT(set, PE_FLOATINC);
+      if (alternateBlend > 1.0) alternateBlend = 1.0;
+      break;
+    case COM_BLEND_DEC:
+      alternateBlend -= SFLOAT(set, PE_FLOATINC);
+      if (alternateBlend < 0.0) alternateBlend = 0.0;
+      break;
+    case COM_BLENDINC_RST: alternateBlendRate = 0.01; break;
+    case COM_BLENDINC_INC:
+      alternateBlendRate += SFLOAT(set, PE_FLOATINC);
+      if (alternateBlendRate > 1.0) alternateBlendRate = 1.0;
+      break;
+    case COM_BLENDINC_DEC:
+      alternateBlendRate -= SFLOAT(set, PE_FLOATINC);
+      if (alternateBlendRate < 0.0) alternateBlendRate = 0.0;
+      break;
+    case COM_BLENDSWITCH: autoBlend = !autoBlend; break;
+    case COM_EXCHANGE: i = currentSet; currentSet = alternateSet; alternateSet = i; break;
+    case COM_OPERATE: displaySet = (displaySet + 1) % OO_COUNT; break;
+    case COM_ALTERNATE_INC: alternateSet = (alternateSet + 1) % PATTERN_SET_COUNT; break;
+    case COM_ALTERNATE_DEC: alternateSet--; if (alternateSet < 0) alternateSet = PATTERN_SET_COUNT - 1; break;
+    case COM_LIVE_INC: currentSet = (currentSet + 1) % PATTERN_SET_COUNT; break;
+    case COM_LIVE_DEC: currentSet--; if (currentSet < 0) currentSet = PATTERN_SET_COUNT - 1; break;
+    case COM_CELL: SBOOL(set, PE_CELLFUN) = !SBOOL(set, PE_CELLFUN); break;
+    case COM_TEXT_FLIP: SBOOL(set, PE_FONTFLIP) = !SBOOL(set, PE_FONTFLIP); break;
+    case COM_TEXT_REVERSE: SBOOL(set, PE_FONTDIR) = !SBOOL(set, PE_FONTDIR); break;
+    case COM_TEXT: SBOOL(set, PE_TEXTSEED) = !SBOOL(set, PE_TEXTSEED); break;
+    case COM_BOUNCE: SBOOL(set, PE_BOUNCER) = !SBOOL(set, PE_BOUNCER); break;
+    case COM_FADE: SBOOL(set, PE_FADE) = !SBOOL(set, PE_FADE); break;
+    case COM_DIFFUSE: SBOOL(set, PE_DIFFUSE) = !SBOOL(set, PE_DIFFUSE); break;
+    case COM_ROLL: SBOOL(set, PE_ROLLOVER) = !SBOOL(set, PE_ROLLOVER); break;
+    case COM_SCROLL: SBOOL(set, PE_SCROLL) = !SBOOL(set, PE_SCROLL); break;
+    case COM_HBAR: SBOOL(set, PE_HBARS) = YES; break;
+    case COM_VBAR: SBOOL(set, PE_VBARS) = YES; break;
+    case COM_FGALL: SBOOL(set, PE_FGCOLORALL) = YES; break;
+    case COM_BGALL: SBOOL(set, PE_BGCOLORALL) = YES; break;
+    case COM_IMAGEALL: SBOOL(set, PE_IMAGEALL) = YES; break;
+    case COM_RDOT: SBOOL(set, PE_RANDOMDOT) = !SBOOL(set, PE_RANDOMDOT); break;
+    case COM_FGCYCLE_RST: SENUM(set, PE_FGCYCLE) = patternSet[PE_FGCYCLE].initial.e; break;
+    case COM_BGCYCLE_RST: SENUM(set, PE_BGCYCLE) = patternSet[PE_BGCYCLE].initial.e; break;
+    case COM_FGCYCLE_UP: SENUM(set, PE_FGCYCLE) = (SENUM(set, PE_FGCYCLE) + 1) % CM_COUNT; break;
+    case COM_BGCYCLE_UP: SENUM(set, PE_BGCYCLE) = (SENUM(set, PE_BGCYCLE) + 1) % CM_COUNT; break;
+    case COM_FGCYCLE_DOWN:
+      SENUM(set, PE_FGCYCLE)--;
+      if (SENUM(set, PE_FGCYCLE) < 0) SENUM(set, PE_FGCYCLE) = CM_COUNT - 1;
+      break;
+    case COM_BGCYCLE_DOWN:
+      SENUM(set, PE_BGCYCLE)--;
+      if (SENUM(set, PE_BGCYCLE) < 0) SENUM(set, PE_BGCYCLE) = CM_COUNT - 1;
+      break;
+    case COM_CYCLESET:
+      cyclePatternSets = !cyclePatternSets;
+      cycleFrameCount = SINT(set, PE_FRAMECOUNT);
+      break;
     case COM_MODEOFF:
       for (i = 0; i < PSET_SIZE; i++) {
         if (patternSet[i].type == ET_BOOL) {
-          DBOOL(i) = NO;
+          SBOOL(set, i) = NO;
         }
       }
-      DENUM(PE_SHIFTBLUE) = SM_HOLD;
-      DENUM(PE_SHIFTCYAN) = SM_HOLD;
-      DENUM(PE_SHIFTGREEN) = SM_HOLD;
-      DENUM(PE_SHIFTMAGENTA) = SM_HOLD;
-      DENUM(PE_SHIFTYELLOW) = SM_HOLD;
-      DENUM(PE_SHIFTRED) = SM_HOLD;
+      SENUM(set, PE_SHIFTBLUE) = SM_HOLD;
+      SENUM(set, PE_SHIFTCYAN) = SM_HOLD;
+      SENUM(set, PE_SHIFTGREEN) = SM_HOLD;
+      SENUM(set, PE_SHIFTMAGENTA) = SM_HOLD;
+      SENUM(set, PE_SHIFTYELLOW) = SM_HOLD;
+      SENUM(set, PE_SHIFTRED) = SM_HOLD;
       cyclePatternSets = NO;
-      break;
-      //~ DBOOL(PE_ALIAS) = NO;
-      //~ DBOOL(PE_BOUNCER) = NO;
-      //~ DBOOL(PE_CELLFUN) = NO;
-      //~ DBOOL(PE_BGCOLORALL) = NO;
-      //~ DBOOL(PE_FGCOLORALL) = NO;
-      //~ DBOOL(PE_CYCLEBG) = NO;
-      //~ DBOOL(PE_CYCLEFG) = NO;
-      //~ DBOOL(PE_DIFFUSE) = NO;
-      //~ DENUM(PE_FADEMODE) = FM_LIMIT;
-      //~ DBOOL(PE_FADE) = NO;
-      //~ DBOOL(PE_HBARS) = NO;
-      //~ DBOOL(PE_MULTIPLY) = NO;
-      //~ DBOOL(PE_RANDOMDOT) = NO;
-      //~ DBOOL(PE_ROLLOVER) = NO;
-      //~ DBOOL(PE_POSTRZ) = NO;
-      //~ DBOOL(PE_PRERZ) = NO;
-      //~ DBOOL(PE_SCROLL) = NO;
-      //~ DBOOL(PE_TEXTSEED) = NO;
-      //~ DBOOL(PE_VBARS) = NO;
-      //~ DBOOL(PE_BARSEED) = NO;
-      //~ DBOOL(PE_NORED) = NO;
-      //~ DBOOL(PE_NOBLUE) = NO;
-      //~ DBOOL(PE_NOGREEN) = NO;
-      //~ DENUM(PE_SHIFTBLUE) = SM_HOLD;
-      //~ DENUM(PE_SHIFTCYAN) = SM_HOLD;
-      //~ DENUM(PE_SHIFTGREEN) = SM_HOLD;
-      //~ DENUM(PE_SHIFTMAGENTA) = SM_HOLD;
-      //~ DENUM(PE_SHIFTYELLOW) = SM_HOLD;
-      //~ DENUM(PE_SHIFTRED) = SM_HOLD;
-      //~ DBOOL(PE_POSTIMAGE) = OFF;
-      //~ DBOOL(PE_FONTFLIP) = OFF;
-      //~ DBOOL(PE_FONTDIR) = FORWARDS;
       break;
     case COM_LOADSET0: currentSet = 0; break;
     case COM_LOADSET1: currentSet = 1; break;
@@ -1522,217 +1816,274 @@ int HandleCommand(command_e command) {
     case COM_LOADSET8: currentSet = 8; break;
     case COM_LOADSET9: currentSet = 9; break;
     case COM_FADEMODE:
-      DENUM(PE_FADEMODE) = (DENUM(PE_FADEMODE) + 1) % FM_COUNT;
+      SENUM(set, PE_FADEMODE) = (SENUM(set, PE_FADEMODE) + 1) % FM_COUNT;
       break;
-    case COM_NORED: DBOOL(PE_NORED) = !DBOOL(PE_NORED); break;
-    case COM_NOGREEN: DBOOL(PE_NOGREEN) = !DBOOL(PE_NOGREEN); break;
-    case COM_NOBLUE: DBOOL(PE_NOBLUE) = !DBOOL(PE_NOBLUE); break;
-    case COM_TEXTRESET: DINT(PE_PIXELINDEX) = INVALID; break;
+    case COM_NORED: SBOOL(set, PE_NORED) = !SBOOL(set, PE_NORED); break;
+    case COM_NOGREEN: SBOOL(set, PE_NOGREEN) = !SBOOL(set, PE_NOGREEN); break;
+    case COM_NOBLUE: SBOOL(set, PE_NOBLUE) = !SBOOL(set, PE_NOBLUE); break;
+    case COM_TEXTRESET: SINT(set, PE_PIXELINDEX) = INVALID; break;
     case COM_POSTROTATE:
-      DBOOL(PE_POSTRZ) = !DBOOL(PE_POSTRZ);
-      DFLOAT(PE_POSTRZANGLE) = 0;
+      SBOOL(set, PE_POSTRZ) = !SBOOL(set, PE_POSTRZ);
+      SFLOAT(set, PE_POSTRZANGLE) = 0;
       break;
-    case COM_PREROTATE: DBOOL(PE_PRERZ) = !DBOOL(PE_PRERZ); break;
-    case COM_AA: DBOOL(PE_ALIAS) = !DBOOL(PE_ALIAS); break;
-    case COM_MULTIPLY: DBOOL(PE_MULTIPLY) = !DBOOL(PE_MULTIPLY); break;
-    case COM_SIDEBAR: DBOOL(PE_BARSEED) = !DBOOL(PE_BARSEED); break;
+    case COM_PREROTATE: SBOOL(set, PE_PRERZ) = !SBOOL(set, PE_PRERZ); break;
+    case COM_AA: SBOOL(set, PE_ALIAS) = !SBOOL(set, PE_ALIAS); break;
+    case COM_MULTIPLY: SBOOL(set, PE_MULTIPLY) = !SBOOL(set, PE_MULTIPLY); break;
+    case COM_SIDEBAR: SBOOL(set, PE_BARSEED) = !SBOOL(set, PE_BARSEED); break;
     case COM_ORIENTATION:
       tensor_landscape_p = !tensor_landscape_p;
       SetDims();
       DrawPreviewBorder(PREVIEW_A_POSITION_X, PREVIEW_A_POSITION_Y);
-      //~ DrawPreviewBorder(PREVIEW_B_POSITION_X, PREVIEW_B_POSITION_Y);
+      DrawPreviewBorder(PREVIEW_B_POSITION_X, PREVIEW_B_POSITION_Y);
       break;
-    case COM_TEXT_MODE_UP: DENUM(PE_TEXTMODE) = (DENUM(PE_TEXTMODE) + 1) % TS_COUNT; break;
+    case COM_TEXT_MODE_UP: SENUM(set, PE_TEXTMODE) = (SENUM(set, PE_TEXTMODE) + 1) % TS_COUNT; break;
     case COM_TEXT_MODE_DOWN:
-      DENUM(PE_TEXTMODE)--;
-      if (DENUM(PE_TEXTMODE) < 0) DENUM(PE_TEXTMODE) = TS_COUNT - 1;
+      SENUM(set, PE_TEXTMODE)--;
+      if (SENUM(set, PE_TEXTMODE) < 0) SENUM(set, PE_TEXTMODE) = TS_COUNT - 1;
       break;
-    case COM_RP_UP: DENUM(PE_SHIFTRED) = (DENUM(PE_SHIFTRED) + 1) % SM_COUNT; break;
+    case COM_RP_UP: SENUM(set, PE_SHIFTRED) = (SENUM(set, PE_SHIFTRED) + 1) % SM_COUNT; break;
+    case COM_RP_RST: SENUM(set, PE_SHIFTRED) = patternSet[PE_SHIFTRED].initial.e; break;
     case COM_RP_DOWN:
-      DENUM(PE_SHIFTRED)--;
-      if (DENUM(PE_SHIFTRED) < 0) DENUM(PE_SHIFTRED) = SM_COUNT - 1;
+      SENUM(set, PE_SHIFTRED)--;
+      if (SENUM(set, PE_SHIFTRED) < 0) SENUM(set, PE_SHIFTRED) = SM_COUNT - 1;
       break;
-    case COM_GP_UP: DENUM(PE_SHIFTGREEN) = (DENUM(PE_SHIFTGREEN) + 1) % SM_COUNT; break;
+    case COM_GP_UP: SENUM(set, PE_SHIFTGREEN) = (SENUM(set, PE_SHIFTGREEN) + 1) % SM_COUNT; break;
+    case COM_GP_RST: SENUM(set, PE_SHIFTGREEN) = patternSet[PE_SHIFTGREEN].initial.e; break;
     case COM_GP_DOWN:
-      DENUM(PE_SHIFTGREEN)--;
-      if (DENUM(PE_SHIFTGREEN) < 0) DENUM(PE_SHIFTGREEN) = SM_COUNT - 1;
+      SENUM(set, PE_SHIFTGREEN)--;
+      if (SENUM(set, PE_SHIFTGREEN) < 0) SENUM(set, PE_SHIFTGREEN) = SM_COUNT - 1;
       break;
-    case COM_BP_UP: DENUM(PE_SHIFTBLUE) = (DENUM(PE_SHIFTBLUE) + 1) % SM_COUNT; break;
+    case COM_BP_UP: SENUM(set, PE_SHIFTBLUE) = (SENUM(set, PE_SHIFTBLUE) + 1) % SM_COUNT; break;
+    case COM_BP_RST: SENUM(set, PE_SHIFTBLUE) = patternSet[PE_SHIFTBLUE].initial.e; break;
     case COM_BP_DOWN:
-      DENUM(PE_SHIFTBLUE)--;
-      if (DENUM(PE_SHIFTBLUE) < 0) DENUM(PE_SHIFTBLUE) = SM_COUNT - 1;
+      SENUM(set, PE_SHIFTBLUE)--;
+      if (SENUM(set, PE_SHIFTBLUE) < 0) SENUM(set, PE_SHIFTBLUE) = SM_COUNT - 1;
       break;
     case COM_FG_DEC:
-      DENUM(PE_FGE)--;
-      if (DENUM(PE_FGE) < CE_RED) DENUM(PE_FGE) = CE_COUNT - 1;
-      DCOLOR(PE_FGC) = namedPalette[DENUM(PE_FGE)].color;
+      SENUM(set, PE_FGE)--;
+      if (SENUM(set, PE_FGE) < CE_RED) SENUM(set, PE_FGE) = CE_COUNT - 1;
+      SCOLOR(set, PE_FGC) = namedPalette[SENUM(set, PE_FGE)].color;
       break;
     case COM_FG_INC:
-      DENUM(PE_FGE) = (DENUM(PE_FGE) + 1) % CE_COUNT;
-      DCOLOR(PE_FGC) = namedPalette[DENUM(PE_FGE)].color;
+      SENUM(set, PE_FGE) = (SENUM(set, PE_FGE) + 1) % CE_COUNT;
+      SCOLOR(set, PE_FGC) = namedPalette[SENUM(set, PE_FGE)].color;
       break;
     case COM_BG_DEC:
-      DENUM(PE_BGE)--;
-      if (DENUM(PE_BGE) < 0) DENUM(PE_BGE) = CE_COUNT - 1;
-      DCOLOR(PE_BGC) = namedPalette[DENUM(PE_BGE)].color;
+      SENUM(set, PE_BGE)--;
+      if (SENUM(set, PE_BGE) < 0) SENUM(set, PE_BGE) = CE_COUNT - 1;
+      SCOLOR(set, PE_BGC) = namedPalette[SENUM(set, PE_BGE)].color;
       break;
     case COM_BG_INC:
-      DENUM(PE_BGE) = (DENUM(PE_BGE) + 1) % CE_COUNT;
-      DCOLOR(PE_BGC) = namedPalette[DENUM(PE_BGE)].color;
+      SENUM(set, PE_BGE) = (SENUM(set, PE_BGE) + 1) % CE_COUNT;
+      SCOLOR(set, PE_BGC) = namedPalette[SENUM(set, PE_BGE)].color;
       break;
-    case COM_COPYSET0: CopyPatternSet(0, currentSet); break;
-    case COM_COPYSET1: CopyPatternSet(1, currentSet); break;
-    case COM_COPYSET2: CopyPatternSet(2, currentSet); break;
-    case COM_COPYSET3: CopyPatternSet(3, currentSet); break;
-    case COM_COPYSET4: CopyPatternSet(4, currentSet); break;
-    case COM_COPYSET5: CopyPatternSet(5, currentSet); break;
-    case COM_COPYSET6: CopyPatternSet(6, currentSet); break;
-    case COM_COPYSET7: CopyPatternSet(7, currentSet); break;
-    case COM_COPYSET8: CopyPatternSet(8, currentSet); break;
-    case COM_COPYSET9: CopyPatternSet(9, currentSet); break;
+    case COM_COPYSET0: CopyPatternSet(0, set); break;
+    case COM_COPYSET1: CopyPatternSet(1, set); break;
+    case COM_COPYSET2: CopyPatternSet(2, set); break;
+    case COM_COPYSET3: CopyPatternSet(3, set); break;
+    case COM_COPYSET4: CopyPatternSet(4, set); break;
+    case COM_COPYSET5: CopyPatternSet(5, set); break;
+    case COM_COPYSET6: CopyPatternSet(6, set); break;
+    case COM_COPYSET7: CopyPatternSet(7, set); break;
+    case COM_COPYSET8: CopyPatternSet(8, set); break;
+    case COM_COPYSET9: CopyPatternSet(9, set); break;
     case COM_TEXTO_DEC:
-      DINT(PE_TEXTOFFSET)--;
-      if (DINT(PE_TEXTOFFSET) < 0) {
-        if ((DENUM(PE_SCROLLDIR) == DIR_LEFT) || (DENUM(PE_SCROLLDIR) == DIR_RIGHT)) {
-          DINT(PE_TEXTOFFSET) = tensorHeight - 1;
+      SINT(set, PE_TEXTOFFSET)--;
+      if (SINT(set, PE_TEXTOFFSET) < 0) {
+        if ((SENUM(set, PE_SCROLLDIR) == DIR_LEFT) || (SENUM(set, PE_SCROLLDIR) == DIR_RIGHT)) {
+          SINT(set, PE_TEXTOFFSET) = tensorHeight - 1;
         } else {
-          DINT(PE_TEXTOFFSET) = tensorWidth - 1;
+          SINT(set, PE_TEXTOFFSET) = tensorWidth - 1;
         }
       }
       break;
     case COM_TEXTO_INC:
-      DINT(PE_TEXTOFFSET)++;
-      if ((DENUM(PE_SCROLLDIR) == DIR_LEFT) || (DENUM(PE_SCROLLDIR) == DIR_RIGHT)) {
-        DINT(PE_TEXTOFFSET) %= tensorHeight;
+      SINT(set, PE_TEXTOFFSET)++;
+      if ((SENUM(set, PE_SCROLLDIR) == DIR_LEFT) || (SENUM(set, PE_SCROLLDIR) == DIR_RIGHT)) {
+        SINT(set, PE_TEXTOFFSET) %= tensorHeight;
       } else {
-        DINT(PE_TEXTOFFSET) %= tensorWidth;
+        SINT(set, PE_TEXTOFFSET) %= tensorWidth;
       }
       break;
     case COM_DELAY_DEC:
-      DINT(PE_DELAY)--;
-      if (DINT(PE_DELAY) < 1) DINT(PE_DELAY) = 1;  // Can't be 0!
+      SINT(set, PE_DELAY)--;
+      if (SINT(set, PE_DELAY) < 1) SINT(set, PE_DELAY) = 1;  // Can't be 0!
       break;
     case COM_DELAY_RST:
-      DINT(PE_DELAY) = INITIAL_DELAY;
+      SINT(set, PE_DELAY) = INITIAL_DELAY;
       break;
     case COM_DELAY_INC:
-      DINT(PE_DELAY)++;
+      SINT(set, PE_DELAY)++;
       break;
-    case COM_CP_UP: DENUM(PE_SHIFTCYAN) = (DENUM(PE_SHIFTCYAN) + 1) % SM_COUNT; break;
+    case COM_CP_UP: SENUM(set, PE_SHIFTCYAN) = (SENUM(set, PE_SHIFTCYAN) + 1) % SM_COUNT; break;
+    case COM_CP_RST: SENUM(set, PE_SHIFTCYAN) = patternSet[PE_SHIFTCYAN].initial.e; break;
     case COM_CP_DOWN:
-      DENUM(PE_SHIFTCYAN)--;
-      if (DENUM(PE_SHIFTCYAN) < 0) DENUM(PE_SHIFTCYAN) = SM_COUNT - 1;
+      SENUM(set, PE_SHIFTCYAN)--;
+      if (SENUM(set, PE_SHIFTCYAN) < 0) SENUM(set, PE_SHIFTCYAN) = SM_COUNT - 1;
       break;
-    case COM_YP_UP: DENUM(PE_SHIFTYELLOW) = (DENUM(PE_SHIFTYELLOW) + 1) % SM_COUNT; break;
+    case COM_YP_UP: SENUM(set, PE_SHIFTYELLOW) = (SENUM(set, PE_SHIFTYELLOW) + 1) % SM_COUNT; break;
+    case COM_YP_RST: SENUM(set, PE_SHIFTYELLOW) = patternSet[PE_SHIFTYELLOW].initial.e; break;
     case COM_YP_DOWN:
-      DENUM(PE_SHIFTYELLOW)--;
-      if (DENUM(PE_SHIFTYELLOW) < 0) DENUM(PE_SHIFTYELLOW) = SM_COUNT - 1;
+      SENUM(set, PE_SHIFTYELLOW)--;
+      if (SENUM(set, PE_SHIFTYELLOW) < 0) SENUM(set, PE_SHIFTYELLOW) = SM_COUNT - 1;
       break;
-    case COM_MP_UP: DENUM(PE_SHIFTMAGENTA) = (DENUM(PE_SHIFTMAGENTA) + 1) % SM_COUNT; break;
+    case COM_MP_UP: SENUM(set, PE_SHIFTMAGENTA) = (SENUM(set, PE_SHIFTMAGENTA) + 1) % SM_COUNT; break;
+    case COM_MP_RST: SENUM(set, PE_SHIFTMAGENTA) = patternSet[PE_SHIFTMAGENTA].initial.e; break;
     case COM_MP_DOWN:
-      DENUM(PE_SHIFTMAGENTA)--;
-      if (DENUM(PE_SHIFTMAGENTA) < 0) DENUM(PE_SHIFTMAGENTA) = SM_COUNT - 1;
+      SENUM(set, PE_SHIFTMAGENTA)--;
+      if (SENUM(set, PE_SHIFTMAGENTA) < 0) SENUM(set, PE_SHIFTMAGENTA) = SM_COUNT - 1;
       break;
-    case COM_IMAGE: DBOOL(PE_POSTIMAGE) = !DBOOL(PE_POSTIMAGE); break;
-    case COM_FADE_DEC: DINT(PE_FADEINC)--; break;
-    case COM_FADE_INC: DINT(PE_FADEINC)++; break;
-    case COM_FADE_RST: DINT(PE_FADEINC) = INITIAL_FADEOUT_DEC; break;
-    case COM_DIFFUSE_DEC: DFLOAT(PE_DIFFUSECOEF) -= DFLOAT(PE_FLOATINC); break;
-    case COM_DIFFUSE_RST: DFLOAT(PE_DIFFUSECOEF) = INITIAL_DIFF_COEF; break;
-    case COM_DIFFUSE_INC: DFLOAT(PE_DIFFUSECOEF) += DFLOAT(PE_FLOATINC); break;
-    case COM_EXPAND_DEC: DFLOAT(PE_EXPAND) -= DFLOAT(PE_FLOATINC); break;
-    case COM_EXPAND_RST: DFLOAT(PE_EXPAND) = INITIAL_EXPAND; break;
-    case COM_EXPAND_INC: DFLOAT(PE_EXPAND) += DFLOAT(PE_FLOATINC); break;
+    case COM_IMAGE: SBOOL(set, PE_POSTIMAGE) = !SBOOL(set, PE_POSTIMAGE); break;
+    case COM_FADE_DEC: SINT(set, PE_FADEINC)--; break;
+    case COM_FADE_INC: SINT(set, PE_FADEINC)++; break;
+    case COM_FADE_RST: SINT(set, PE_FADEINC) = INITIAL_FADE_INC; break;
+    case COM_DIFFUSE_DEC: SFLOAT(set, PE_DIFFUSECOEF) -= SFLOAT(set, PE_FLOATINC); break;
+    case COM_DIFFUSE_RST: SFLOAT(set, PE_DIFFUSECOEF) = INITIAL_DIFF_COEF; break;
+    case COM_DIFFUSE_INC: SFLOAT(set, PE_DIFFUSECOEF) += SFLOAT(set, PE_FLOATINC); break;
+    case COM_EXPAND_DEC: SFLOAT(set, PE_POSTEXP) -= SFLOAT(set, PE_FLOATINC); break;
+    case COM_EXPAND_RST: SFLOAT(set, PE_POSTEXP) = INITIAL_EXPAND; break;
+    case COM_EXPAND_INC: SFLOAT(set, PE_POSTEXP) += SFLOAT(set, PE_FLOATINC); break;
     case COM_RANDOM_DEC:
-      DINT(PE_RANDOMDOTCOEF) -= max(1, DINT(PE_RANDOMDOTCOEF) / 50);
-      if (DINT(PE_RANDOMDOTCOEF) < 1) DINT(PE_RANDOMDOTCOEF) = 1;
+      SINT(set, PE_RANDOMDOTCOEF) -= max(1, SINT(set, PE_RANDOMDOTCOEF) / 50);
+      if (SINT(set, PE_RANDOMDOTCOEF) < 1) SINT(set, PE_RANDOMDOTCOEF) = 1;
       break;
-    case COM_RANDOM_RST: DINT(PE_RANDOMDOTCOEF) = INITIAL_RAND_MOD; break;
+    case COM_RANDOM_RST: SINT(set, PE_RANDOMDOTCOEF) = INITIAL_RAND_MOD; break;
     case COM_RANDOM_INC:
-      DINT(PE_RANDOMDOTCOEF) += max(1, DINT(PE_RANDOMDOTCOEF) / 50);
-      if (DINT(PE_RANDOMDOTCOEF) > 20000) DINT(PE_RANDOMDOTCOEF) = 20000;
+      SINT(set, PE_RANDOMDOTCOEF) += max(1, SINT(set, PE_RANDOMDOTCOEF) / 50);
+      if (SINT(set, PE_RANDOMDOTCOEF) > 20000) SINT(set, PE_RANDOMDOTCOEF) = 20000;
       break;
-    case COM_POSTROT_DEC: DFLOAT(PE_POSTRZANGLE) -= DFLOAT(PE_FLOATINC); break;
-    case COM_POSTROT_RST: DFLOAT(PE_POSTRZANGLE) = INITIAL_POSTROT_ANGLE; break;
-    case COM_POSTROT_INC: DFLOAT(PE_POSTRZANGLE) += DFLOAT(PE_FLOATINC); break;
-    case COM_LOAD0: memcpy(DBUFFER(PE_FRAMEBUFFER), SBUFFER(PE_FRAMEBUFFER, 0), patternSet[PE_FRAMEBUFFER].size * sizeof(unsigned char)); break;
-    case COM_LOAD1: memcpy(DBUFFER(PE_FRAMEBUFFER), SBUFFER(PE_FRAMEBUFFER, 1), patternSet[PE_FRAMEBUFFER].size * sizeof(unsigned char)); break;
-    case COM_LOAD2: memcpy(DBUFFER(PE_FRAMEBUFFER), SBUFFER(PE_FRAMEBUFFER, 2), patternSet[PE_FRAMEBUFFER].size * sizeof(unsigned char)); break;
-    case COM_LOAD3: memcpy(DBUFFER(PE_FRAMEBUFFER), SBUFFER(PE_FRAMEBUFFER, 3), patternSet[PE_FRAMEBUFFER].size * sizeof(unsigned char)); break;
-    case COM_LOAD4: memcpy(DBUFFER(PE_FRAMEBUFFER), SBUFFER(PE_FRAMEBUFFER, 4), patternSet[PE_FRAMEBUFFER].size * sizeof(unsigned char)); break;
-    case COM_LOAD5: memcpy(DBUFFER(PE_FRAMEBUFFER), SBUFFER(PE_FRAMEBUFFER, 5), patternSet[PE_FRAMEBUFFER].size * sizeof(unsigned char)); break;
-    case COM_LOAD6: memcpy(DBUFFER(PE_FRAMEBUFFER), SBUFFER(PE_FRAMEBUFFER, 6), patternSet[PE_FRAMEBUFFER].size * sizeof(unsigned char)); break;
-    case COM_LOAD7: memcpy(DBUFFER(PE_FRAMEBUFFER), SBUFFER(PE_FRAMEBUFFER, 7), patternSet[PE_FRAMEBUFFER].size * sizeof(unsigned char)); break;
-    case COM_LOAD8: memcpy(DBUFFER(PE_FRAMEBUFFER), SBUFFER(PE_FRAMEBUFFER, 8), patternSet[PE_FRAMEBUFFER].size * sizeof(unsigned char)); break;
-    case COM_LOAD9: memcpy(DBUFFER(PE_FRAMEBUFFER), SBUFFER(PE_FRAMEBUFFER, 9), patternSet[PE_FRAMEBUFFER].size * sizeof(unsigned char)); break;
-    case COM_RAINDBOW_DEC: DINT(PE_RAINBOWINC)--; break;
-    case COM_RAINDBOW_RST: DINT(PE_RAINBOWINC) = INITIAL_RAINBOW_INC; break;
-    case COM_RAINDBOW_INC: DINT(PE_RAINBOWINC)++; break;
-    case COM_CYCLE_MODE: DENUM(PE_COLORCYCLEMODE) = (DENUM(PE_COLORCYCLEMODE) + 1) % CM_COUNT; break;
+    case COM_POSTROT_DEC: SFLOAT(set, PE_POSTRZANGLE) -= SFLOAT(set, PE_FLOATINC); break;
+    case COM_POSTROT_RST: SFLOAT(set, PE_POSTRZANGLE) = INITIAL_POSTROT_ANGLE; break;
+    case COM_POSTROT_INC: SFLOAT(set, PE_POSTRZANGLE) += SFLOAT(set, PE_FLOATINC); break;
+    case COM_LOAD0: memcpy(SBUFFER(set, PE_FRAMEBUFFER), SBUFFER(0, PE_FRAMEBUFFER), patternSet[PE_FRAMEBUFFER].size * sizeof(unsigned char)); break;
+    case COM_LOAD1: memcpy(SBUFFER(set, PE_FRAMEBUFFER), SBUFFER(1, PE_FRAMEBUFFER), patternSet[PE_FRAMEBUFFER].size * sizeof(unsigned char)); break;
+    case COM_LOAD2: memcpy(SBUFFER(set, PE_FRAMEBUFFER), SBUFFER(2, PE_FRAMEBUFFER), patternSet[PE_FRAMEBUFFER].size * sizeof(unsigned char)); break;
+    case COM_LOAD3: memcpy(SBUFFER(set, PE_FRAMEBUFFER), SBUFFER(3, PE_FRAMEBUFFER), patternSet[PE_FRAMEBUFFER].size * sizeof(unsigned char)); break;
+    case COM_LOAD4: memcpy(SBUFFER(set, PE_FRAMEBUFFER), SBUFFER(4, PE_FRAMEBUFFER), patternSet[PE_FRAMEBUFFER].size * sizeof(unsigned char)); break;
+    case COM_LOAD5: memcpy(SBUFFER(set, PE_FRAMEBUFFER), SBUFFER(5, PE_FRAMEBUFFER), patternSet[PE_FRAMEBUFFER].size * sizeof(unsigned char)); break;
+    case COM_LOAD6: memcpy(SBUFFER(set, PE_FRAMEBUFFER), SBUFFER(6, PE_FRAMEBUFFER), patternSet[PE_FRAMEBUFFER].size * sizeof(unsigned char)); break;
+    case COM_LOAD7: memcpy(SBUFFER(set, PE_FRAMEBUFFER), SBUFFER(7, PE_FRAMEBUFFER), patternSet[PE_FRAMEBUFFER].size * sizeof(unsigned char)); break;
+    case COM_LOAD8: memcpy(SBUFFER(set, PE_FRAMEBUFFER), SBUFFER(8, PE_FRAMEBUFFER), patternSet[PE_FRAMEBUFFER].size * sizeof(unsigned char)); break;
+    case COM_LOAD9: memcpy(SBUFFER(set, PE_FRAMEBUFFER), SBUFFER(9, PE_FRAMEBUFFER), patternSet[PE_FRAMEBUFFER].size * sizeof(unsigned char)); break;
+    case COM_FGRAINBOW_DEC: SINT(set, PE_FGRAINBOW)--; break;
+    case COM_FGRAINBOW_RST: SINT(set, PE_FGRAINBOW) = patternSet[PE_FGRAINBOW].initial.i; break;
+    case COM_FGRAINBOW_INC: SINT(set, PE_FGRAINBOW)++; break;
+    case COM_BGRAINBOW_DEC: SINT(set, PE_BGRAINBOW)--; break;
+    case COM_BGRAINBOW_RST: SINT(set, PE_BGRAINBOW) = patternSet[PE_BGRAINBOW].initial.i; break;
+    case COM_BGRAINBOW_INC: SINT(set, PE_BGRAINBOW)++; break;
+    case COM_CYCLE_MODE: SENUM(set, PE_FGCYCLE) = (SENUM(set, PE_FGCYCLE) + 1) % CM_COUNT; break;
     case COM_CYCLE_MODE_DOWN:
-      DENUM(PE_COLORCYCLEMODE)--;
-      if (DENUM(PE_COLORCYCLEMODE) < 0) DENUM(PE_COLORCYCLEMODE) = CM_COUNT - 1;
+      SENUM(set, PE_FGCYCLE)--;
+      if (SENUM(set, PE_FGCYCLE) < 0) SENUM(set, PE_FGCYCLE) = CM_COUNT - 1;
       break;
-    case COM_PREROT_DEC: DFLOAT(PE_PRERZANGLE)-= DFLOAT(PE_FLOATINC); break;
-    case COM_PREROT_RST: DFLOAT(PE_PRERZANGLE) = INITIAL_PREROT_ANGLE; break;
-    case COM_PREROT_INC: DFLOAT(PE_PRERZANGLE)+= DFLOAT(PE_FLOATINC); break;
+    case COM_PREROT_DEC: SFLOAT(set, PE_PRERZANGLE)-= SFLOAT(set, PE_FLOATINC); break;
+    case COM_PREROT_RST: SFLOAT(set, PE_PRERZANGLE) = INITIAL_PREROT_ANGLE; break;
+    case COM_PREROT_INC: SFLOAT(set, PE_PRERZANGLE)+= SFLOAT(set, PE_FLOATINC); break;
     case COM_SCROLL_UPC:
-      DENUM(PE_SCROLLDIR) = DIR_UP;
-      DBOOL(PE_SCROLL) = YES;
+      SENUM(set, PE_SCROLLDIR) = DIR_UP;
+      SBOOL(set, PE_SCROLL) = YES;
       break;
     case COM_SCROLL_DOWNC:
-      DENUM(PE_SCROLLDIR) = DIR_DOWN;
-      DBOOL(PE_SCROLL) = YES;
+      SENUM(set, PE_SCROLLDIR) = DIR_DOWN;
+      SBOOL(set, PE_SCROLL) = YES;
       break;
     case COM_SCROLL_LEFTC:
-      DENUM(PE_SCROLLDIR) = DIR_LEFT;
-      DBOOL(PE_SCROLL) = YES;
+      SENUM(set, PE_SCROLLDIR) = DIR_LEFT;
+      SBOOL(set, PE_SCROLL) = YES;
       break;
     case COM_SCROLL_RIGHTC:
-      DENUM(PE_SCROLLDIR) = DIR_RIGHT;
-      DBOOL(PE_SCROLL) = YES;
+      SENUM(set, PE_SCROLLDIR) = DIR_RIGHT;
+      SBOOL(set, PE_SCROLL) = YES;
       break;
     case COM_SCROLL_CYCLE_UP:
-      DENUM(PE_SCROLLDIR) = (DENUM(PE_SCROLLDIR) + 1) % DIR_COUNT;
-      DBOOL(PE_SCROLL) = YES;
+      SENUM(set, PE_SCROLLDIR) = (SENUM(set, PE_SCROLLDIR) + 1) % DIR_COUNT;
+      SBOOL(set, PE_SCROLL) = YES;
       break;
     case COM_SCROLL_CYCLE_DOWN:
-      DENUM(PE_SCROLLDIR)--;
-      if (DENUM(PE_SCROLLDIR) < 0) DENUM(PE_SCROLLDIR) = DIR_COUNT - 1;
-      DBOOL(PE_SCROLL) = YES;
+      SENUM(set, PE_SCROLLDIR)--;
+      if (SENUM(set, PE_SCROLLDIR) < 0) SENUM(set, PE_SCROLLDIR) = DIR_COUNT - 1;
+      SBOOL(set, PE_SCROLL) = YES;
       break;
-    case COM_MULT_DEC: DFLOAT(PE_MULTIPLYBY) -= DFLOAT(PE_FLOATINC); break;
-    case COM_MULT_RST: DFLOAT(PE_MULTIPLYBY) = INITIAL_MULTIPLIER; break;
-    case COM_MULT_INC: DFLOAT(PE_MULTIPLYBY) += DFLOAT(PE_FLOATINC); break;
-    case COM_POSTSPEED_DEC: DFLOAT(PE_POSTRZINC) -= DFLOAT(PE_FLOATINC); break;
-    case COM_POSTSPEED_RST: DFLOAT(PE_POSTRZINC) = INITIAL_POSTROT_INC; break;
-    case COM_POSTSPEED_INC: DFLOAT(PE_POSTRZINC) += DFLOAT(PE_FLOATINC); break;
-    case COM_STEP_INC: DFLOAT(PE_FLOATINC) *= 10; break;
-    case COM_STEP_RST: DFLOAT(PE_FLOATINC) = INITIAL_FLOAT_INC; break;
-    case COM_STEP_DEC: DFLOAT(PE_FLOATINC) /= 10; break;
-    case COM_SCROLL_UP: DENUM(PE_SCROLLDIR) = DIR_UP; break;
-    case COM_SCROLL_DOWN: DENUM(PE_SCROLLDIR) = DIR_DOWN; break;
-    case COM_SCROLL_LEFT: DENUM(PE_SCROLLDIR) = DIR_LEFT; break;
-    case COM_SCROLL_RIGHT: DENUM(PE_SCROLLDIR) = DIR_RIGHT; break;
+    case COM_MULT_DEC: SFLOAT(set, PE_MULTIPLYBY) -= SFLOAT(set, PE_FLOATINC); break;
+    case COM_MULT_RST: SFLOAT(set, PE_MULTIPLYBY) = INITIAL_MULTIPLIER; break;
+    case COM_MULT_INC: SFLOAT(set, PE_MULTIPLYBY) += SFLOAT(set, PE_FLOATINC); break;
+    case COM_POSTSPEED_DEC: SFLOAT(set, PE_POSTRZINC) -= SFLOAT(set, PE_FLOATINC); break;
+    case COM_POSTSPEED_RST: SFLOAT(set, PE_POSTRZINC) = INITIAL_POSTROT_INC; break;
+    case COM_POSTSPEED_INC: SFLOAT(set, PE_POSTRZINC) += SFLOAT(set, PE_FLOATINC); break;
+    case COM_STEP_INC: SFLOAT(set, PE_FLOATINC) *= 10; break;
+    case COM_STEP_RST: SFLOAT(set, PE_FLOATINC) = INITIAL_FLOAT_INC; break;
+    case COM_STEP_DEC: SFLOAT(set, PE_FLOATINC) /= 10; break;
+    case COM_SCROLL_UP: SENUM(set, PE_SCROLLDIR) = DIR_UP; break;
+    case COM_SCROLL_DOWN: SENUM(set, PE_SCROLLDIR) = DIR_DOWN; break;
+    case COM_SCROLL_LEFT: SENUM(set, PE_SCROLLDIR) = DIR_LEFT; break;
+    case COM_SCROLL_RIGHT: SENUM(set, PE_SCROLLDIR) = DIR_RIGHT; break;
     case COM_EXIT: return 1;
     case COM_BACKSPACE:
-      DINT(PE_TEXTINDEX)--;
-      if (DINT(PE_TEXTINDEX) < 0) DINT(PE_TEXTINDEX) = 0;
-      DSTRING(PE_TEXTBUFFER)[DINT(PE_TEXTINDEX)] = 0x00;
+      SINT(set, PE_TEXTINDEX)--;
+      if (SINT(set, PE_TEXTINDEX) < 0) SINT(set, PE_TEXTINDEX) = 0;
+      SSTRING(set, PE_TEXTBUFFER)[SINT(set, PE_TEXTINDEX)] = 0x00;
       break;
     case COM_RETURN:
-      DSTRING(PE_TEXTBUFFER)[DINT(PE_TEXTINDEX)] = '\n';
-      DSTRING(PE_TEXTBUFFER)[DINT(PE_TEXTINDEX) + 1] = 0x00;
-      DINT(PE_TEXTINDEX)++;
-      if (DINT(PE_TEXTINDEX) >= (patternSet[PE_TEXTBUFFER].size - 2)) {
-        DINT(PE_TEXTINDEX)--;
+      SSTRING(set, PE_TEXTBUFFER)[SINT(set, PE_TEXTINDEX)] = '\n';
+      SSTRING(set, PE_TEXTBUFFER)[SINT(set, PE_TEXTINDEX) + 1] = 0x00;
+      SINT(set, PE_TEXTINDEX)++;
+      if (SINT(set, PE_TEXTINDEX) >= (patternSet[PE_TEXTBUFFER].size - 2)) {
+        SINT(set, PE_TEXTINDEX)--;
       }
       break;
     case COM_DELETE:
-      DINT(PE_TEXTINDEX) = 0;
-      DSTRING(PE_TEXTBUFFER)[0] = 0x00;
+      SINT(set, PE_TEXTINDEX) = 0;
+      SSTRING(set, PE_TEXTBUFFER)[0] = 0x00;
       break;
     case COM_INVALID: case COM_NONE: case COM_COUNT:
+      break;
+    case COM_PREROTINC_RST: SFLOAT(set, PE_PRERZINC) = patternSet[PE_PRERZINC].initial.f; break;
+    case COM_PREROTINC_INC: SFLOAT(set, PE_PRERZINC) += SFLOAT(set, PE_FLOATINC); break;
+    case COM_PREROTINC_DEC: SFLOAT(set, PE_PRERZINC) -= SFLOAT(set, PE_FLOATINC); break;
+    case COM_PREALIAS: SBOOL(set, PE_PRERZALIAS) = !SBOOL(set, PE_PRERZALIAS); break;
+    case COM_PREEXP_RST: SFLOAT(set, PE_PRERZEXPAND) = patternSet[PE_PRERZEXPAND].initial.f; break;
+    case COM_PREEXP_INC: SFLOAT(set, PE_PRERZEXPAND) += SFLOAT(set, PE_FLOATINC); break;
+    case COM_PREEXP_DEC: SFLOAT(set, PE_PRERZEXPAND) -= SFLOAT(set, PE_FLOATINC); break;
+    case COM_IMINC_RST: SFLOAT(set, PE_IMAGEINC) = patternSet[PE_IMAGEINC].initial.f; break;
+    case COM_IMINC_INC: SFLOAT(set, PE_IMAGEINC) += SFLOAT(set, PE_FLOATINC); break;
+    case COM_IMINC_DEC: SFLOAT(set, PE_IMAGEINC) -= SFLOAT(set, PE_FLOATINC); break;
+    case COM_IMALIAS: SBOOL(set, PE_IMAGEALIAS) = !SBOOL(set, PE_IMAGEALIAS); break;
+    case COM_IMEXP_RST: SFLOAT(set, PE_IMAGEEXP) = patternSet[PE_IMAGEEXP].initial.f; break;
+    case COM_IMEXP_INC: SFLOAT(set, PE_IMAGEEXP) += SFLOAT(set, PE_FLOATINC); break;
+    case COM_IMEXP_DEC: SFLOAT(set, PE_IMAGEEXP) -= SFLOAT(set, PE_FLOATINC); break;
+    case COM_IMANGLE_RST: SFLOAT(set, PE_IMAGEANGLE) = patternSet[PE_IMAGEANGLE].initial.f; break;
+    case COM_IMANGLE_INC: SFLOAT(set, PE_IMAGEANGLE) += SFLOAT(set, PE_FLOATINC); break;
+    case COM_IMANGLE_DEC: SFLOAT(set, PE_IMAGEANGLE) -= SFLOAT(set, PE_FLOATINC); break;
+    case COM_IMXOFFSET_RST: SFLOAT(set, PE_IMAGEXOFFSET) = patternSet[PE_IMAGEXOFFSET].initial.f; break;
+    case COM_IMXOFFSET_INC:
+      SFLOAT(set, PE_IMAGEXOFFSET) += SFLOAT(set, PE_FLOATINC);
+      if (SFLOAT(set, PE_IMAGEXOFFSET) > 1.0) SFLOAT(set, PE_IMAGEXOFFSET) = 1.0;
+      break;
+    case COM_IMXOFFSET_DEC:
+      SFLOAT(set, PE_IMAGEXOFFSET) -= SFLOAT(set, PE_FLOATINC);
+      if (SFLOAT(set, PE_IMAGEXOFFSET) < 0.0) SFLOAT(set, PE_IMAGEXOFFSET) = 0.0;
+      break;
+    case COM_IMYOFFSET_RST: SFLOAT(set, PE_IMAGEYOFFSET) = patternSet[PE_IMAGEYOFFSET].initial.f; break;
+    case COM_IMYOFFSET_INC:
+      SFLOAT(set, PE_IMAGEYOFFSET) += SFLOAT(set, PE_FLOATINC);
+      if (SFLOAT(set, PE_IMAGEYOFFSET) > 1.0) SFLOAT(set, PE_IMAGEYOFFSET) = 1.0;
+      break;
+    case COM_IMYOFFSET_DEC:
+      SFLOAT(set, PE_IMAGEYOFFSET) -= SFLOAT(set, PE_FLOATINC);
+      if (SFLOAT(set, PE_IMAGEYOFFSET) < 0.0) SFLOAT(set, PE_IMAGEYOFFSET) = 0.0;
+      break;
+    case COM_FCOUNT_RST:
+      SINT(set, PE_FRAMECOUNT) = patternSet[PE_FRAMECOUNT].initial.i;
+      cycleFrameCount = SINT(set, PE_FRAMECOUNT);
+      break;
+    case COM_FCOUNT_INC:
+      SINT(set, PE_FRAMECOUNT)++;
+      cycleFrameCount = SINT(set, PE_FRAMECOUNT);
+      break;
+    case COM_FCOUNT_DEC:
+      SINT(set, PE_FRAMECOUNT)--;
+      if (SINT(set, PE_FRAMECOUNT) < 1) SINT(set, PE_FRAMECOUNT) = 1;
+      cycleFrameCount = SINT(set, PE_FRAMECOUNT);
       break;
   }
   return 0;
@@ -1951,76 +2302,108 @@ color_t GetPixel(int x, int y, unsigned char *buffer) {
   return colorTemp;
 }
 
-
-
-
-
 // Send out the frame buffer to tensor and/or the display window.
 // 11/22/2009 - You know what was uncanny?  Walter looked a lot like FB the
 // other night at the decom, and spent most of his time there running Tensor...
-void UpdateDisplays(float intensity_limit) {
-  unsigned char *buffer = DBUFFER(PE_FRAMEBUFFER);
+void UpdateDisplays(int set, unsigned char sendToTensor, float intensity_limit) {
   unsigned char fba[TENSOR_BYTES];
+  unsigned char *buffer;
   int i;
+  int currentSet = set; // Override global currentSet for D*.
 
-  // Output rotate (doesn't effect array values, but does effect the final image).
+  // The preview...
+  buffer = DBUFFER(PE_FRAMEBUFFER);
+
+  // Post rotation
   if (DBOOL(PE_POSTRZ)) {
-    DFLOAT(PE_POSTRZANGLE) += DFLOAT(PE_POSTRZINC);
-    Rotate(DFLOAT(PE_POSTRZANGLE), DFLOAT(PE_EXPAND), DBOOL(PE_ALIAS), &fba[0], &buffer[0]);
+
+    // Apply the post rotation, so that it doesn't affect the feedback buffer.
+    Rotate(DFLOAT(PE_POSTRZANGLE), DFLOAT(PE_POSTEXP), DBOOL(PE_ALIAS), fba, buffer);
+
+  } else {
+
+    // Just copy the buffer, because we aren't rotating it.
+    memcpy(fba, DBUFFER(PE_FRAMEBUFFER), patternSet[PE_FRAMEBUFFER].size * sizeof(unsigned char));
+  }
+
+  if (set == alternateSet) {
+    // For alternate blending with the post.
+    memcpy(fbb, fba, patternSet[PE_FRAMEBUFFER].size * sizeof(unsigned char));
+  }
+
+  // Send to the preview and to the wall
+  if (sendToTensor) {
+    // Alternate blending
+    BlendAlternate(fba);
 
     UpdatePreview(PREVIEW_A_POSITION_X, PREVIEW_A_POSITION_Y, fba);
-    //~ UpdatePreview(PREVIEW_B_POSITION_X, PREVIEW_B_POSITION_Y, fba);
-
-    // Output diminish - no reason to do this to the preview (or is there?)
-    for (i = 0; i < TENSOR_BYTES; i++) {
+    for (i = 0 ; i < TENSOR_BYTES; i++) {
       fba[i] = (unsigned char)((float) fba[i] * intensity_limit);
+    }
+    if (enableTensor) {
+      UpdateTensor(fba);
     }
 
   } else {
-    UpdatePreview(PREVIEW_A_POSITION_X, PREVIEW_A_POSITION_Y, buffer);
-    //~ UpdatePreview(PREVIEW_B_POSITION_X, PREVIEW_B_POSITION_Y, buffer);
-    // Output diminish
-    for (i = 0; i < TENSOR_BYTES; i++) {
-      fba[i] = (unsigned char)((float) buffer[i] * intensity_limit);
-    }
+    UpdatePreview(PREVIEW_B_POSITION_X, PREVIEW_B_POSITION_Y, fba);
   }
-
-#ifdef USE_TENSOR
-  UpdateTensor(fba);
-#endif
-
-  // I can't remember if this is necessary - it would be frame limiting, huh?
-  // I think it has something to do with the UDP packets, or Tensor not liking
-  // to be flooded.
-  usleep(50000);
 
   return;
 }
 
+void BlendAlternate(unsigned char *fba) {
+  int i, j;
+  color_t temp;
+
+  // Too small to see...
+  //~ if (alternateBlend < 0.001) return;
+  for (i = 0; i < tensorWidth; i++) {
+    for (j = 0; j < tensorHeight; j++) {
+      temp = GetPixel(i,j,fbb);
+      temp.a = alternateBlend * 255;
+      SetPixelA(i, j, temp, fba);
+    }
+  }
+
+  // Autoblending
+  if (autoBlend) {
+    alternateBlend += alternateBlendRate;
+    if (alternateBlend > 1.0) {
+      alternateBlend = 0.0;
+      autoBlend = NO;
+      i = currentSet;
+      currentSet = alternateSet;
+      alternateSet = i;
+    }
+  }
+}
 
 // Rotate
 void Rotate(double angle, double expansion, int aliasmode, unsigned char *fb_dst, unsigned char *fb_src) {
   SDL_Surface *rotatedSurface;
+  SDL_Surface *scratch;
   SDL_Rect offset;
 
-  FBToSurface(scratchSurface, fb_src);
+  scratch = SDL_CreateRGBSurface(0, tensorWidth, tensorHeight, 32, 0, 0, 0, 0);
+  FBToSurface(scratch, fb_src);
 
   // Rotate / scale it.
-  rotatedSurface = rotozoomSurface (scratchSurface, angle, expansion, aliasmode ? 1 : 0);
+  rotatedSurface = rotozoomSurface (scratch, angle, expansion, aliasmode ? 1 : 0);
   if (!rotatedSurface) {
     fprintf(stderr, "Error rotating surface: %s\n", SDL_GetError());
     return;
   }
 
   // Recenter and copy it back to the scratchSurface
-  offset.x = 0 - (rotatedSurface->w - scratchSurface->w) / 2;
-  offset.y = 0 - (rotatedSurface->h - scratchSurface->h) / 2;
-  SDL_FillRect(scratchSurface, NULL, 0);
-  SDL_BlitSurface(rotatedSurface, NULL, scratchSurface, &offset);
+  offset.x = 0 - (rotatedSurface->w - scratch->w) / 2;
+  offset.y = 0 - (rotatedSurface->h - scratch->h) / 2;
+  SDL_FillRect(scratch, NULL, 0);
+  SDL_BlitSurface(rotatedSurface, NULL, scratch, &offset);
 
   // Copy the result back to the frame buffer.
-  SurfaceToFB(fb_dst, scratchSurface);
+  SurfaceToFB(fb_dst, scratch);
   SDL_FreeSurface(rotatedSurface);
+  SDL_FreeSurface(scratch);
 }
 
 
@@ -2213,7 +2596,8 @@ void UpdateTensor(unsigned char *buffer) {
 
 
 // Write a slice of text.
-void WriteSlice(void) {
+void WriteSlice(int set) {
+  int currentSet = set;
   const unsigned char charColMasks[] = { 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80 };
   int sliceColOrRow;  // The seed target column / row (depending on direction).
   int sliceIndex;     // A pixel of the target slice we are working on.
@@ -2354,7 +2738,7 @@ void WriteSlice(void) {
 
   // First we draw the seed's background according to our textStagger mode.
   useRand = 0;
-  switch (DSENUM(PE_TEXTMODE, textStaggerMode_e)) {
+  switch (DSENUM(PE_TEXTMODE, textMode_e)) {
     case TS_9ROWSTAGGER:
       // Stagger.  For landscape - 8 pixel font on 9 pixels high display.
       // Stagger the letter and fill in the pixel that isn't covered by the
@@ -2469,22 +2853,13 @@ void RandomDots(color_t color, unsigned int rFreq, unsigned char *buffer) {
 
 
 
-void ColorCycle(int fb_mode) {
+color_t ColorCycle(int set, colorCycleModes_e cycleMode, int *cycleSaver, int cycleInc) {
   color_t colorTemp = cBlack;
   int inpos, inposo;
-  colorCycleModes_e cycleMode = DENUM(PE_COLORCYCLEMODE);
-  int *cycleSaver;
-  int rainbowInc = DINT(PE_RAINBOWINC);
+  int currentSet = set;
 
-  // Position in the cycle must be saved in the patternSet to ensure reload is
-  // identical to save.
-  if (fb_mode == FOREGROUND) {
-    cycleSaver = &DINT(PE_CYCLESAVEFG);
-  } else {
-    cycleSaver = &DINT(PE_CYCLESAVEBG);
-  }
-
-  // If the mode changed, we should reset our position in the cycle.
+  // If the mode changed, we should make sure our position in the cycle limits
+  // to the mode.
   switch(cycleMode) {
     case CM_RGB:
       *cycleSaver = (*cycleSaver + 1) % paletteRGB.size;
@@ -2512,7 +2887,7 @@ void ColorCycle(int fb_mode) {
       break;
 
     case CM_RAINBOW:
-      *cycleSaver = (*cycleSaver + rainbowInc) % (256 * 6);
+      *cycleSaver = (*cycleSaver + cycleInc) % (256 * 6);
       inposo = *cycleSaver % 256;
       inpos = *cycleSaver / 256;
       switch(inpos) {
@@ -2558,21 +2933,42 @@ void ColorCycle(int fb_mode) {
       break;
 
     case CM_RANDOM:
-      colorTemp.r = rand() % 255;
-      colorTemp.g = rand() % 255;
-      colorTemp.b = rand() % 255;
+      colorTemp.r = rand() % 256;
+      colorTemp.g = rand() % 256;
+      colorTemp.b = rand() % 256;
       break;
 
-    default:
+    case CM_FGBGFADE:
+      *cycleSaver = (*cycleSaver + cycleInc) % (256 * 2);
+      inpos = *cycleSaver / 256;
+      inposo = *cycleSaver % 256;
+      switch(inpos) {
+        case 0: // FG - BG
+          colorTemp.r = ((255.0 - inposo) / 255) * namedPalette[DENUM(PE_FGE)].color.r + ((inposo / 255.0) * namedPalette[DENUM(PE_BGE)].color.r);
+          colorTemp.g = ((255.0 - inposo) / 255) * namedPalette[DENUM(PE_FGE)].color.g + ((inposo / 255.0) * namedPalette[DENUM(PE_BGE)].color.g);
+          colorTemp.b = ((255.0 - inposo) / 255) * namedPalette[DENUM(PE_FGE)].color.b + ((inposo / 255.0) * namedPalette[DENUM(PE_BGE)].color.b);
+          break;
+
+        case 1: // FG - BG
+          colorTemp.r = ((inposo / 255.0) * namedPalette[DENUM(PE_FGE)].color.r) + ((255.0 - inposo) / 255) * namedPalette[DENUM(PE_BGE)].color.r;
+          colorTemp.g = ((inposo / 255.0) * namedPalette[DENUM(PE_FGE)].color.g) + ((255.0 - inposo) / 255) * namedPalette[DENUM(PE_BGE)].color.g;
+          colorTemp.b = ((inposo / 255.0) * namedPalette[DENUM(PE_FGE)].color.b) + ((255.0 - inposo) / 255) * namedPalette[DENUM(PE_BGE)].color.b;
+
+        default:
+          break;
+      }
+      break;
+
+
+
+
+    case CM_INVALID: case CM_NONE: case CM_COUNT:
+    //~ default:
       break;
   }
 
   // We used to return it...
-  if (fb_mode == FOREGROUND) {
-    DCOLOR(PE_FGC) = colorTemp;
-  } else {
-    DCOLOR(PE_BGC) = colorTemp;
-  }
+  return colorTemp;
 }
 
 
@@ -2593,7 +2989,7 @@ void InitDisplayTexts(void) {
   }
 
   for (i = 0; i < DISPLAYTEXT_SIZE; i++) {
-    WriteLine(displayText[i].text, displayText[i].line, displayText[i].col, DISPLAY_COLOR_TEXTS, DISPLAY_COLOR_TEXTSBG);
+    WriteLine(displayText[i].text, displayText[i].line, displayText[i].col, DISPLAY_COLOR_INFO, DISPLAY_COLOR_INFOBG);
   }
 }
 
@@ -2614,9 +3010,9 @@ void WriteCommand(int index, const command_t *comList, color_t fg, color_t bg) {
   for (i = 0; i < MOUSE_COUNT; i++) {
     if (comList[index].commands[i].mod != KMOD_NONE) {
       ind += snprintf(ind, end - ind, "%s%s%s",
-        comList[index].commands[i].mod & KMOD_CTRL ? "<ctrl> " : "",
-        comList[index].commands[i].mod & KMOD_SHIFT ? "<shft> " : "",
-        comList[index].commands[i].mod & KMOD_ALT ? "<alt> " : "");
+        comList[index].commands[i].mod & KMOD_CTRL ? "<c> " : "",
+        comList[index].commands[i].mod & KMOD_SHIFT ? "<s> " : "",
+        comList[index].commands[i].mod & KMOD_ALT ? "<a> " : "");
       break;  // Found the first, skip the rest.
     }
   }
@@ -2640,79 +3036,71 @@ void WriteCommand(int index, const command_t *comList, color_t fg, color_t bg) {
 
 
 // Update the values of the text on the display window.
-void UpdateInfoDisplay(void) {
-
+void UpdateInfoDisplay(int set) {
   char text[102], mybuff[102];
   int length;
+  int i;
 
-  // First column
-  WriteInt(previewFPS, 21, 1, 3);
-  WriteInt(guiFPS, 22, 1, 3);
-  WriteBool(DBOOL(PE_CELLFUN), 23, 1);
-  WriteBool(DBOOL(PE_BOUNCER), 24, 1);
-  WriteBool(DBOOL(PE_FADE), 25, 1);
-  WriteBool(DBOOL(PE_DIFFUSE), 26, 1);
-  WriteBool(DBOOL(PE_TEXTSEED), 27, 1);
-  WriteBool(DBOOL(PE_ROLLOVER), 28, 1);
-  WriteBool(DBOOL(PE_SCROLL), 29, 1);
-  WriteBool(DBOOL(PE_RANDOMDOT), 34, 1);
-  WriteBool(DBOOL(PE_CYCLEFG), 35, 1);
-  WriteBool(DBOOL(PE_CYCLEBG), 36, 1);
-  WriteBool(cyclePatternSets, 37, 1);
-  WriteString(fadeModeText[DENUM(PE_FADEMODE)], 38, 1, 3);
-  WriteBool(DBOOL(PE_POSTRZ), 40, 1);
-  WriteBool(DBOOL(PE_PRERZ), 42, 1);
-  WriteBool(DBOOL(PE_ALIAS), 43, 1);
-  WriteBool(DBOOL(PE_MULTIPLY), 44, 1);
-  WriteBool(DBOOL(PE_BARSEED), 45, 1);
-  WriteBool(DBOOL(PE_NORED), 46, 1);
-  WriteBool(DBOOL(PE_NOGREEN), 47, 1);
-  WriteBool(DBOOL(PE_NOBLUE), 48, 1);
-  WriteBool(DBOOL(PE_POSTIMAGE), 49, 1);
+  for (i = 0; i < DISPLAYCOMMAND_SIZE; i++) {
+    if (displayCommand[i].dat != PE_INVALID) {
+      switch(patternSet[displayCommand[i].dat].type) {
+        case ET_BOOL:
+          WriteBool(SBOOL(set, displayCommand[i].dat), displayCommand[i].line, displayCommand[i].col + 1, 10);
+          break;
 
-  // Second column
-  WriteFloat(DFLOAT(PE_FLOATINC), 2, 3, 14, 6);
-  WriteFloat(DFLOAT(PE_DIFFUSECOEF), 4, 3, 14, 6);
-  WriteFloat(DFLOAT(PE_EXPAND), 5, 3, 14, 6);
-  WriteInt(DINT(PE_FADEINC), 6, 3, 14);
-  WriteFloat(DFLOAT(PE_PRERZANGLE), 7, 3, 14, 6);
-  WriteInt(DINT(PE_RAINBOWINC), 8, 3, 14);
-  WriteFloat(DFLOAT(PE_POSTRZANGLE), 9, 3, 14, 6);
-  WriteFloat(DFLOAT(PE_MULTIPLYBY), 10, 3, 14, 6);
-  WriteFloat(DFLOAT(PE_POSTRZINC), 11, 3, 14, 6);
-  WriteInt(DINT(PE_RANDOMDOTCOEF), 12, 3, 14);
-  WriteString(colorCycleText[DENUM(PE_COLORCYCLEMODE)], 13, 3, 14);
-  WriteString(dirText[DENUM(PE_SCROLLDIR)], 14, 3, 14);
-  WriteInt(DINT(PE_DELAY), 15, 3, 14);
-  WriteString(namedPalette[DENUM(PE_FGE)].name, 20, 3, 14);
-  WriteString(namedPalette[DENUM(PE_BGE)].name, 21, 3, 14);
-  WriteInt(currentSet, 24, 3, 14);
-  WriteBool(DBOOL(PE_FONTDIR), 35, 4);
-  WriteBool(DBOOL(PE_FONTFLIP), 36, 4);
-  WriteInt(DINT(PE_TEXTOFFSET), 37, 3, 14);
-  WriteString(staggerText[DENUM(PE_TEXTMODE)], 38, 3, 14);
-  WriteInt((int) strlen(DSTRING(PE_TEXTBUFFER)), 39, 3, 14);
-  WriteString(shiftText[DENUM(PE_SHIFTRED)], 44, 3, 14);
-  WriteString(shiftText[DENUM(PE_SHIFTGREEN)], 45, 3, 14);
-  WriteString(shiftText[DENUM(PE_SHIFTBLUE)], 46, 3, 14);
-  WriteString(shiftText[DENUM(PE_SHIFTCYAN)], 47, 3, 14);
-  WriteString(shiftText[DENUM(PE_SHIFTYELLOW)], 48, 3, 14);
-  WriteString(shiftText[DENUM(PE_SHIFTMAGENTA)], 49, 3, 14);
+        case ET_FLOAT:
+          WriteFloat(SFLOAT(set, displayCommand[i].dat), displayCommand[i].line, displayCommand[i].col + 1, 10, 5);
+          break;
+
+        case ET_INT:
+          WriteInt(SINT(set, displayCommand[i].dat), displayCommand[i].line, displayCommand[i].col + 1, 10);
+          break;
+
+        case ET_ENUM:
+          WriteString(enumerations[patternSet[displayCommand[i].dat].etype].texts[SENUM(set, displayCommand[i].dat)],
+            displayCommand[i].line, displayCommand[i].col + 1, 10);
+          break;
+
+        default:
+          // Lazy
+          fprintf(stderr, "No data display driver for this type of information (%i).\n", patternSet[displayCommand[i].dat].type);
+      }
+    }
+  }
+
+  // The ones that aren't automatic:
+  WriteInt(previewFPSA, 21, 1, 10);
+  WriteInt(previewFPSB, 21, 5, 10);
+  WriteInt(guiFPS, 51, 5, 10);
+  if (cyclePatternSets) {
+    WriteInt(cycleFrameCount, ROW_PA + 1, COL_PA + 1, 10);
+  } else {
+    WriteBool(cyclePatternSets, ROW_PA + 1, COL_PA + 1, 10);
+  }
+  WriteInt(alternateSet, ROW_PA + 9, COL_PA + 1, 10);
+  WriteInt(currentSet, ROW_PA + 8, COL_PA + 1, 10);
+  WriteString(operateText[displaySet], ROW_PA + 10, COL_PA + 1, 10);
+  WriteFloat(alternateBlend, ROW_PA + 12, COL_PA + 1, 10, 5);
+  WriteFloat(alternateBlendRate, ROW_PA + 13, COL_PA + 1, 10, 5);
+  WriteBool(autoBlend, ROW_PA + 14, COL_PA + 1, 10);
 
   // Show the last 100 bytes of the text buffer.
-  length = strlen(DSTRING(PE_TEXTBUFFER));
-  strncpy(mybuff, DSTRING(PE_TEXTBUFFER) + (length > 100 ? length - 100 : 0), 101);
+  length = strlen(SSTRING(set, PE_TEXTBUFFER));
+  WriteInt(length, 51, 1, 10);
+  strncpy(mybuff, SSTRING(set, PE_TEXTBUFFER) + (length > 100 ? length - 100 : 0), 101);
   // The extra snprintf takes care of overwriting longer lines.
   snprintf(text, sizeof(text), "%-100s", mybuff );
-  WriteLine(text, 52, 0, DISPLAY_COLOR_PARMS, DISPLAY_COLOR_PARMSBG);
+  WriteLine(text, 52, 0, DISPLAY_COLOR_TBUF, DISPLAY_COLOR_TBUFBG);
 }
 
-void WriteBool(int value, int row, int col) {
+void WriteBool(int value, int row, int col, int width) {
+  char text[100];
   if (value) {
-    WriteLine("YES", row, col, DISPLAY_COLOR_PARMS, DISPLAY_COLOR_PARMSBG);
+    snprintf(text, sizeof(text), "%*.*s", width, width, "YES");
   } else {
-    WriteLine(" NO", row, col, DISPLAY_COLOR_PARMS, DISPLAY_COLOR_PARMSBG);
+    snprintf(text, sizeof(text), "%*.*s", width, width, "NO");
   }
+  WriteLine(text, row, col, DISPLAY_COLOR_PARMS, DISPLAY_COLOR_PARMSBG);
 }
 
 void WriteInt(int value, int row, int col, int width) {
@@ -2723,8 +3111,10 @@ void WriteInt(int value, int row, int col, int width) {
 
 void WriteFloat(float value, int row, int col, int width, int precision) {
   char text[100];
+  char text2[100];
   snprintf(text, sizeof(text), "%*.*f", width, precision, value);
-  WriteLine(text, row, col, DISPLAY_COLOR_PARMS, DISPLAY_COLOR_PARMSBG);
+  snprintf(text2, sizeof(text2), "%.*s", width, text); // Hard limit the width
+  WriteLine(text2, row, col, DISPLAY_COLOR_PARMS, DISPLAY_COLOR_PARMSBG);
 }
 
 void WriteString(const char *text, int line, int col, int width) {
@@ -2791,15 +3181,6 @@ void SetDims(void) {
     tensorWidth = TENSOR_WIDTH;
     tensorHeight = TENSOR_HEIGHT;
   }
-
-  if (scratchSurface) SDL_FreeSurface(scratchSurface);
-
-  scratchSurface = SDL_CreateRGBSurface(0, tensorWidth, tensorHeight,
-    32, 0, 0, 0, 0);
-  if (!scratchSurface) {
-    fprintf(stderr, "Unable to allocate a temp buffer: %s\n", SDL_GetError());
-    exit(EXIT_FAILURE);
-  }
 }
 
 void DrawRectangle(int x, int y, int w, int h, color_t color) {
@@ -2814,25 +3195,33 @@ void DrawBox(int x, int y, int w, int h, color_t color) {
 
 // Draw an image to the output with appropriate rotation and expansion.
 // Rotation is acheived using SDL_gfx primitive rotozoom.
-void DrawImage(double angle, double expansion, int aliasmode, unsigned char *fb_dst) {
+void DrawImage(int set, double angle, float xoffset, float yoffset, double expansion, int aliasmode, unsigned char *fb_dst) {
   SDL_Surface *rotatedImage;
+  SDL_Surface *scratch;
   SDL_Rect offset;
 
+  // Don't if it isn't.
+  if (!imageSeed[set]) return;
+
   // Rotate / scale it.
-  rotatedImage = rotozoomSurface (imageSeed, angle, expansion, aliasmode ? 1 : 0);
+  rotatedImage = rotozoomSurface (imageSeed[set], angle, expansion, aliasmode ? 1 : 0);
   if (!rotatedImage) {
     fprintf(stderr, "Error rotating image: %s\n", SDL_GetError());
     return;
   }
 
+  scratch = SDL_CreateRGBSurface(0, tensorWidth, tensorHeight, 32, 0, 0, 0, 0);
+
   // This clips the image and recenters it on the preview window.
-  offset.x = 0 - (rotatedImage->w - scratchSurface->w) / 2;
-  offset.y = 0 - (rotatedImage->h - scratchSurface->h) / 2;
-  SDL_BlitSurface(rotatedImage, NULL, scratchSurface, &offset);
+
+  offset.x = 0 - SFLOAT(set, PE_IMAGEXOFFSET) * (rotatedImage->w - scratch->w);
+  offset.y = 0 - SFLOAT(set, PE_IMAGEYOFFSET) * (rotatedImage->h - scratch->h);
+  SDL_BlitSurface(rotatedImage, NULL, scratch, &offset);
 
   // Copy the result back to the frame buffer.
-  SurfaceToFB(fb_dst, scratchSurface);
+  SurfaceToFB(fb_dst, scratch);
   SDL_FreeSurface(rotatedImage);
+  SDL_FreeSurface(scratch);
 }
 
 // Draw the borders around the preview output.  We can switch between portrait
@@ -2855,6 +3244,7 @@ void DrawPreviewBorder(int x, int y) {
   // Erase the old preview.
   DrawBox(x, y, maxDim, maxDim, cBlack);
   DrawRectangle(x, y, maxDim, maxDim, cWhite);
+  DrawBox(x + 1, y + 1, maxDim - 2, maxDim - 2, cGray);
 
   // Ajust x and y to center the preview.
   x = x + (maxDim - w) / 2;
@@ -2862,6 +3252,7 @@ void DrawPreviewBorder(int x, int y) {
 
   // Draw the new outer border.
   DrawRectangle(x, y, w, h, cWhite);
+  DrawBox(x + 1, y + 1, w - 2, h - 2, cBlack);
 
   // Get the inner border dimensions.
   w = (tensorWidth * PREVIEW_PIXEL_SIZE) + 1;
@@ -2881,7 +3272,8 @@ void DrawPreviewBorder(int x, int y) {
 }
 
 // Or not.
-void CellFun(void) {
+void CellFun(int set) {
+  int currentSet = set; // Override global for D*
   int x, y;
   color_t pixelColor, oldColor;
 
@@ -2925,23 +3317,23 @@ void SavePatternSet(char key, int set) {
     fprintf(fp, "%s ", patternSet[i].name);
     switch(patternSet[i].type) {
       case ET_BOOL:
-        fprintf(fp, "%s", SBOOL(i, set) ? "YES" : "NO");
+        fprintf(fp, "%s", SBOOL(set, i) ? "YES" : "NO");
         break;
       case ET_INT: case ET_ENUM:
-        fprintf(fp, "%i", SINT(i, set));
+        fprintf(fp, "%i", SINT(set, i));
         break;
       case ET_FLOAT:
-        fprintf(fp, "%f", SFLOAT(i, set));
+        fprintf(fp, "%f", SFLOAT(set, i));
         break;
       case ET_COLOR:
-        fprintf(fp, "%i %i %i %i", SCOLOR(i, set).r, SCOLOR(i, set).g, SCOLOR(i, set).b, SCOLOR(i, set).a);
+        fprintf(fp, "%i %i %i %i", SCOLOR(set, i).r, SCOLOR(set, i).g, SCOLOR(set, i).b, SCOLOR(set, i).a);
         break;
       case ET_STRING:
-        fprintf(fp, "%s", SSTRING(i, set));
+        fprintf(fp, "%s", SSTRING(set, i));
         break;
       case ET_BUFFER:
         for (j = 0; j < patternSet[i].size; j++) {
-          fprintf(fp, "%02x ", SBUFFER(i, set)[j]);
+          fprintf(fp, "%02x ", SBUFFER(set, i)[j]);
         }
         break;
       default:
@@ -2957,6 +3349,7 @@ void SavePatternSet(char key, int set) {
 
 // Loads a pattern set from a file.
 void LoadPatternSet(char key, int set) {
+  int currentSet = set; // Override global for D*.
   char filename[8] = "";
   FILE *fp;
   char *ikey = NULL;
@@ -3074,24 +3467,24 @@ void LoadPatternSet(char key, int set) {
         // Process the result by parameter type.
         switch(patternSet[parameterIndex].type) {
           case ET_INT: case ET_ENUM:
-            SINT(parameterIndex, set) = atoi(value);
+            DINT(parameterIndex) = atoi(value);
             break;
           case ET_BOOL:
             if (strncasecmp(value, "YES", 3) == 0) {
-              SBOOL(parameterIndex, set) = YES;
+              DBOOL(parameterIndex) = YES;
             } else if (strncasecmp(value, "NO", 2) == 0) {
-              SBOOL(parameterIndex, set) = NO;
+              DBOOL(parameterIndex) = NO;
             } else {
               fprintf(stderr, "Ignoring invalid value for boolean parameter %s. (\"%s\")\n", patternSet[parameterIndex].name, value);
             }
             break;
           case ET_FLOAT:
-            SFLOAT(parameterIndex, set) = atof(value);
+            DFLOAT(parameterIndex) = atof(value);
             break;
           case ET_STRING:
-            strncpy(SSTRING(parameterIndex, set), value, patternSet[parameterIndex].size);
+            strncpy(DSTRING(parameterIndex), value, patternSet[parameterIndex].size);
             // Just in case...
-            SSTRING(parameterIndex, set)[patternSet[parameterIndex].size - 1] = '\0';
+            DSTRING(parameterIndex)[patternSet[parameterIndex].size - 1] = '\0';
             break;
           case ET_COLOR:
             z = y = x = w = INVALID;
@@ -3102,7 +3495,7 @@ void LoadPatternSet(char key, int set) {
                 temp.g = y;
                 temp.b = x;
                 temp.a = w;
-                SCOLOR(parameterIndex, set) = temp;
+                DCOLOR(parameterIndex) = temp;
               } else {
                 fprintf(stderr, "Ignoring inappropriate format for color of %s: \"%s\"\n", patternSet[parameterIndex].name, value);
               }
@@ -3138,7 +3531,7 @@ void LoadPatternSet(char key, int set) {
             if (w != INVALID && y == patternSet[parameterIndex].size) {
               //~ printf("Valid buffer input found.\n");
               for (i = 0; i < patternSet[parameterIndex].size; i++) {
-                SBUFFER(parameterIndex, set)[i] = bufferData[i];
+                DBUFFER(parameterIndex)[i] = bufferData[i];
               }
             } else {
               fprintf(stderr, "Ignoring invalid buffer data for %s.\n", patternSet[parameterIndex].name);
@@ -3180,10 +3573,18 @@ void LoadPatternSet(char key, int set) {
   free(ikey);
   free(value);
   fclose(fp);
+
+  // Now, the new set may have specified an image to load.  Let's do that here.
+  SDL_FreeSurface(imageSeed[set]);
+  imageSeed[set] = IMG_Load(DSTRING(PE_IMAGENAME));
+  if (!imageSeed[set]) {
+    fprintf(stderr, "Unable to load image: \"%s\"\n", DSTRING(PE_IMAGENAME));
+  }
 }
 
 
-void DrawSideBar(void) {
+void DrawSideBar(int set) {
+  int currentSet = set; // Override global for D*
   int i;
 
   switch (DSENUM(PE_SCROLLDIR, dir_e)) {
@@ -3215,23 +3616,26 @@ void DrawSideBar(void) {
   }
 }
 
-void ClearRed(void) {
+void ClearRed(int set) {
+  int currentSet = set; // Override global for D*
   int i;
-  for(i = 0; i < TENSOR_BYTES; i++) {
+  for(i = 0; i < (tensorHeight * tensorWidth); i++) {
     DBUFFER(PE_FRAMEBUFFER)[(i * 3) + 0] = 0;
   }
 }
 
-void ClearGreen(void) {
+void ClearGreen(int set) {
+  int currentSet = set; // Override global for D*
   int i;
-  for(i = 0; i < TENSOR_BYTES; i++) {
+  for(i = 0; i < (tensorHeight * tensorWidth); i++) {
     DBUFFER(PE_FRAMEBUFFER)[(i * 3) + 1] = 0;
   }
 }
 
-void ClearBlue(void) {
+void ClearBlue(int set) {
+  int currentSet = set; // Override global for D*
   int i;
-  for(i = 0; i < TENSOR_BYTES; i++) {
+  for(i = 0; i < (tensorHeight * tensorWidth); i++) {
     DBUFFER(PE_FRAMEBUFFER)[(i * 3) + 2] = 0;
   }
 }
@@ -3267,14 +3671,15 @@ void CopyPatternSet(int dst, int src) {
   if (src == dst) return;
   for (i = 0; i < PSET_SIZE; i++) {
     switch(patternSet[i].type) {
-      case ET_BOOL: SBOOL(i, dst) = SBOOL(i, src); break;
-      case ET_INT: SINT(i, dst) = SINT(i, src); break;
-      case ET_FLOAT: SFLOAT(i, dst) = SFLOAT(i, src); break;
-      case ET_COLOR: SCOLOR(i, dst) = SCOLOR(i, src); break;
-      case ET_ENUM: SENUM(i, dst) = SENUM(i, src); break;
-      case ET_STRING: memcpy(SSTRING(i, dst), SSTRING(i, src), patternSet[i].size); break;
-      case ET_BUFFER: memcpy(SBUFFER(i, dst), SBUFFER(i, src), patternSet[i].size); break;
+      case ET_BOOL: SBOOL(dst, i) = SBOOL(src, i); break;
+      case ET_INT: SINT(dst, i) = SINT(src, i); break;
+      case ET_FLOAT: SFLOAT(dst, i) = SFLOAT(src, i); break;
+      case ET_COLOR: SCOLOR(dst, i) = SCOLOR(src, i); break;
+      case ET_ENUM: SENUM(dst, i) = SENUM(src, i); break;
+      case ET_STRING: memcpy(SSTRING(dst, i), SSTRING(src, i), patternSet[i].size); break;
+      case ET_BUFFER: memcpy(SBUFFER(dst, i), SBUFFER(src, i), patternSet[i].size); break;
       case ET_COUNT: case ET_INVALID: break;
     }
   }
 }
+

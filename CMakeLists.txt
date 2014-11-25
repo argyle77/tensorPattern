@@ -38,5 +38,6 @@ file(COPY fonts/DroidSansMono.ttf DESTINATION ${PROJECT_BINARY_DIR})
 file(RENAME ${PROJECT_BINARY_DIR}/DroidSansMono.ttf ${PROJECT_BINARY_DIR}/font.ttf)
 
 # Aux files
-file(COPY images/Fbyte-01.jpg DESTINATION ${PROJECT_BINARY_DIR})
+file(GLOB IMAGES images/*)
+file(COPY ${IMAGES} DESTINATION ${PROJECT_BINARY_DIR})
 
