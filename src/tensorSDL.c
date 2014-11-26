@@ -673,7 +673,7 @@ const command_t displayCommand[] = {
   {ROW_T + 9, COL_T, "Restart text",       PE_INVALID,    {{KMOD_CTRL, SDLK_j, COM_TEXTRESET}}},
 
   // Quit
-  {53, 4, "Quit",           PE_INVALID,  {{KMOD_NONE, SDLK_ESCAPE, COM_EXIT}}},
+  {51, 4, "Quit",           PE_INVALID,  {{KMOD_NONE, SDLK_ESCAPE, COM_EXIT}}},
 };
 #define DISPLAYCOMMAND_SIZE (sizeof(displayCommand) / sizeof(command_t))
 
@@ -741,7 +741,7 @@ displayText_t displayText[] = {
 displayText_t headerText[] = {
   {21, 0,          "Live Preview          FPS:"},
   {21, 4,          "Alternate Preview     FPS:"},
-  {51, 4,          "                 GUI  FPS:"},
+  {53, 4,          "                  GUI FPS:"},
   {51, 0,          "Text buffer:"},
   {ROW_PA, COL_PA, "Pattern sets:"},
   {ROW_P, COL_P,   "Plane suppression:"},
@@ -771,7 +771,7 @@ unsigned char cyclePatternSets = NO;  // cyclePatternSets mode is a global (for 
 int cycleFrameCount = INITIAL_FRAMECYCLECOUNT;    // Frame Count for cycling.
 unsigned char enableTensor = YES;
 int currentSet = 0;
-int alternateSet = 7;
+int alternateSet = 1;
 operateOn_e displaySet = OO_CURRENT;
 float global_intensity_limit = 1.0;
 int previewFrameCountA = 0, previewFPSA = 0;
@@ -787,8 +787,14 @@ unsigned char autoBlend = NO;
 #define ECOL (DCOL + 13 * CHAR_W)
 #define FCOL (ECOL + 26 * CHAR_W)
 const int colToPixel[] = {ACOL, BCOL, CCOL, DCOL, ECOL, FCOL, WINDOW_WIDTH};
-Uint32 FPSEventType, DRAWEventTypeA, DRAWEventTypeB, GUIEventType;
+Uint32 FPSEventType, DRAWEventTypeA, DRAWEventTypeB, GUIEventType, CONFIRMEventType;
 unsigned char fbb[TENSOR_BYTES];
+char cText[100] = "";  // For confirming actions.
+unsigned char confirmed = NO;
+unsigned char confirmRequired = NO;
+char keySave;
+int setSave;
+unsigned char refresh = NO;
 
 // Prototypes
 void DrawNewFrame(int set, unsigned char primary);
@@ -818,7 +824,7 @@ void SetDims(void);
 void UpdateDisplays(int set, unsigned char sendToTensor, float intensity_limit);
 void UpdateGUI(void);
 void UpdateTensor(unsigned char *buffer);
-void DrawPreviewBorder(int x, int y);
+void DrawPreviewBorder(int x, int y, unsigned char active);
 void UpdatePreview(int xOffset, int yOffset, unsigned char *buffer);
 void InitDisplayTexts(void);
 void UpdateInfoDisplay(int set);
@@ -833,8 +839,8 @@ SDL_Surface * FBToSurface(SDL_Surface *surface, unsigned char *FB);
 unsigned char * SurfaceToFB(unsigned char *FB, SDL_Surface *surface);
 void Rotate(double angle, double expansion, int aliasmode, unsigned char *fb_dst, unsigned char *fb_src);
 void Multiply(float multiplier, unsigned char *buffer);
-void DrawRectangle(int x, int y, int w, int h, color_t color);
-void DrawBox(int x, int y, int w, int h, color_t color);
+void DrawRectangle(SDL_Renderer *r, int x, int y, int w, int h, color_t color);
+void DrawBox(SDL_Renderer *r, int x, int y, int w, int h, color_t color);
 void ClearRed(int set);
 void ClearGreen(int set);
 void ClearBlue(int set);
@@ -848,6 +854,11 @@ void AllocatePatternData(void);
 void VerifyStructuralIntegrity(void);
 void CopyPatternSet(int dst, int src);
 void BlendAlternate(unsigned char *fba);
+void DrawConfirmationBox(SDL_Rect *yesBox, SDL_Rect *noBox, unsigned char selected);
+void DrawSBox(SDL_Renderer *r, SDL_Rect rect, color_t color);
+void DrawSRectangle(SDL_Renderer *r, SDL_Rect rect, color_t color);
+unsigned char Intersects(int x, int y, SDL_Rect rect);
+void CenterText(SDL_Rect box, char * text, color_t fg, color_t bg);
 
 // Main
 int main(int argc, char *argv[]) {
@@ -864,6 +875,7 @@ int main(int argc, char *argv[]) {
   int lastHover = INVALID;
   int mouseDownOn = INVALID;
   SDL_Rect box = {0, 0, 0, 0}, boxOld = {0, 0, 0, 0};
+  SDL_Rect boxYes, boxNo;
 
   // Unbuffer the console...
   setvbuf(stdout, (char *)NULL, _IONBF, 0);
@@ -932,8 +944,8 @@ int main(int argc, char *argv[]) {
   SetDims();  // After set tensor_landscape_p.
 
   // Draw a border around the preview
-  DrawPreviewBorder(PREVIEW_A_POSITION_X, PREVIEW_A_POSITION_Y);
-  DrawPreviewBorder(PREVIEW_B_POSITION_X, PREVIEW_B_POSITION_Y);
+  DrawPreviewBorder(PREVIEW_A_POSITION_X, PREVIEW_A_POSITION_Y, YES);
+  DrawPreviewBorder(PREVIEW_B_POSITION_X, PREVIEW_B_POSITION_Y, NO);
 
   // Further patternSet initializations
   for (i = 0; i < PATTERN_SET_COUNT; i++) {
@@ -945,6 +957,10 @@ int main(int argc, char *argv[]) {
   // into those pattern sets.
   for (i = 0; i < PATTERN_SET_COUNT; i++) {
     LoadPatternSet(i + '0', i);
+    // Load the remaining image sets (in cases of pattern set load failure).
+    if (!imageSeed[i]) {
+      imageSeed[i] = IMG_Load(SSTRING(i, PE_IMAGENAME));
+    }
   }
   cycleFrameCount = DINT(PE_FRAMECOUNT);
 
@@ -959,6 +975,8 @@ int main(int argc, char *argv[]) {
   DRAWEventTypeA = SDL_RegisterEvents(1);
   DRAWEventTypeB = SDL_RegisterEvents(1);
   GUIEventType = SDL_RegisterEvents(1);
+  CONFIRMEventType = SDL_RegisterEvents(1);
+
 
   // Init the processing timer.
   if (!SDL_AddTimer(DINT(PE_DELAY), TriggerFrameDrawA, NULL)) {
@@ -1003,19 +1021,47 @@ int main(int argc, char *argv[]) {
           x = event.motion.x;
           y = event.motion.y;
 
-          // Check if its hovering over a command.
-          thisHover = INVALID;
-          for (i = 0; i < DISPLAYCOMMAND_SIZE; i++) {
-            // box is the rectangle encompassing the command text.  We could
-            // precompute these if timing were important.
-            box.x = colToPixel[displayCommand[i].col];
-            box.y = displayCommand[i].line * DISPLAY_TEXT_HEIGHT;
-            box.w = colToPixel[displayCommand[i].col + 2] - box.x;
-            box.h = (displayCommand[i].line + 1) * DISPLAY_TEXT_HEIGHT - box.y + 1;
+          // Confirmation dialog?
+          if (confirmRequired) {
 
-            // Is it in the rectangle of command i?
-            if ((y >= box.y) && (y < box.y + box.h)) {
-              if ((x >= box.x) && (x < box.x + box.w)) {
+            // Check for intersection with confirmation boxes.
+            thisHover = INVALID;
+            if (Intersects(x, y, boxYes)) {
+              thisHover = YES;
+              confirmed = YES;
+              box = boxYes;
+            } else if (Intersects(x, y, boxNo)) {
+              thisHover = NO;
+              confirmed = NO;
+              box = boxNo;
+            }
+            if (thisHover != INVALID) {
+              // Is it hovering over a command is wasn't hovering over before?
+              if ((!SameRectangle(box, boxOld)) || (lastHover == INVALID)) {
+                boxOld = box;
+                lastHover = thisHover;
+              }
+            }
+
+            // Not over a new command? May have to clear the old highlight anyway.
+            if ((thisHover == INVALID) && (lastHover != INVALID)) {
+              lastHover = INVALID;
+              confirmed = NO;
+            }
+
+          } else {
+            // Check if its hovering over a command.
+            thisHover = INVALID;
+            for (i = 0; i < DISPLAYCOMMAND_SIZE; i++) {
+              // box is the rectangle encompassing the command text.  We could
+              // precompute these if timing were important.
+              box.x = colToPixel[displayCommand[i].col];
+              box.y = displayCommand[i].line * DISPLAY_TEXT_HEIGHT;
+              box.w = colToPixel[displayCommand[i].col + 2] - box.x;
+              box.h = (displayCommand[i].line + 1) * DISPLAY_TEXT_HEIGHT - box.y + 1;
+
+              // Is it in the rectangle of command i?
+              if (Intersects(x, y, box)) {
 
                 // Yep.
                 thisHover = i;
@@ -1024,12 +1070,12 @@ int main(int argc, char *argv[]) {
                 if ((!SameRectangle(box, boxOld)) || (lastHover == INVALID)) {
 
                   // Yeah, so draw the new highlight.
-                  DrawBox(box.x, box.y, box.w, box.h, DISPLAY_COLOR_TEXTSBG_HL);
+                  DrawBox(mwRenderer, box.x, box.y, box.w, box.h, DISPLAY_COLOR_TEXTSBG_HL);
                   WriteCommand(i, displayCommand, DISPLAY_COLOR_TEXTS_HL, DISPLAY_COLOR_TEXTSBG_HL);
 
                   // And if it came off a different command, remove that highlight.
                   if (lastHover != INVALID) {
-                    DrawBox(boxOld.x, boxOld.y, boxOld.w, boxOld.h, DISPLAY_COLOR_TEXTSBG);
+                    DrawBox(mwRenderer, boxOld.x, boxOld.y, boxOld.w, boxOld.h, DISPLAY_COLOR_TEXTSBG);
                     WriteCommand(lastHover, displayCommand, DISPLAY_COLOR_TEXTS, DISPLAY_COLOR_TEXTSBG);
                   }
 
@@ -1042,17 +1088,18 @@ int main(int argc, char *argv[]) {
                 }
               }
             }
-          }
 
-          // Not over a new command? May have to clear the old highlight anyway.
-          if ((thisHover == INVALID) && (lastHover != INVALID)) {
-            DrawBox(boxOld.x, boxOld.y, boxOld.w, boxOld.h, DISPLAY_COLOR_TEXTSBG);
-            WriteCommand(lastHover, displayCommand, DISPLAY_COLOR_TEXTS, DISPLAY_COLOR_TEXTSBG);
-            lastHover = INVALID;
+            // Not over a new command? May have to clear the old highlight anyway.
+            if ((thisHover == INVALID) && (lastHover != INVALID)) {
+              DrawBox(mwRenderer, boxOld.x, boxOld.y, boxOld.w, boxOld.h, DISPLAY_COLOR_TEXTSBG);
+              WriteCommand(lastHover, displayCommand, DISPLAY_COLOR_TEXTS, DISPLAY_COLOR_TEXTSBG);
+              lastHover = INVALID;
+            }
           }
           break;
 
         case SDL_MOUSEWHEEL:
+          if (confirmRequired) break;  // Not if the confirmation box is up.
           // The mouse wheel moved.  See if we should act on that.
           if (thisHover != INVALID) {
 
@@ -1084,7 +1131,21 @@ int main(int argc, char *argv[]) {
           // the same item we down clicked on, execute a command.
           if (event.button.button == SDL_BUTTON_LEFT) {
             if ((thisHover != INVALID) && (thisHover == mouseDownOn)) {
-              exitProgram = HandleCommand(displayCommand[thisHover].commands[MOUSE_CLICK].command);
+              if (confirmRequired) {
+                if (thisHover == YES) {
+                  confirmed = YES;
+                  SavePatternSet(keySave, setSave);
+                  confirmRequired = NO;
+                  confirmed = NO;
+                } else {
+                  confirmed = NO;
+                  confirmRequired = NO;
+                  snprintf(cText, sizeof(cText), "Save action cancelled.");
+                }
+                refresh = YES;
+              } else {
+                exitProgram = HandleCommand(displayCommand[thisHover].commands[MOUSE_CLICK].command);
+              }
             }
           }
           break;
@@ -1107,10 +1168,7 @@ int main(int argc, char *argv[]) {
           // display if they occur.
           if ((event.window.event == SDL_WINDOWEVENT_RESIZED) ||
               (event.window.event == SDL_WINDOWEVENT_EXPOSED)) {
-            ClearWindow();
-            InitDisplayTexts();
-            DrawPreviewBorder(PREVIEW_A_POSITION_X, PREVIEW_A_POSITION_Y);
-            DrawPreviewBorder(PREVIEW_B_POSITION_X, PREVIEW_B_POSITION_Y);
+            refresh = YES;
           }
           break;
 
@@ -1138,9 +1196,17 @@ int main(int argc, char *argv[]) {
           } else if (event.type == GUIEventType) {
             // Update the text display.
             UpdateInfoDisplay(displaySet ? alternateSet : currentSet);
+            if (confirmRequired) DrawConfirmationBox(&boxYes, &boxNo, confirmed);
             UpdateGUI();
             guiFrameCount++;
 
+          } else if (event.type == CONFIRMEventType) {
+            // Draw the confirmation box.
+            //~ DrawConfirmationBox(&boxYes, &boxNo, NO);
+            //~ UpdateGUI();
+            lastHover = NO;
+            confirmed = NO;
+            boxOld = boxNo;
           } else {
             //~ fprintf(stderr, "Unhandled SDL event: %i\n", event.type);
           }
@@ -1175,6 +1241,14 @@ int main(int argc, char *argv[]) {
       // loop, polling for events that never occur.  Best to get out of the way...
       // Idle the processor for 1 ms.
       nanosleep((struct timespec[]) {{0,1000000}}, NULL);
+    }
+
+    if (refresh) {
+      refresh = NO;
+      ClearWindow();
+      InitDisplayTexts();
+      DrawPreviewBorder(PREVIEW_A_POSITION_X, PREVIEW_A_POSITION_Y, displaySet == OO_CURRENT);
+      DrawPreviewBorder(PREVIEW_B_POSITION_X, PREVIEW_B_POSITION_Y, displaySet == OO_ALTERNATE);
     }
 
     if (exitProgram) break;
@@ -1630,6 +1704,13 @@ void ProcessModes(int set) {
 // Key press processing.
 int HandleKey(SDL_Keycode key, SDL_Keymod mod) {
   int i, j;
+  int set = currentSet;
+
+  // Make sure we're operating on the right set.
+  if (displaySet == OO_ALTERNATE) {
+    set = alternateSet;
+  };
+
 
   // Prolly not necessary.
   if (key == SDLK_UNKNOWN) return 0;
@@ -1639,6 +1720,49 @@ int HandleKey(SDL_Keycode key, SDL_Keymod mod) {
   if (mod & KMOD_CTRL) mod |= KMOD_CTRL;
   if (mod & KMOD_ALT) mod |= KMOD_ALT;
   if (mod & KMOD_SHIFT) mod |= KMOD_SHIFT;
+
+  // Check for confirmation dialog
+  if (confirmRequired) {
+    switch (key) {
+      case SDLK_y:
+        confirmed = YES;
+        SavePatternSet(keySave, setSave);
+        confirmRequired = NO;
+        confirmed = NO;
+        refresh = YES;
+        break;
+
+      case SDLK_n:
+      case SDLK_ESCAPE:
+        snprintf(cText, sizeof(cText), "Save action cancelled.");
+        confirmRequired = NO;
+        confirmed = NO;
+        refresh = YES;
+        break;
+
+      case SDLK_RETURN:
+        if (confirmed == YES) {
+          SavePatternSet(keySave, setSave);
+          confirmRequired = NO;
+          confirmed = NO;
+          refresh = YES;
+        } else {
+          snprintf(cText, sizeof(cText), "Save action cancelled.");
+          confirmRequired = NO;
+          confirmed = NO;
+          refresh = YES;
+        }
+        break;
+
+      case SDLK_LEFT: case SDLK_RIGHT: case SDLK_UP: case SDLK_DOWN:
+        confirmed = !confirmed;
+        break;
+
+      default:
+        break;
+    }
+    return 0;
+  }
 
   // Check to see if the key combination activates a command.
   for ( i = 0 ; i < DISPLAYCOMMAND_SIZE; i++) {
@@ -1662,7 +1786,7 @@ int HandleKey(SDL_Keycode key, SDL_Keymod mod) {
   // Save the current pattern set as <key>.now (for 0-9, a-z, only)
   if (mod == (KMOD_ALT | KMOD_SHIFT)) {
     if ((key >= 'a' && key <= 'z') || (key >= '0' && key <= '9')) {
-      SavePatternSet(key, currentSet);
+      SavePatternSet(key, set);
       return 0;
     }
   }
@@ -1670,7 +1794,7 @@ int HandleKey(SDL_Keycode key, SDL_Keymod mod) {
   // Load a pattern set from <key>.now into the current set.
   if (mod == (KMOD_CTRL | KMOD_SHIFT)) {
     if ((key >= 'a' && key <= 'z') || (key >= '0' && key <= '9')) {
-      LoadPatternSet(key, currentSet);
+      LoadPatternSet(key, set);
       return 0;
     }
   }
@@ -1682,43 +1806,43 @@ int HandleKey(SDL_Keycode key, SDL_Keymod mod) {
       // Keys with shift held down.
       if (key <= SDLK_z && key >= SDLK_a) {
         // Capitalize for a - z.
-        DSTRING(PE_TEXTBUFFER)[DINT(PE_TEXTINDEX)] = key - ('a' - 'A');
+        SSTRING(set, PE_TEXTBUFFER)[SINT(set, PE_TEXTINDEX)] = key - ('a' - 'A');
       } else {
         // Lookup the symbols for the rest of the keys.
         switch (key) {
-          case SDLK_1: DSTRING(PE_TEXTBUFFER)[DINT(PE_TEXTINDEX)] = '!'; break;
-          case SDLK_2: DSTRING(PE_TEXTBUFFER)[DINT(PE_TEXTINDEX)] = '@'; break;
-          case SDLK_3: DSTRING(PE_TEXTBUFFER)[DINT(PE_TEXTINDEX)] = '#'; break;
-          case SDLK_4: DSTRING(PE_TEXTBUFFER)[DINT(PE_TEXTINDEX)] = '$'; break;
-          case SDLK_5: DSTRING(PE_TEXTBUFFER)[DINT(PE_TEXTINDEX)] = '%'; break;
-          case SDLK_6: DSTRING(PE_TEXTBUFFER)[DINT(PE_TEXTINDEX)] = '^'; break;
-          case SDLK_7: DSTRING(PE_TEXTBUFFER)[DINT(PE_TEXTINDEX)] = '&'; break;
-          case SDLK_8: DSTRING(PE_TEXTBUFFER)[DINT(PE_TEXTINDEX)] = '*'; break;
-          case SDLK_9: DSTRING(PE_TEXTBUFFER)[DINT(PE_TEXTINDEX)] = '('; break;
-          case SDLK_0: DSTRING(PE_TEXTBUFFER)[DINT(PE_TEXTINDEX)] = ')'; break;
-          case SDLK_BACKSLASH: DSTRING(PE_TEXTBUFFER)[DINT(PE_TEXTINDEX)] = '|'; break;
-          case SDLK_BACKQUOTE: DSTRING(PE_TEXTBUFFER)[DINT(PE_TEXTINDEX)] = '~'; break;
-          case SDLK_MINUS: DSTRING(PE_TEXTBUFFER)[DINT(PE_TEXTINDEX)] = '_'; break;
-          case SDLK_EQUALS: DSTRING(PE_TEXTBUFFER)[DINT(PE_TEXTINDEX)] = '+'; break;
-          case SDLK_LEFTBRACKET: DSTRING(PE_TEXTBUFFER)[DINT(PE_TEXTINDEX)] = '{'; break;
-          case SDLK_RIGHTBRACKET: DSTRING(PE_TEXTBUFFER)[DINT(PE_TEXTINDEX)] = '}'; break;
-          case SDLK_SEMICOLON: DSTRING(PE_TEXTBUFFER)[DINT(PE_TEXTINDEX)] = ':'; break;
-          case SDLK_COMMA: DSTRING(PE_TEXTBUFFER)[DINT(PE_TEXTINDEX)] = '<'; break;
-          case SDLK_PERIOD: DSTRING(PE_TEXTBUFFER)[DINT(PE_TEXTINDEX)] = '>'; break;
-          case SDLK_SLASH: DSTRING(PE_TEXTBUFFER)[DINT(PE_TEXTINDEX)] = '?'; break;
-          case SDLK_QUOTE: DSTRING(PE_TEXTBUFFER)[DINT(PE_TEXTINDEX)] = '"'; break;
+          case SDLK_1: SSTRING(set, PE_TEXTBUFFER)[SINT(set, PE_TEXTINDEX)] = '!'; break;
+          case SDLK_2: SSTRING(set, PE_TEXTBUFFER)[SINT(set, PE_TEXTINDEX)] = '@'; break;
+          case SDLK_3: SSTRING(set, PE_TEXTBUFFER)[SINT(set, PE_TEXTINDEX)] = '#'; break;
+          case SDLK_4: SSTRING(set, PE_TEXTBUFFER)[SINT(set, PE_TEXTINDEX)] = '$'; break;
+          case SDLK_5: SSTRING(set, PE_TEXTBUFFER)[SINT(set, PE_TEXTINDEX)] = '%'; break;
+          case SDLK_6: SSTRING(set, PE_TEXTBUFFER)[SINT(set, PE_TEXTINDEX)] = '^'; break;
+          case SDLK_7: SSTRING(set, PE_TEXTBUFFER)[SINT(set, PE_TEXTINDEX)] = '&'; break;
+          case SDLK_8: SSTRING(set, PE_TEXTBUFFER)[SINT(set, PE_TEXTINDEX)] = '*'; break;
+          case SDLK_9: SSTRING(set, PE_TEXTBUFFER)[SINT(set, PE_TEXTINDEX)] = '('; break;
+          case SDLK_0: SSTRING(set, PE_TEXTBUFFER)[SINT(set, PE_TEXTINDEX)] = ')'; break;
+          case SDLK_BACKSLASH: SSTRING(set, PE_TEXTBUFFER)[SINT(set, PE_TEXTINDEX)] = '|'; break;
+          case SDLK_BACKQUOTE: SSTRING(set, PE_TEXTBUFFER)[SINT(set, PE_TEXTINDEX)] = '~'; break;
+          case SDLK_MINUS: SSTRING(set, PE_TEXTBUFFER)[SINT(set, PE_TEXTINDEX)] = '_'; break;
+          case SDLK_EQUALS: SSTRING(set, PE_TEXTBUFFER)[SINT(set, PE_TEXTINDEX)] = '+'; break;
+          case SDLK_LEFTBRACKET: SSTRING(set, PE_TEXTBUFFER)[SINT(set, PE_TEXTINDEX)] = '{'; break;
+          case SDLK_RIGHTBRACKET: SSTRING(set, PE_TEXTBUFFER)[SINT(set, PE_TEXTINDEX)] = '}'; break;
+          case SDLK_SEMICOLON: SSTRING(set, PE_TEXTBUFFER)[SINT(set, PE_TEXTINDEX)] = ':'; break;
+          case SDLK_COMMA: SSTRING(set, PE_TEXTBUFFER)[SINT(set, PE_TEXTINDEX)] = '<'; break;
+          case SDLK_PERIOD: SSTRING(set, PE_TEXTBUFFER)[SINT(set, PE_TEXTINDEX)] = '>'; break;
+          case SDLK_SLASH: SSTRING(set, PE_TEXTBUFFER)[SINT(set, PE_TEXTINDEX)] = '?'; break;
+          case SDLK_QUOTE: SSTRING(set, PE_TEXTBUFFER)[SINT(set, PE_TEXTINDEX)] = '"'; break;
           default: break;
         }
       }
     } else {
       // Unmodified key entry.  We'll treat them as ascii in the printable range.
-      DSTRING(PE_TEXTBUFFER)[DINT(PE_TEXTINDEX)] = key;
+      SSTRING(set, PE_TEXTBUFFER)[SINT(set, PE_TEXTINDEX)] = key;
     }
 
     // Advance the terminating null and increase the buffer size.
-    DSTRING(PE_TEXTBUFFER)[DINT(PE_TEXTINDEX) + 1] = 0x00;
-    DINT(PE_TEXTINDEX)++;
-    if (DINT(PE_TEXTINDEX) >= (patternSet[PE_TEXTBUFFER].size - 2)) DINT(PE_TEXTINDEX)--;
+    SSTRING(set, PE_TEXTBUFFER)[SINT(set, PE_TEXTINDEX) + 1] = 0x00;
+    SINT(set, PE_TEXTINDEX)++;
+    if (SINT(set, PE_TEXTINDEX) >= (patternSet[PE_TEXTBUFFER].size - 2)) SINT(set, PE_TEXTINDEX)--;
   }
 
   return 0;
@@ -1755,7 +1879,11 @@ int HandleCommand(command_e command) {
       break;
     case COM_BLENDSWITCH: autoBlend = !autoBlend; break;
     case COM_EXCHANGE: i = currentSet; currentSet = alternateSet; alternateSet = i; break;
-    case COM_OPERATE: displaySet = (displaySet + 1) % OO_COUNT; break;
+    case COM_OPERATE:
+      displaySet = (displaySet + 1) % OO_COUNT;
+      DrawPreviewBorder(PREVIEW_A_POSITION_X, PREVIEW_A_POSITION_Y, displaySet == OO_CURRENT);
+      DrawPreviewBorder(PREVIEW_B_POSITION_X, PREVIEW_B_POSITION_Y, displaySet == OO_ALTERNATE);
+      break;
     case COM_ALTERNATE_INC: alternateSet = (alternateSet + 1) % PATTERN_SET_COUNT; break;
     case COM_ALTERNATE_DEC: alternateSet--; if (alternateSet < 0) alternateSet = PATTERN_SET_COUNT - 1; break;
     case COM_LIVE_INC: currentSet = (currentSet + 1) % PATTERN_SET_COUNT; break;
@@ -1805,16 +1933,17 @@ int HandleCommand(command_e command) {
       SENUM(set, PE_SHIFTRED) = SM_HOLD;
       cyclePatternSets = NO;
       break;
-    case COM_LOADSET0: currentSet = 0; break;
-    case COM_LOADSET1: currentSet = 1; break;
-    case COM_LOADSET2: currentSet = 2; break;
-    case COM_LOADSET3: currentSet = 3; break;
-    case COM_LOADSET4: currentSet = 4; break;
-    case COM_LOADSET5: currentSet = 5; break;
-    case COM_LOADSET6: currentSet = 6; break;
-    case COM_LOADSET7: currentSet = 7; break;
-    case COM_LOADSET8: currentSet = 8; break;
-    case COM_LOADSET9: currentSet = 9; break;
+    // For load, we want to replace the displayed set.
+    case COM_LOADSET0: if (displaySet == OO_ALTERNATE) alternateSet = 0; else currentSet = 0; break;
+    case COM_LOADSET1: if (displaySet == OO_ALTERNATE) alternateSet = 1; else currentSet = 1; break;
+    case COM_LOADSET2: if (displaySet == OO_ALTERNATE) alternateSet = 2; else currentSet = 2; break;
+    case COM_LOADSET3: if (displaySet == OO_ALTERNATE) alternateSet = 3; else currentSet = 3; break;
+    case COM_LOADSET4: if (displaySet == OO_ALTERNATE) alternateSet = 4; else currentSet = 4; break;
+    case COM_LOADSET5: if (displaySet == OO_ALTERNATE) alternateSet = 5; else currentSet = 5; break;
+    case COM_LOADSET6: if (displaySet == OO_ALTERNATE) alternateSet = 6; else currentSet = 6; break;
+    case COM_LOADSET7: if (displaySet == OO_ALTERNATE) alternateSet = 7; else currentSet = 7; break;
+    case COM_LOADSET8: if (displaySet == OO_ALTERNATE) alternateSet = 8; else currentSet = 8; break;
+    case COM_LOADSET9: if (displaySet == OO_ALTERNATE) alternateSet = 9; else currentSet = 9; break;
     case COM_FADEMODE:
       SENUM(set, PE_FADEMODE) = (SENUM(set, PE_FADEMODE) + 1) % FM_COUNT;
       break;
@@ -1833,8 +1962,8 @@ int HandleCommand(command_e command) {
     case COM_ORIENTATION:
       tensor_landscape_p = !tensor_landscape_p;
       SetDims();
-      DrawPreviewBorder(PREVIEW_A_POSITION_X, PREVIEW_A_POSITION_Y);
-      DrawPreviewBorder(PREVIEW_B_POSITION_X, PREVIEW_B_POSITION_Y);
+      DrawPreviewBorder(PREVIEW_A_POSITION_X, PREVIEW_A_POSITION_Y, displaySet == OO_CURRENT);
+      DrawPreviewBorder(PREVIEW_B_POSITION_X, PREVIEW_B_POSITION_Y, displaySet == OO_ALTERNATE);
       break;
     case COM_TEXT_MODE_UP: SENUM(set, PE_TEXTMODE) = (SENUM(set, PE_TEXTMODE) + 1) % TS_COUNT; break;
     case COM_TEXT_MODE_DOWN:
@@ -1877,6 +2006,7 @@ int HandleCommand(command_e command) {
       SENUM(set, PE_BGE) = (SENUM(set, PE_BGE) + 1) % CE_COUNT;
       SCOLOR(set, PE_BGC) = namedPalette[SENUM(set, PE_BGE)].color;
       break;
+    // We want to copy the display set to the selected set.  This accomplishes that.
     case COM_COPYSET0: CopyPatternSet(0, set); break;
     case COM_COPYSET1: CopyPatternSet(1, set); break;
     case COM_COPYSET2: CopyPatternSet(2, set); break;
@@ -2474,7 +2604,7 @@ void UpdatePreview(int xOffset, int yOffset, unsigned char *buffer) {
 
       // Draw the output pixel as a square of dimension PREVIEW_PIXEL_SIZE - 1.
       // This leaves us with a border around our pixels.
-      DrawBox(xOffset + (x * PREVIEW_PIXEL_SIZE), yOffset + (y * PREVIEW_PIXEL_SIZE),
+      DrawBox(mwRenderer, xOffset + (x * PREVIEW_PIXEL_SIZE), yOffset + (y * PREVIEW_PIXEL_SIZE),
               PREVIEW_PIXEL_SIZE - 1, PREVIEW_PIXEL_SIZE - 1, pixel);
     }
   }
@@ -3071,7 +3201,7 @@ void UpdateInfoDisplay(int set) {
   // The ones that aren't automatic:
   WriteInt(previewFPSA, 21, 1, 10);
   WriteInt(previewFPSB, 21, 5, 10);
-  WriteInt(guiFPS, 51, 5, 10);
+  WriteInt(guiFPS, 53, 5, 10);
   if (cyclePatternSets) {
     WriteInt(cycleFrameCount, ROW_PA + 1, COL_PA + 1, 10);
   } else {
@@ -3083,6 +3213,10 @@ void UpdateInfoDisplay(int set) {
   WriteFloat(alternateBlend, ROW_PA + 12, COL_PA + 1, 10, 5);
   WriteFloat(alternateBlendRate, ROW_PA + 13, COL_PA + 1, 10, 5);
   WriteBool(autoBlend, ROW_PA + 14, COL_PA + 1, 10);
+
+  // Show the status bar
+  snprintf(text, sizeof(text), "%-50s", cText);
+  WriteLine(text, 53, 2, cBlack, cGray);
 
   // Show the last 100 bytes of the text buffer.
   length = strlen(SSTRING(set, PE_TEXTBUFFER));
@@ -3183,14 +3317,26 @@ void SetDims(void) {
   }
 }
 
-void DrawRectangle(int x, int y, int w, int h, color_t color) {
-  rectangleRGBA(mwRenderer, x, y, x + (w - 1), y + (h - 1),
+// Outline
+void DrawRectangle(SDL_Renderer *r, int x, int y, int w, int h, color_t color) {
+  rectangleRGBA(r, x, y, x + (w - 1), y + (h - 1),
     (Uint8) color.r, (Uint8) color.g, (Uint8) color.b, (Uint8) color.a);
 }
 
-void DrawBox(int x, int y, int w, int h, color_t color) {
-  boxRGBA(mwRenderer, x, y, x + (w - 1), y + (h - 1),
+// Outline, but with easier passing var.
+void DrawSRectangle(SDL_Renderer *r, SDL_Rect rect, color_t color) {
+  DrawRectangle(r, rect.x, rect.y, rect.w, rect.h, color);
+}
+
+// Filled
+void DrawBox(SDL_Renderer *r, int x, int y, int w, int h, color_t color) {
+  boxRGBA(r, x, y, x + (w - 1), y + (h - 1),
     (Uint8) color.r, (Uint8) color.g, (Uint8) color.b, (Uint8) color.a);
+}
+
+// Filled, but with easier passing var.
+void DrawSBox(SDL_Renderer *r, SDL_Rect rect, color_t color) {
+  DrawBox(r, rect.x, rect.y, rect.w, rect.h, color);
 }
 
 // Draw an image to the output with appropriate rotation and expansion.
@@ -3227,12 +3373,13 @@ void DrawImage(int set, double angle, float xoffset, float yoffset, double expan
 // Draw the borders around the preview output.  We can switch between portrait
 // and landscape, so the preview space is a square box that would accomodate
 // either orientation.
-void DrawPreviewBorder(int x, int y) {
+void DrawPreviewBorder(int x, int y, unsigned char active) {
 
   // Vars
   int w, h;
   int maxDim;
   int i;
+  color_t highlight = {{0, 127, 0, 255}};
 
   // Get the outer border dimensions.
   w = (tensorWidth * PREVIEW_PIXEL_SIZE) + (PREVIEW_BORDER_THICKNESS * 2);
@@ -3242,17 +3389,21 @@ void DrawPreviewBorder(int x, int y) {
   maxDim = max(w, h);
 
   // Erase the old preview.
-  DrawBox(x, y, maxDim, maxDim, cBlack);
-  DrawRectangle(x, y, maxDim, maxDim, cWhite);
-  DrawBox(x + 1, y + 1, maxDim - 2, maxDim - 2, cGray);
+  DrawBox(mwRenderer, x, y, maxDim, maxDim, cBlack);
+  DrawRectangle(mwRenderer, x, y, maxDim, maxDim, cWhite);
+  if (active) {
+    DrawBox(mwRenderer, x + 1, y + 1, maxDim - 2, maxDim - 2, highlight);
+  } else {
+    DrawBox(mwRenderer, x + 1, y + 1, maxDim - 2, maxDim - 2, cBlack);
+  }
 
   // Ajust x and y to center the preview.
   x = x + (maxDim - w) / 2;
   y = y + (maxDim - h) / 2;
 
   // Draw the new outer border.
-  DrawRectangle(x, y, w, h, cWhite);
-  DrawBox(x + 1, y + 1, w - 2, h - 2, cBlack);
+  DrawRectangle(mwRenderer, x, y, w, h, cWhite);
+  DrawBox(mwRenderer, x + 1, y + 1, w - 2, h - 2, cBlack);
 
   // Get the inner border dimensions.
   w = (tensorWidth * PREVIEW_PIXEL_SIZE) + 1;
@@ -3261,12 +3412,12 @@ void DrawPreviewBorder(int x, int y) {
   if (tensor_landscape_p) {
     // Landscape - Draw horizontal panel indicators.
     for (i = 0; i < 3; i++) {
-      DrawRectangle(x + PREVIEW_BORDER_THICKNESS - 1, y + i * (h / 3) + PREVIEW_BORDER_THICKNESS - 1, w, (h / 3) + 1, cGray);
+      DrawRectangle(mwRenderer, x + PREVIEW_BORDER_THICKNESS - 1, y + i * (h / 3) + PREVIEW_BORDER_THICKNESS - 1, w, (h / 3) + 1, cGray);
     }
   } else {
     // Portrait - Draw vertical panel indicators.
     for (i = 0; i < 3; i++) {
-      DrawRectangle(x + i * (w / 3) + PREVIEW_BORDER_THICKNESS - 1, y + PREVIEW_BORDER_THICKNESS - 1, (w / 3) + 1, h, cGray);
+      DrawRectangle(mwRenderer, x + i * (w / 3) + PREVIEW_BORDER_THICKNESS - 1, y + PREVIEW_BORDER_THICKNESS - 1, (w / 3) + 1, h, cGray);
     }
   }
 }
@@ -3291,6 +3442,7 @@ void CellFun(int set) {
 }
 
 // Saves a pattern set to a file.
+// Return value indicates if the action requires confirmation.
 void SavePatternSet(char key, int set) {
   char filename[8] = "";
   FILE *fp;
@@ -3298,12 +3450,34 @@ void SavePatternSet(char key, int set) {
 
   // Filename
   snprintf(filename, sizeof(filename), "%c.now", key);
-  fprintf(stdout, "Save filename: %s\n", filename);
+
+  // Check file existence.
+  if (!confirmed) {
+    fp = fopen(filename, "r");
+    if (fp) {
+      fclose(fp);
+      snprintf(cText, sizeof(cText), "Overwrite \"%s\" with set %i?", filename, set);
+      setSave = set;
+      keySave = key;
+      confirmRequired = YES;
+      SDL_Event event;
+      SDL_zero(event);
+      event.type = CONFIRMEventType;
+      event.user.code = 0;
+      event.user.data1 = 0;
+      event.user.data2 = 0;
+      SDL_PushEvent(&event);
+      return;
+    }
+  }
+
+  fprintf(stdout, "Save set %i to filename: %s\n", set, filename);
 
   // Open the file for write.
   fp = fopen(filename, "w");
   if (!fp) {
-    fprintf(stderr, "Failed to open file for output: %s", filename);
+    snprintf(cText, sizeof(cText), "Failed to open file for output: %s", filename);
+    fprintf(stderr, "%s\n", cText);
     return;
   }
 
@@ -3345,6 +3519,7 @@ void SavePatternSet(char key, int set) {
     fprintf(fp, "\n");
   }
   fclose(fp);
+  snprintf(cText, sizeof(cText), "Saved set %i to filename: %s", set, filename);
 }
 
 // Loads a pattern set from a file.
@@ -3373,12 +3548,13 @@ void LoadPatternSet(char key, int set) {
 
   // Filename
   snprintf(filename, sizeof(filename), "%c.now", key);
-  fprintf(stdout, "Load filename: %s\n", filename);
+  fprintf(stdout, "Load filename: %s into set %i\n", filename, currentSet);
 
   // Open file.
   fp = fopen(filename, "r");
   if (!fp) {
     fprintf(stderr, "Failed to open file %s\n", filename);
+    snprintf(cText, sizeof(cText), "Failed to open file \"%s\"", filename);
     return;
   }
 
@@ -3580,6 +3756,7 @@ void LoadPatternSet(char key, int set) {
   if (!imageSeed[set]) {
     fprintf(stderr, "Unable to load image: \"%s\"\n", DSTRING(PE_IMAGENAME));
   }
+  snprintf(cText, sizeof(cText), "Loaded filename \"%s\" into set %i", filename, currentSet);
 }
 
 
@@ -3683,3 +3860,143 @@ void CopyPatternSet(int dst, int src) {
   }
 }
 
+#define BORDER_WIDTH 10
+// Confirmation box for dangerous actions.
+void DrawConfirmationBox(SDL_Rect *yesBox, SDL_Rect *noBox, unsigned char selected) {
+  SDL_Surface *t1 = NULL, *t2 = NULL, *t3 = NULL;
+  SDL_Texture *texture = NULL;
+  SDL_Color fg = {DISPLAY_COLOR_TEXTS.r, DISPLAY_COLOR_TEXTS.g, DISPLAY_COLOR_TEXTS.b};
+  SDL_Color bg = {DISPLAY_COLOR_TEXTSBG.r, DISPLAY_COLOR_TEXTSBG.g, DISPLAY_COLOR_TEXTSBG.b};
+  SDL_Color fghl = {DISPLAY_COLOR_TEXTS_HL.r, DISPLAY_COLOR_TEXTS_HL.g, DISPLAY_COLOR_TEXTS_HL.b};
+  SDL_Color bghl = {DISPLAY_COLOR_TEXTSBG_HL.r, DISPLAY_COLOR_TEXTSBG_HL.g, DISPLAY_COLOR_TEXTSBG_HL.b};
+  SDL_Rect rect;
+  int tHeight, boxHeight, boxWidth, boxX, boxY;
+
+  // Create the texts.
+  t1 = TTF_RenderText_Shaded(screenFont, cText, fg, bg);
+  if (!t1) {
+    fprintf(stderr, "SDL error rendering text \"%s\": %s\n", cText, SDL_GetError());
+    exit(EXIT_FAILURE);
+  }
+  if (selected == YES) {
+    t2 = TTF_RenderText_Shaded(screenFont, "Yes", fghl, bghl);
+  } else {
+    t2 = TTF_RenderText_Shaded(screenFont, "Yes", fg, bg);
+  }
+  if (!t2) {
+    fprintf(stderr, "SDL error rendering text \"%s\": %s\n", "Yes", SDL_GetError());
+    exit(EXIT_FAILURE);
+  }
+  if (selected == NO) {
+    t3 = TTF_RenderText_Shaded(screenFont, "No", fghl, bghl);
+  } else {
+    t3 = TTF_RenderText_Shaded(screenFont, "No", fg, bg);
+  }
+  if (!t3) {
+    fprintf(stderr, "SDL error rendering text \"%s\": %s\n", "No", SDL_GetError());
+    exit(EXIT_FAILURE);
+  }
+
+  // Calculations of the box's positions and sizes.
+  tHeight = max(max(t1->h, t2->h), t3->h);
+  boxHeight = 3 * tHeight + 4 * BORDER_WIDTH;
+  boxWidth = max(4 * BORDER_WIDTH + max(t2->w, t3->w) * 2, 2 * BORDER_WIDTH + t1->w);
+  boxX = (WINDOW_WIDTH / 2) - (boxWidth / 2);
+  boxY = (WINDOW_HEIGHT / 2) - (boxHeight / 2);
+
+  // Get the yes and no box areas to pass back to the caller.
+  yesBox->x = boxX;
+  yesBox->y = boxY + boxHeight / 2 - 1;
+  yesBox->w = boxWidth / 2 + 1;
+  yesBox->h = boxHeight / 2 + 1;
+  noBox->x = boxX + boxWidth / 2;
+  noBox->y = boxY + boxHeight / 2 - 1;
+  noBox->w = boxWidth / 2 + 1;
+  noBox->h = boxHeight / 2 + 1;
+
+  // Draw the underlying box areas.
+  DrawBox(mwRenderer, boxX, boxY, boxWidth + 1, boxHeight + 1, DISPLAY_COLOR_TEXTSBG);
+  DrawRectangle(mwRenderer, boxX, boxY, boxWidth + 1, boxHeight / 2 + 1, DISPLAY_COLOR_TEXTS);
+  if (selected == YES) {
+    DrawSBox(mwRenderer, *yesBox, DISPLAY_COLOR_TEXTSBG_HL);
+  } else if (selected == NO) {
+    DrawSBox(mwRenderer, *noBox, DISPLAY_COLOR_TEXTSBG_HL);
+  }
+  DrawSRectangle(mwRenderer, *yesBox, DISPLAY_COLOR_TEXTS);
+  DrawSRectangle(mwRenderer, *noBox, DISPLAY_COLOR_TEXTS);
+
+  // Draw the texts.
+  texture = SDL_CreateTextureFromSurface(mwRenderer, t1);
+  if (!texture) {
+    fprintf(stderr, "Unable to create text render texture: %s\n", SDL_GetError());
+    exit(EXIT_FAILURE);
+  }
+  rect.x = boxX + BORDER_WIDTH;
+  rect.y = boxY + boxHeight / 4 - tHeight / 2;
+  rect.w = t1->w;
+  rect.h = t1->h;
+  SDL_FreeSurface(t1);
+  SDL_RenderCopy(mwRenderer, texture, NULL, &rect);
+  SDL_DestroyTexture(texture);
+
+  texture = SDL_CreateTextureFromSurface(mwRenderer, t2);
+  if (!texture) {
+    fprintf(stderr, "Unable to create text render texture: %s\n", SDL_GetError());
+    exit(EXIT_FAILURE);
+  }
+  rect.x = boxX + (boxWidth / 4 - t2->w / 2);
+  rect.y = boxY + (3 * boxHeight / 4) - tHeight / 2;
+  rect.w = t2->w;
+  rect.h = t2->h;
+  SDL_FreeSurface(t2);
+  SDL_RenderCopy(mwRenderer, texture, NULL, &rect);
+  SDL_DestroyTexture(texture);
+
+  texture = SDL_CreateTextureFromSurface(mwRenderer, t3);
+  if (!texture) {
+    fprintf(stderr, "Unable to create text render texture: %s\n", SDL_GetError());
+    exit(EXIT_FAILURE);
+  }
+  rect.x = boxX + (3 * boxWidth / 4 - t3->w / 2);
+  rect.y = boxY + (3 * boxHeight / 4) - tHeight / 2;
+  rect.w = t3->w;
+  rect.h = t3->h;
+  SDL_FreeSurface(t3);
+  SDL_RenderCopy(mwRenderer, texture, NULL, &rect);
+  SDL_DestroyTexture(texture);
+}
+
+
+unsigned char Intersects(int x, int y, SDL_Rect box){
+  if ((y >= box.y) && (y <= box.y + box.h) && (x >= box.x) && (x <= box.x + box.w)) return YES;
+  return NO;
+}
+
+
+void CenterText(SDL_Rect box, char * text, color_t fg, color_t bg) {
+  SDL_Surface *textS = NULL;
+  SDL_Texture *texture = NULL;
+  SDL_Rect rect;
+  SDL_Color fontColor = {fg.r, fg.g, fg.b};
+  SDL_Color fontBGColor = {bg.r, bg.g, bg.b};
+
+
+  textS = TTF_RenderText_Shaded(screenFont, text, fontColor, fontBGColor);
+  if (!textS) {
+    fprintf(stderr, "SDL error rendering text \"%s\": %s\n", text, SDL_GetError());
+    exit(EXIT_FAILURE);
+  }
+
+  texture = SDL_CreateTextureFromSurface(mwRenderer, textS);
+  if (!texture) {
+    fprintf(stderr, "Unable to create text render texture: %s\n", SDL_GetError());
+    exit(EXIT_FAILURE);
+  }
+  rect.w = textS->w;
+  rect.h = textS->h;
+  rect.x = box.x + (box.w / 2) - (rect.w / 2);
+  rect.y = box.y + (box.h / 2) - (rect.h / 2);
+  SDL_FreeSurface(textS);
+  SDL_RenderCopy(mwRenderer, texture, NULL, &rect);
+  SDL_DestroyTexture(texture);
+}
