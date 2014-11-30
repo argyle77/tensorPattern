@@ -27,8 +27,6 @@
 #define YES 1
 #define OFF 0
 #define ON 1
-//~ #define FOREGROUND 0
-//~ #define BACKGROUND 1
 #define FORWARDS 0
 #define BACKWARDS 1
 #define INVALID (-1)
@@ -230,10 +228,10 @@ const char *textModeText[] = { "8 Row", "9 Row Stag", "10 Row", "Full BG" };
 typedef enum colorCycleModes_e{
   CM_INVALID = -1,
   CM_NONE = 0, CM_RGB, CM_CMY, CM_SECONDARY, CM_TERTIARY, CM_GRAY, CM_RAINBOW,
-  CM_RANDOM, CM_FGBGFADE,
+  CM_RANDOM, CM_FGBGFADE, CM_TERTTOBLACK,
   CM_COUNT // Last.
 } colorCycleModes_e;
-const char *colorCycleText[] = { "None", "R-G-B", "C-M-Y", "Secondary", "Tertiary", "Graystep", "Rainbow", "Random", "FG-BG Fade" };
+const char *colorCycleText[] = { "None", "R-G-B", "C-M-Y", "Secondary", "Tertiary", "Graystep", "Rainbow", "Random", "FG-BG Fade", "Tertiary-Blk" };
 #define COLORCYCLETEXT_SIZE (sizeof(colorCycleText) / sizeof(const char *))
 
 typedef enum operateOn_e {
@@ -543,8 +541,8 @@ const command_t displayCommand[] = {
   // Pattern sets
   #define ROW_PA 0
   #define COL_PA 2
-  {ROW_PA + 1, COL_PA, "Pattern set cycle:",   PE_INVALID,  {{KMOD_CTRL, SDLK_g, COM_CYCLESET}}},
-  {ROW_PA + 2, COL_PA, "Frames until cycle:", PE_FRAMECOUNT, {{0, 0, COM_FCOUNT_RST}, {0, 0, COM_FCOUNT_INC}, {0, 0, COM_FCOUNT_DEC}}},
+  {ROW_PA + 1, COL_PA, "Cycle pattern sets:",   PE_INVALID,  {{KMOD_CTRL, SDLK_g, COM_CYCLESET}}},
+  {ROW_PA + 2, COL_PA, "Frames until next set:", PE_FRAMECOUNT, {{0, 0, COM_FCOUNT_RST}, {0, 0, COM_FCOUNT_INC}, {0, 0, COM_FCOUNT_DEC}}},
   {ROW_PA + 8, COL_PA, "Live pattern set:",PE_INVALID, {{0, 0, COM_LIVE_INC}, {}, {0, 0, COM_LIVE_DEC}}},
   {ROW_PA + 9, COL_PA, "Alternate preview:",PE_INVALID, {{0, 0, COM_ALTERNATE_INC}, {}, {0, 0, COM_ALTERNATE_DEC}}},
   {ROW_PA + 10,COL_PA, "Control set:",     PE_INVALID, {{0, 0, COM_OPERATE}}},
@@ -656,8 +654,8 @@ const command_t displayCommand[] = {
   {ROW_I + 2, COL_I, "Angle:",         PE_IMAGEANGLE, {{0, 0, COM_IMANGLE_RST}, {0, 0, COM_IMANGLE_INC}, {0, 0, COM_IMANGLE_DEC}}},
   {ROW_I + 3, COL_I, "Angle Inc:",     PE_IMAGEINC,   {{0, 0, COM_IMINC_RST},   {0, 0, COM_IMINC_INC},   {0, 0, COM_IMINC_DEC}}},
   {ROW_I + 4, COL_I, "Expansion:",     PE_IMAGEEXP,   {{0, 0, COM_IMEXP_RST},   {0, 0, COM_IMEXP_INC},   {0, 0, COM_IMEXP_DEC}}},
-  {ROW_I + 5, COL_I, "Xoffset:",       PE_IMAGEXOFFSET, {{0, 0, COM_IMXOFFSET_RST}, {0, 0, COM_IMXOFFSET_INC}, {0, 0, COM_IMXOFFSET_DEC}}},
-  {ROW_I + 6, COL_I, "Yoffset:",       PE_IMAGEYOFFSET, {{0, 0, COM_IMYOFFSET_RST}, {0, 0, COM_IMYOFFSET_INC}, {0, 0, COM_IMYOFFSET_DEC}}},
+  {ROW_I + 5, COL_I, "Center x:",      PE_IMAGEXOFFSET, {{0, 0, COM_IMXOFFSET_RST}, {0, 0, COM_IMXOFFSET_INC}, {0, 0, COM_IMXOFFSET_DEC}}},
+  {ROW_I + 6, COL_I, "Center y:",      PE_IMAGEYOFFSET, {{0, 0, COM_IMYOFFSET_RST}, {0, 0, COM_IMYOFFSET_INC}, {0, 0, COM_IMYOFFSET_DEC}}},
   {ROW_I + 7, COL_I, "Anti-alias:",    PE_IMAGEALIAS, {{0, 0, COM_IMALIAS}}},
 
   // Text
@@ -844,7 +842,7 @@ void DrawBox(SDL_Renderer *r, int x, int y, int w, int h, color_t color);
 void ClearRed(int set);
 void ClearGreen(int set);
 void ClearBlue(int set);
-void DrawImage(int set, double angle, float xoffset, float yoffset, double expansion, int aliasmode, unsigned char *fb_dst);
+void DrawImage(SDL_Surface *image, double angle, float xoffset, float yoffset, double expansion, int aliasmode, unsigned char *fb_dst);
 int min(int a, int b);
 int max(int a, int b);
 unsigned char SameRectangle(SDL_Rect a, SDL_Rect b);
@@ -952,7 +950,7 @@ int main(int argc, char *argv[]) {
     SINT(i, PE_TEXTOFFSET) = tensorHeight / 3 - 1;  // After SetDims()
   }
 
-  // Attempt to load startup pattern sets from disk.  These are 0-9.now
+  // Attempt to load startup pattern sets from disk.  These are the 0-9.now
   // files.  Its okay if they don't exist.  Otherwise, default will be loaded
   // into those pattern sets.
   for (i = 0; i < PATTERN_SET_COUNT; i++) {
@@ -1166,10 +1164,28 @@ int main(int argc, char *argv[]) {
           // We care about the window events that destroy our display.  Those
           // are probably resize and expose events.  We'll redraw the whole
           // display if they occur.
-          if ((event.window.event == SDL_WINDOWEVENT_RESIZED) ||
-              (event.window.event == SDL_WINDOWEVENT_EXPOSED)) {
-            refresh = YES;
+          switch (event.window.event) {
+            case SDL_WINDOWEVENT_RESIZED:
+            case SDL_WINDOWEVENT_EXPOSED:
+              refresh = YES;
+              break;
+            case SDL_WINDOWEVENT_ENTER:
+            case SDL_WINDOWEVENT_LEAVE:
+            case SDL_WINDOWEVENT_FOCUS_LOST:
+            case SDL_WINDOWEVENT_FOCUS_GAINED:
+              // Included for event debugging.  I think I was actually trying to
+              // debug a video card bug.  My card is cranky sometimes and likes
+              // to forget its memory occasionally.
+              break;
+            default:
+              fprintf(stderr, "Unhandled SDL window event: %i\n", event.window.event);
+              break;
           }
+          break;
+
+        case SDL_KEYUP:
+        case SDL_TEXTINPUT:
+          // Included for event debugging.
           break;
 
         default:
@@ -1208,7 +1224,7 @@ int main(int argc, char *argv[]) {
             confirmed = NO;
             boxOld = boxNo;
           } else {
-            //~ fprintf(stderr, "Unhandled SDL event: %i\n", event.type);
+            fprintf(stderr, "Unhandled SDL event: %i\n", event.type);
           }
           break;
       }
@@ -1604,16 +1620,16 @@ void ProcessModes(int set) {
     DrawSideBar(currentSet);
   }
 
-  // First stab experimental image drawing.  Needs work.
+  // Slap an image down over the display (every frame).
   if (DBOOL(PE_POSTIMAGE)) {
-    DrawImage(set, DFLOAT(PE_IMAGEANGLE), DFLOAT(PE_IMAGEXOFFSET), DFLOAT(PE_IMAGEYOFFSET),
+    DrawImage(imageSeed[currentSet], DFLOAT(PE_IMAGEANGLE), DFLOAT(PE_IMAGEXOFFSET), DFLOAT(PE_IMAGEYOFFSET),
       DFLOAT(PE_IMAGEEXP), DBOOL(PE_IMAGEALIAS), DBUFFER(PE_FRAMEBUFFER));
     DFLOAT(PE_IMAGEANGLE) += DFLOAT(PE_IMAGEINC);
   }
 
   // Image one-shot
   if (DBOOL(PE_IMAGEALL)) {
-    DrawImage(set, DFLOAT(PE_IMAGEANGLE), DFLOAT(PE_IMAGEXOFFSET), DFLOAT(PE_IMAGEYOFFSET),
+    DrawImage(imageSeed[currentSet], DFLOAT(PE_IMAGEANGLE), DFLOAT(PE_IMAGEXOFFSET), DFLOAT(PE_IMAGEYOFFSET),
       DFLOAT(PE_IMAGEEXP), DBOOL(PE_IMAGEALIAS), DBUFFER(PE_FRAMEBUFFER));
     DBOOL(PE_IMAGEALL) = NO;
   }
@@ -3341,33 +3357,252 @@ void DrawSBox(SDL_Renderer *r, SDL_Rect rect, color_t color) {
 
 // Draw an image to the output with appropriate rotation and expansion.
 // Rotation is acheived using SDL_gfx primitive rotozoom.
-void DrawImage(int set, double angle, float xoffset, float yoffset, double expansion, int aliasmode, unsigned char *fb_dst) {
-  SDL_Surface *rotatedImage;
-  SDL_Surface *scratch;
+// Angle is given in degrees.
+void DrawImageA(SDL_Surface *image, double angle, float xoffset, float yoffset, double expansion, int aliasmode, unsigned char *fb_dst) {
+  SDL_Surface *rotatedImage = NULL;
+  SDL_Surface *scratch = NULL;
   SDL_Rect offset;
 
-  // Don't if it isn't.
-  if (!imageSeed[set]) return;
+  float x, y, ax, ay;
+  float w, h, aw, ah;
+  float b, c, d, e;
+  float ox, oy;
+  float tanTheta;
+  float cosTheta;
+  float sinTheta;
+  float cw, ch;
+  float cn, cm;
+  float theta, nw, nh;
+  static float nwmax = -10;
+  static float nwmin = 10;
+  static float nhmax = -10;
+  static float nhmin = 10;
 
-  // Rotate / scale it.
-  rotatedImage = rotozoomSurface (imageSeed[set], angle, expansion, aliasmode ? 1 : 0);
+
+
+  // Don't if it isn't.
+  if (!image) return;
+
+  // Rotate and scale the image.  We don't care about centers yet because the
+  // rotozoom function generates a new surface that isn't the same as as the new
+  // surface, maintaining roughly the same center while expanding the edges to
+  // fit the rotated image.
+  rotatedImage = rotozoomSurface (image, angle, expansion, aliasmode ? 1 : 0);
   if (!rotatedImage) {
     fprintf(stderr, "Error rotating image: %s\n", SDL_GetError());
     return;
   }
 
+  if (angle > 0) {
+    angle = fmod(angle, 360);
+  } else {
+    angle = fabs(angle);
+    angle = fmod(angle, 360);
+    angle = 360.0 - angle;
+  }
+
+  w = image->w;
+  h = image->h;
+  aw = expansion * w;
+  ah = expansion * h;
+  x = xoffset * w;
+  y = yoffset * h;
+  ax = x * expansion;
+  ay = y * expansion;
+
+
+
+  if (angle < 90.0) {
+    theta = angle;
+    tanTheta = tan((M_PI / 180.0) * theta);
+    cosTheta = cos((M_PI / 180.0) * theta);
+    sinTheta = sin((M_PI / 180.0) * theta);
+    b = ay * tanTheta;
+    ox = (b + ax) * cosTheta;
+    e = (aw - ax) * tanTheta;
+    oy = (ay + e) * cosTheta;
+    nw = ah * sinTheta + aw * cosTheta;
+    nh = aw * sinTheta + ah * cosTheta;
+    //~ ox = c - x;
+    //~ oy = d - y;
+  } else if (angle < 180.0) {
+    theta = angle - 90.0;
+    tanTheta = tan((M_PI / 180.0) * theta);
+    cosTheta = cos((M_PI / 180.0) * theta);
+    sinTheta = sin((M_PI / 180.0) * theta);
+    b = (ah - ay) * tanTheta;
+    oy = ((aw - ax) + b) * cosTheta;
+    e = (aw - ax) * tanTheta;
+    ox = (e + ay) * cosTheta;
+    nw = ah * sinTheta + aw * cosTheta;
+    nh = aw * sinTheta + ah * cosTheta;
+    //~ oy = c - y;
+    //~ ox = d - x;
+  } else if (angle < 270.0) {
+    theta = angle - 180.0;
+    tanTheta = tan((M_PI / 180.0) * theta);
+    cosTheta = cos((M_PI / 180.0) * theta);
+    sinTheta = sin((M_PI / 180.0) * theta);
+    b = (ah - ay) * tanTheta;
+    ox = ((aw - ax) + b) * cosTheta;
+    //~ ox = c - x;
+    e = ax * tanTheta;
+    oy = ((ah - ay) + e) * cosTheta;
+    //~ oy = d - y;
+    nw = ah * sinTheta + aw * cosTheta;
+    nh = aw * sinTheta + ah * cosTheta;
+  } else {
+    theta = angle - 270.0;
+    tanTheta = tan((M_PI / 180.0) * theta);
+    cosTheta = cos((M_PI / 180.0) * theta);
+    sinTheta = sin((M_PI / 180.0) * theta);
+    b = ax * tanTheta;
+    ox = ((ah - ay) + b) * cosTheta;
+    //~ ox = c - x;
+    e = ay * tanTheta;
+    oy = (ax + e) * cosTheta;
+    //~ oy = d - y;
+    nw = ah * sinTheta + aw * cosTheta;
+    nh = aw * sinTheta + ah * cosTheta;
+  }
+  //~ nwmax = fmaxf(nw - rotatedImage->w, nwmax);
+  //~ nwmin = fminf(nw - rotatedImage->w, nwmin);
+  //~ nhmax = fmaxf(nh - rotatedImage->h, nhmax);
+  //~ nhmin = fminf(nh - rotatedImage->h, nhmin);
+  //~ printf("nwmax: %f, nwmin: %f, mhmax: %f, nhmin: %f\n", nwmax, nwmin, nhmax, nhmin);
+  //~ ox = ox - ((nw - rotatedImage->w)*((xoffset - 0.5)*2));
+  printf("nw: %f, w: %i, fact: %f, ox = %f", nw, rotatedImage->w, nw / rotatedImage->w, ox);
+  ox = ox * ((float) rotatedImage->w / nw);
+  printf(", oxn = %f\n", ox);
+  oy = oy * ((float) rotatedImage->h / nh);
+  //~ oy = oy / ((nh / (float)rotatedImage->h) );
+  //~ oy = oy - ((nh - rotatedImage->h)*((yoffset - 0.5)*2));
+  //~ printf("x: %f\n", ((nw - rotatedImage->w) * ((xoffset - 0.5) * 2)));
+  //~ printf("nw %f = %i, nh %f = %i\n", nw, rotatedImage->w, nh, rotatedImage->h);
+  //~ printf("nw diff = %f, nh diff = %f\n", nw - rotatedImage->w, nh - rotatedImage->h);
+  //~ printf("w = %i, h = %i, aw = %i, ah = %i, x = %i, y = %i, ", (int) w, (int) h, (int) aw, (int) ah, (int)x, (int)y);
+  //~ printf("ax = %i, ay = %i, ", (int) ax, (int) ay);
+  //~ printf("tan = %f, cos = %f, ", tanTheta, cosTheta);
+  //~ printf("b = %i, b+ax = %i, c = %i, ox = %i, ", (int)b, (int)(b + ax), (int)c, (int)ox);
+  //~ printf("e = %i, d = %i, oy = %i, ", (int)e, (int)d, (int)oy);
+  //~ printf("x = %i, y = %i, ox = %i, oy = %i, offx = %i, offy = %i, ", (int) x, (int) y, (int) ox, (int) oy, (int) ((tensorWidth / 2) - x - ox), (int) ((tensorHeight / 2) - y - oy));
+  //~ printf("\n");
+
+
+
+  // Create a surface to copy the image to.
   scratch = SDL_CreateRGBSurface(0, tensorWidth, tensorHeight, 32, 0, 0, 0, 0);
+  if (!scratch) {
+    fprintf(stderr, "Error creating scratch image: %s\n", SDL_GetError());
+    SDL_FreeSurface(rotatedImage);
+    return;
+  }
 
-  // This clips the image and recenters it on the preview window.
 
-  offset.x = 0 - SFLOAT(set, PE_IMAGEXOFFSET) * (rotatedImage->w - scratch->w);
-  offset.y = 0 - SFLOAT(set, PE_IMAGEYOFFSET) * (rotatedImage->h - scratch->h);
+
+  // Recenter the image.  Our offsets choose the center about which to do the
+  // rotation and expansion.  We just have to calculate where the new center
+  // ended up and put it back over the old center to effect that.
+  //~ offset.x = (tensorWidth / 2) - (int)(ox);
+  //~ offset.y = (tensorHeight / 2) - (int)(oy);
+  offset.x = (tensorWidth / 2) - (int)(ox + 0.5);
+  offset.y = (tensorHeight / 2) - (int)(oy + 0.5);
+  //~ offset.x = (tensorWidth / 2) - (int)(rotatedImage->w * xoffset);
+  //~ offset.y = (tensorHeight / 2) - (int)(rotatedImage->h * yoffset);
+
+  //~ printf("ox: %i = %f, oy: %i = %f, ", (int)(ox + 0.5), ox, (int)(oy + 0.5), oy);
+  //~ printf("nw: %i, nh: %i, ", rotatedImage->w, rotatedImage->h);
+  //~ printf("ncx: %i, ncy: %i, ", (int)(rotatedImage->w * xoffset), (int)(rotatedImage->h * yoffset));
+  //~ printf("\n");
+
+
   SDL_BlitSurface(rotatedImage, NULL, scratch, &offset);
-
-  // Copy the result back to the frame buffer.
-  SurfaceToFB(fb_dst, scratch);
   SDL_FreeSurface(rotatedImage);
+//~
+  //~ rotatedImage = SDL_CreateRGBSurface(0, tensorWidth, tensorHeight, 32, 0, 0, 0, 0);
+  //~ offset.x = 0;
+  //~ offset.y = 0;
+  //~ SDL_BlitSurface(scratch, NULL, rotatedImage, &offset);
+
+  SurfaceToFB(fb_dst, scratch);
   SDL_FreeSurface(scratch);
+  //~ SDL_FreeSurface(rotatedImage);
+
+}
+
+// Draw an image to the output with appropriate rotation and expansion.
+// Rotation is acheived using SDL_gfx primitive rotozoom.
+// Angle is given in degrees.
+void DrawImage(SDL_Surface *image, double angle, float xoffset, float yoffset, double expansion, int aliasmode, unsigned char *fb_dst) {
+  SDL_Surface *s1 = NULL;
+  SDL_Surface *s2 = NULL;
+  SDL_Rect offset;
+  int tempx, tempy;
+  int cx, cy;
+
+  // If not, don't.
+  if (!image) return;
+
+  // Recenter the image around the chosen center.  xoffset and yoffset are the
+  // normalized (0-1) choice of center.  We'll expand the surface of the image
+  // to make our chosen center the real center without cutting off any edges.
+
+  // Calculate new image size
+  tempx = (fabs((xoffset - 0.5) * 2) + 1) * image->w;
+  tempy = (fabs((yoffset - 0.5) * 2) + 1) * image->h;
+
+  // Calculate the new center.
+  cx = xoffset * image->w;
+  cy = yoffset * image->h;
+
+  // Make the surface
+  s1 =  SDL_CreateRGBSurface(0, tempx, tempy, 32, 0, 0, 0, 0);
+  if (!s1) {
+    fprintf(stderr, "Error getting scratch image for recentering: %s\n", SDL_GetError());
+    return;
+  }
+
+  // Get the offsets to place the image within the new surface.
+  if (cx < (image->w / 2)) {
+    offset.x = tempx - image->w;
+  } else {
+    offset.x = 0;
+  }
+  if (cy < (image->h / 2)) {
+    offset.y = tempy - image->h;
+  } else {
+    offset.y = 0;
+  }
+
+  // Copy the image onto the new surface with our chosen pixel centered.
+  SDL_BlitSurface(image, NULL, s1, &offset);
+
+  // Rotate and zoom the image.
+  s2 = rotozoomSurface (s1, angle, expansion, aliasmode ? 1 : 0);
+  if (!s2) {
+    fprintf(stderr, "Error rotating image: %s\n", SDL_GetError());
+    return;
+  }
+  SDL_FreeSurface(s1);
+
+  // Create a tensor sized surface to copy the image to.
+  s1 = SDL_CreateRGBSurface(0, tensorWidth, tensorHeight, 32, 0, 0, 0, 0);
+  if (!s1) {
+    fprintf(stderr, "Error creating tensor scratch surface: %s\n", SDL_GetError());
+    SDL_FreeSurface(s2);
+    return;
+  }
+
+  // Get the offsets between the image center and the surface center.
+  offset.x = 0 - (s2->w - s1->w) / 2;
+  offset.y = 0 - (s2->h - s1->h) / 2;
+
+  // Copy / clip the rotated image to the tensor surface.
+  SDL_BlitSurface(s2, NULL, s1, &offset);
+  SDL_FreeSurface(s2);
+
+  SurfaceToFB(fb_dst, s1);
+  SDL_FreeSurface(s1);
 }
 
 // Draw the borders around the preview output.  We can switch between portrait

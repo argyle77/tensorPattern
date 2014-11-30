@@ -14,7 +14,7 @@ include_directories(${PROJECT_BINARY_DIR} ${SDL2_INCLUDE_DIRS} ${SDL2TTF_INCLUDE
 include_directories(${PROJECT_BINARY_DIR}/src)
 
 # Linked Libraries
-target_link_libraries(tensorSDL drv-tensor ${SDL2_LIBRARIES} ${SDL2TTF_LIBRARIES} ${SDL2IMAGE_LIBRARIES} SDL2_gfx)
+target_link_libraries(tensorSDL drv-tensor ${SDL2_LIBRARIES} ${SDL2TTF_LIBRARIES} ${SDL2IMAGE_LIBRARIES} SDL2_gfx m)
 
 
 #message(STATUS "sdl includes: ${SDL2_INCLUDE_DIRS}")
