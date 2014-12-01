@@ -66,3 +66,7 @@ Version 5.1:
 Version 6.0:
   Added alternate preview, reorganized command list.  Images
   can be loaded by editing *.now files.
+
+Version 6.1:
+  Added some seeds, added image recentering.  Lots of tweaks.
+  Added some preload files.

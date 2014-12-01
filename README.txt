@@ -1,11 +1,11 @@
-Tensor pattern generation - Version 6.0.0
+Tensor pattern generation - Version 6.1.0
   
 "Frostbyte was an enigineer."
 
 This pattern generator outputs UDP to the tensor wall. A preview
 window shows the pattern and interface using SDL2.
 
-Controls keys are listed next to the preview. Modes and parameters
+Controls are listed next to the previews. Modes and parameters
 can be adjusted with the mouse and mouse wheel.  Unmodified keys,
 backspace, and esc alter the text buffer.  Pattern sets can be saved
 and loaded from disk.  Saved patterns 0-9 are loaded automatically
