@@ -40,4 +40,6 @@ file(RENAME ${PROJECT_BINARY_DIR}/DroidSansMono.ttf ${PROJECT_BINARY_DIR}/font.t
 # Aux files
 file(GLOB IMAGES images/*)
 file(COPY ${IMAGES} DESTINATION ${PROJECT_BINARY_DIR})
+file(GLOB PRELOAD preload/*.now)
+file(COPY ${PRELOAD} DESTINATION ${PROJECT_BINARY_DIR})
 

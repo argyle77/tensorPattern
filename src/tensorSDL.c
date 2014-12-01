@@ -9,7 +9,6 @@
 #include <stdio.h> // File io
 #include <stdlib.h>
 #include <unistd.h>
-#include <math.h>
 #include <SDL.h>
 #include <SDL_ttf.h>
 #include <SDL2_rotozoom.h>
@@ -111,6 +110,7 @@ typedef union color_t {
 #define CD_GRAY       {.r = 127, .g = 127, .b = 127, .a = 255}
 #define CD_DKGRAY     {.r = 63,  .g = 63,  .b = 63,  .a = 255}
 #define CD_BLACK      {.r = 0,   .g = 0,   .b = 0,   .a = 255}
+#define CD_DKYELLOW   {.r = 192, .g = 192, .b = 0,   .a = 255}
 
 // Named color constants
 const color_t cRed = CD_RED;
@@ -130,12 +130,13 @@ const color_t cLtGray = CD_LTGRAY;
 const color_t cGray = CD_GRAY;
 const color_t cDkGray = CD_DKGRAY;
 const color_t cBlack = CD_BLACK;
+const color_t cDkYellow = CD_DKYELLOW;
 
 // Colors for the info display texts.
 #define DISPLAY_COLOR_PARMS cAzure
 #define DISPLAY_COLOR_PARMSBG cBlack
-#define DISPLAY_COLOR_TITLES cYellow
-#define DISPLAY_COLOR_TITLESBG cBlack
+#define DISPLAY_COLOR_TITLES cBlack
+#define DISPLAY_COLOR_TITLESBG cDkYellow
 #define DISPLAY_COLOR_TEXTS cWhite
 #define DISPLAY_COLOR_TEXTSBG cBlack
 #define DISPLAY_COLOR_TEXTS_HL cBlack
@@ -242,10 +243,18 @@ typedef enum operateOn_e {
 const char *operateText[] = { "Live", "Alternate" };
 #define OPERATETEXT_SIZE (sizeof(operateText) / sizeof(const char *))
 
+typedef enum crossBar_e {
+  CB_INVALID = -1,
+  CB_NONE = 0, CB_VERT, CB_HORZ, CB_BOTH,
+  CB_COUNT // Last
+} crossBar_e;
+const char *crossbarText[] = { "None", "Vertical", "Horizontal", "V & H"};
+#define CROSSBARTEXT_SIZE (sizeof(crossbarText) / sizeof(const char *))
+
 // Connect enumeration types to their strings.
 typedef enum enums_e {
   E_INVALID = -1,
-  E_DIRECTIONS = 0, E_FADEMODES, E_SHIFTMODES, E_TEXTMODES, E_COLORCYCLES, E_COLORS, E_OPERATE,
+  E_DIRECTIONS = 0, E_FADEMODES, E_SHIFTMODES, E_TEXTMODES, E_COLORCYCLES, E_COLORS, E_OPERATE, E_CROSSBAR,
   E_COUNT // Last.
 } enums_e;
 typedef struct enums_t {
@@ -260,6 +269,7 @@ const enums_t enumerations[] = {
   { E_COLORCYCLES, colorCycleText},
   { E_COLORS, colorsText },
   { E_OPERATE, operateText },
+  { E_CROSSBAR, crossbarText },
 };
 #define ENUMERATIONS_SIZE (sizeof(enumerations) / sizeof(enums_t))
 
@@ -322,6 +332,7 @@ typedef enum patternElement_e {
   PE_PRERZANGLE, PE_PRERZALIAS, PE_PRERZINC, PE_PRERZEXPAND, PE_FRAMECOUNT,
   PE_IMAGEANGLE, PE_IMAGEALIAS, PE_IMAGEINC, PE_IMAGEEXP,
   PE_IMAGEXOFFSET, PE_IMAGEYOFFSET, PE_IMAGENAME,
+  PE_SNAIL, PE_SNAIL_POS, PE_FASTSNAIL, PE_FASTSNAILP, PE_CROSSBAR, PE_CBLIKELY,
   PE_COUNT // LAst
 } patternElement_e;
 
@@ -430,6 +441,12 @@ patternElement_t patternSet[] = {
   { PE_IMAGEXOFFSET,"ImageXOffset",ET_FLOAT,  {.f = INITIAL_IMAGE_XOFFSET} },
   { PE_IMAGEYOFFSET,"ImageYOffset",ET_FLOAT,  {.f = INITIAL_IMAGE_YOFFSET} },
   { PE_IMAGENAME,   "ImageName",   ET_STRING, {.s = INITIAL_IMAGE}, 1024},
+  { PE_SNAIL,       "SnailShot",   ET_BOOL,   {.b = NO} },
+  { PE_SNAIL_POS,   "SnailPos",    ET_INT,    {.i = 0} },
+  { PE_FASTSNAIL,   "FastSnail",   ET_BOOL,   {.b = NO} },
+  { PE_FASTSNAILP,  "FastSnailP",  ET_INT,    {.i = 0} },
+  { PE_CROSSBAR,    "Crossbar",    ET_ENUM,   {.e = CB_NONE}, .etype = E_CROSSBAR },
+  { PE_CBLIKELY,    "CrossLikely", ET_INT,    {.i = INITIAL_RAND_MOD } },
 };
 #define PSET_SIZE (sizeof(patternSet) / sizeof(patternElement_t))
 #define GLOBAL_PATTERN_ELEMENT_ARRAY patternSet
@@ -508,7 +525,8 @@ typedef enum command_e {
   COM_LIVE_INC, COM_LIVE_DEC, COM_OPERATE, COM_EXCHANGE,
   COM_BLEND_RST, COM_BLEND_INC, COM_BLEND_DEC,
   COM_BLENDINC_RST, COM_BLENDINC_INC, COM_BLENDINC_DEC,
-  COM_BLENDSWITCH,
+  COM_BLENDSWITCH, COM_SNAIL, COM_SNAILFAST, COM_CB_RST, COM_CB_UP, COM_CB_DOWN,
+  COM_CROSSB_RST, COM_CROSSB_UP, COM_CROSSB_DOWN,
   COM_COUNT // Last
 } command_e;
 
@@ -542,14 +560,14 @@ const command_t displayCommand[] = {
   #define ROW_PA 0
   #define COL_PA 2
   {ROW_PA + 1, COL_PA, "Cycle pattern sets:",   PE_INVALID,  {{KMOD_CTRL, SDLK_g, COM_CYCLESET}}},
-  {ROW_PA + 2, COL_PA, "Frames until next set:", PE_FRAMECOUNT, {{0, 0, COM_FCOUNT_RST}, {0, 0, COM_FCOUNT_INC}, {0, 0, COM_FCOUNT_DEC}}},
-  {ROW_PA + 8, COL_PA, "Live pattern set:",PE_INVALID, {{0, 0, COM_LIVE_INC}, {}, {0, 0, COM_LIVE_DEC}}},
-  {ROW_PA + 9, COL_PA, "Alternate preview:",PE_INVALID, {{0, 0, COM_ALTERNATE_INC}, {}, {0, 0, COM_ALTERNATE_DEC}}},
-  {ROW_PA + 10,COL_PA, "Control set:",     PE_INVALID, {{0, 0, COM_OPERATE}}},
+  {ROW_PA + 2, COL_PA, "Frames this set:", PE_FRAMECOUNT, {{0, 0, COM_FCOUNT_RST}, {0, 0, COM_FCOUNT_INC}, {0, 0, COM_FCOUNT_DEC}}},
+  {ROW_PA + 8, COL_PA, "Live pattern set (left):",PE_INVALID, {{0, 0, COM_LIVE_INC}, {}, {0, 0, COM_LIVE_DEC}}},
+  {ROW_PA + 9, COL_PA, "Alternate preview set (right):",PE_INVALID, {{0, 0, COM_ALTERNATE_INC}, {}, {0, 0, COM_ALTERNATE_DEC}}},
+  {ROW_PA + 10,COL_PA, "Controls set:",     PE_INVALID, {{0, 0, COM_OPERATE}}},
   {ROW_PA + 11,COL_PA, "Exchange live and alternate sets", PE_INVALID, {{0, 0, COM_EXCHANGE}}},
-  {ROW_PA + 12,COL_PA, "Alternate blend amount", PE_INVALID, {{0, 0, COM_BLEND_RST}, {0, 0, COM_BLEND_INC}, {0, 0, COM_BLEND_DEC}}},
-  {ROW_PA + 13,COL_PA, "Auto blend rate", PE_INVALID, {{0, 0, COM_BLENDINC_RST},{0, 0, COM_BLENDINC_INC}, {0, 0, COM_BLENDINC_DEC}}},
-  {ROW_PA + 14,COL_PA, "Auto blend & switch", PE_INVALID, {{0, 0, COM_BLENDSWITCH}}},
+  {ROW_PA + 12,COL_PA, "Blend in alternate amount:", PE_INVALID, {{0, 0, COM_BLEND_RST}, {0, 0, COM_BLEND_INC}, {0, 0, COM_BLEND_DEC}}},
+  {ROW_PA + 13,COL_PA, "Auto blend & switch sets", PE_INVALID, {{0, 0, COM_BLENDSWITCH}}},
+  {ROW_PA + 14,COL_PA, "Auto blend rate:", PE_INVALID, {{0, 0, COM_BLENDINC_RST},{0, 0, COM_BLENDINC_INC}, {0, 0, COM_BLENDINC_DEC}}},
 
   // Auxillary
   #define ROW_A 46
@@ -559,7 +577,7 @@ const command_t displayCommand[] = {
   {ROW_A + 3, COL_A, "All modes off",   PE_INVALID,  {{KMOD_CTRL, SDLK_l, COM_MODEOFF}}},
 
   // Plane suppression
-  #define ROW_P 35
+  #define ROW_P 36
   #define COL_P 0
   {ROW_P + 1, COL_P, "Supress red:",     PE_NORED,    {{KMOD_CTRL, SDLK_m, COM_NORED}}},
   {ROW_P + 2, COL_P, "Supress green:",   PE_NOGREEN,  {{KMOD_CTRL, SDLK_COMMA, COM_NOGREEN}}},
@@ -578,20 +596,24 @@ const command_t displayCommand[] = {
   {ROW_R + 2, COL_R, "Randomness:", PE_RANDOMDOTCOEF, {{KMOD_ALT, SDLK_LEFTBRACKET, COM_RANDOM_RST}, {KMOD_ALT, SDLK_p, COM_RANDOM_INC}, {KMOD_ALT, SDLK_RIGHTBRACKET, COM_RANDOM_DEC}}},
 
   // One shot seeds
-  #define ROW_O 23
+  #define ROW_O 22
   #define COL_O 0
   {ROW_O + 1, COL_O, "Horizontal bars", PE_INVALID,  {{KMOD_CTRL, SDLK_i, COM_HBAR}}},
   {ROW_O + 2, COL_O, "Vertical bars",   PE_INVALID,  {{KMOD_CTRL, SDLK_o, COM_VBAR}}},
   {ROW_O + 3, COL_O, "Foreground all",  PE_INVALID,  {{KMOD_CTRL, SDLK_p, COM_FGALL}}},
   {ROW_O + 4, COL_O, "Background all",  PE_INVALID,  {{KMOD_CTRL, SDLK_a, COM_BGALL}}},
   {ROW_O + 5, COL_O, "Image seed",      PE_INVALID,  {{0, 0, COM_IMAGEALL}}},
+  {ROW_O + 6, COL_O, "Snail seed",      PE_SNAIL,    {{0, 0, COM_SNAIL}}},
+  {ROW_O + 7, COL_O, "Fast snail seed", PE_FASTSNAIL,{{0, 0, COM_SNAILFAST}}},
 
     // Misc
-  #define ROW_MI (ROW_O + 7)
+  #define ROW_MI (ROW_O + 8)
   #define COL_MI COL_O
   {ROW_MI + 1, COL_MI, "Cell pattern:",    PE_CELLFUN,  {{KMOD_CTRL, SDLK_q, COM_CELL}}},
   {ROW_MI + 2, COL_MI, "Bouncer:",         PE_BOUNCER,  {{KMOD_CTRL, SDLK_w, COM_BOUNCE}}},
   {ROW_MI + 3, COL_MI, "Sidebar seed:",    PE_BARSEED,  {{KMOD_CTRL, SDLK_n, COM_SIDEBAR}}},
+  {ROW_MI + 4, COL_MI, "Crossbar seeds:",  PE_CROSSBAR, {{0, 0, COM_CROSSB_RST}, {0, 0, COM_CROSSB_UP}, {0, 0, COM_CROSSB_DOWN}}},
+  {ROW_MI + 5, COL_MI, "Crossbar randomness:",  PE_CBLIKELY, {{0, 0, COM_CB_RST}, {0, 0, COM_CB_UP}, {0, 0, COM_CB_DOWN}}},
 
   // Fader
   #define ROW_F 24
@@ -727,12 +749,12 @@ typedef struct displayText_t {
 } displayText_t;
 
 displayText_t displayText[] = {
-  {ROW_T + 2, COL_T, "<Unmodified keys> - Add text."},
-  {ROW_PA + 3, COL_PA, "<c> 0-9 - Change to set #"},
-  {ROW_PA + 4, COL_PA, "<c> <a> 0-9 - Copy set to #"},
-  {ROW_PA + 5, COL_PA, "<a> 0-9 - Load buffer from set #"},
-  {ROW_PA + 6, COL_PA, "<a> <s> 0-9, a-z - Save to disk."},
-  {ROW_PA + 7, COL_PA, "<c> <s> 0-9, a-z - Load saved set."},
+  {ROW_T + 2, COL_T, " Add text - <Unmodified keys>"},
+  {ROW_PA + 3, COL_PA, " Change to set # - <c> 0-9"},
+  {ROW_PA + 4, COL_PA, " Copy set to # - <c> <a> 0-9"},
+  {ROW_PA + 5, COL_PA, " Load buffer from set # - <a> 0-9"},
+  {ROW_PA + 6, COL_PA, " Save to disk - <a> <s> 0-9, a-z"},
+  {ROW_PA + 7, COL_PA, " Load saved set - <c> <s> 0-9, a-z"},
 };
 #define DISPLAYTEXT_SIZE (sizeof(displayText) / sizeof(displayText_t))
 
@@ -740,22 +762,22 @@ displayText_t headerText[] = {
   {21, 0,          "Live Preview          FPS:"},
   {21, 4,          "Alternate Preview     FPS:"},
   {53, 4,          "                  GUI FPS:"},
-  {51, 0,          "Text buffer:"},
-  {ROW_PA, COL_PA, "Pattern sets:"},
-  {ROW_P, COL_P,   "Plane suppression:"},
-  {ROW_A, COL_A,   "Auxiliary:"},
-  {ROW_MI, COL_MI, "Misc:"},
-  {ROW_I, COL_I,   "Image:"},
-  {ROW_R, COL_R,   "Random dots:"},
-  {ROW_C, COL_C,   "Colors:"},
-  {ROW_D, COL_D,   "Diffusion:"},
-  {ROW_O, COL_O,   "One-shot seeds:"},
-  {ROW_F, COL_F,   "Fader:"},
-  {ROW_M, COL_M,   "Multiplier:"},
-  {ROW_T, COL_T,   "Text entry:"},
-  {ROW_S, COL_S,   "Scrollers:"},
-  {ROW_PR, COL_PR, "Post rotation:"},
-  {ROW_PE, COL_PE, "Pre rotation:"}
+  {51, 0,          "Text buffer:              "},
+  {ROW_PA, COL_PA, "Pattern sets:             "},
+  {ROW_P, COL_P,   "Plane suppression:        "},
+  {ROW_A, COL_A,   "Auxiliary:                "},
+  {ROW_MI, COL_MI, "Misc:                     "},
+  {ROW_I, COL_I,   "Image:                    "},
+  {ROW_R, COL_R,   "Random dots:              "},
+  {ROW_C, COL_C,   "Colors:                   "},
+  {ROW_D, COL_D,   "Diffusion:                "},
+  {ROW_O, COL_O,   "One-shot seeds:           "},
+  {ROW_F, COL_F,   "Fader:                    "},
+  {ROW_M, COL_M,   "Multiplier:               "},
+  {ROW_T, COL_T,   "Text entry:               "},
+  {ROW_S, COL_S,   "Scrollers:                "},
+  {ROW_PR, COL_PR, "Post rotation:            "},
+  {ROW_PE, COL_PE, "Pre rotation:             "}
 };
 #define HEADERTEXT_SIZE (sizeof(headerText) / sizeof(displayText_t))
 
@@ -779,9 +801,9 @@ float alternateBlend = 0, alternateBlendRate = 0.01;
 unsigned char autoBlend = NO;
 #define CHAR_W (8)
 #define ACOL (0)
-#define BCOL (ACOL + 26 * CHAR_W)
+#define BCOL (ACOL + 27 * CHAR_W)
 #define CCOL (BCOL + 12 * CHAR_W)
-#define DCOL (CCOL + 40 * CHAR_W)
+#define DCOL (CCOL + 39 * CHAR_W)
 #define ECOL (DCOL + 13 * CHAR_W)
 #define FCOL (ECOL + 26 * CHAR_W)
 const int colToPixel[] = {ACOL, BCOL, CCOL, DCOL, ECOL, FCOL, WINDOW_WIDTH};
@@ -835,7 +857,7 @@ void WriteString(const char *text, int line, int col, int width);
 void WriteCommand(int index, const command_t *commands, color_t fg, color_t bg);
 SDL_Surface * FBToSurface(SDL_Surface *surface, unsigned char *FB);
 unsigned char * SurfaceToFB(unsigned char *FB, SDL_Surface *surface);
-void Rotate(double angle, double expansion, int aliasmode, unsigned char *fb_dst, unsigned char *fb_src);
+void Rotate(double angle, double expansion, int aliasmode, unsigned char *fb_dst, unsigned char *fb_src, unsigned char exclude);
 void Multiply(float multiplier, unsigned char *buffer);
 void DrawRectangle(SDL_Renderer *r, int x, int y, int w, int h, color_t color);
 void DrawBox(SDL_Renderer *r, int x, int y, int w, int h, color_t color);
@@ -857,6 +879,9 @@ void DrawSBox(SDL_Renderer *r, SDL_Rect rect, color_t color);
 void DrawSRectangle(SDL_Renderer *r, SDL_Rect rect, color_t color);
 unsigned char Intersects(int x, int y, SDL_Rect rect);
 void CenterText(SDL_Rect box, char * text, color_t fg, color_t bg);
+void SnailSeed(int set, int position);
+void FastSnailSeed(int set, int position);
+void CrossBars(int set);
 
 // Main
 int main(int argc, char *argv[]) {
@@ -1178,7 +1203,7 @@ int main(int argc, char *argv[]) {
               // to forget its memory occasionally.
               break;
             default:
-              fprintf(stderr, "Unhandled SDL window event: %i\n", event.window.event);
+              //~ fprintf(stderr, "Unhandled SDL window event: %i\n", event.window.event);
               break;
           }
           break;
@@ -1224,7 +1249,7 @@ int main(int argc, char *argv[]) {
             confirmed = NO;
             boxOld = boxNo;
           } else {
-            fprintf(stderr, "Unhandled SDL event: %i\n", event.type);
+            //~ fprintf(stderr, "Unhandled SDL event: %i\n", event.type);
           }
           break;
       }
@@ -1410,6 +1435,14 @@ void VerifyStructuralIntegrity(void) {
   }
   if (CM_COUNT != COLORCYCLETEXT_SIZE) {
     fprintf(stderr, "Programmer error: Mismatched colorCycleModes_e(%i) != colorCycleText(%i)!\n", CM_COUNT, (int) COLORCYCLETEXT_SIZE);
+    exit(EXIT_FAILURE);
+  }
+  if (CB_COUNT != CROSSBARTEXT_SIZE) {
+    fprintf(stderr, "Programmer error: Mismatched crossBar_e(%i) != crossbarText(%i)!\n", CB_COUNT, (int) CROSSBARTEXT_SIZE);
+    exit(EXIT_FAILURE);
+  }
+  if (OO_COUNT != OPERATETEXT_SIZE) {
+    fprintf(stderr, "Programmer error: Mismatched operateOn_e(%i) != operateText(%i)!\n", OO_COUNT, (int) OPERATETEXT_SIZE);
     exit(EXIT_FAILURE);
   }
 }
@@ -1658,15 +1691,32 @@ void ProcessModes(int set) {
     DBOOL(PE_HBARS) = NO;
   }
 
-  // Bam!
+  // Bam! Vertical bars.
   if (DBOOL(PE_VBARS)) {
     VerticalBars(DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
     DBOOL(PE_VBARS) = NO;
   }
 
+  // Crossbar seeds
+  if (DENUM(PE_CROSSBAR) != CB_NONE) {
+    CrossBars(currentSet);
+  }
+
   // Random dots.  Most useful seed ever.
   if (DBOOL(PE_RANDOMDOT)) {
     RandomDots(DCOLOR(PE_FGC), DINT(PE_RANDOMDOTCOEF), DBUFFER(PE_FRAMEBUFFER));
+  }
+
+  // Snail seed.
+  if (DBOOL(PE_SNAIL)) {
+    SnailSeed(currentSet, DINT(PE_SNAIL_POS));
+    DINT(PE_SNAIL_POS)++;
+  }
+
+  // Fast snail seed.
+  if (DBOOL(PE_FASTSNAIL)) {
+    FastSnailSeed(currentSet, DINT(PE_FASTSNAILP));
+    DINT(PE_FASTSNAILP)++;
   }
 
   // Fader
@@ -1692,7 +1742,7 @@ void ProcessModes(int set) {
 
   // Rotozoomer
   if (DBOOL(PE_PRERZ)) {
-    Rotate(DFLOAT(PE_PRERZANGLE), DFLOAT(PE_PRERZEXPAND), DBOOL(PE_PRERZALIAS), DBUFFER(PE_FRAMEBUFFER), DBUFFER(PE_FRAMEBUFFER));
+    Rotate(DFLOAT(PE_PRERZANGLE), DFLOAT(PE_PRERZEXPAND), DBOOL(PE_PRERZALIAS), DBUFFER(PE_FRAMEBUFFER), DBUFFER(PE_FRAMEBUFFER), NO);
     DFLOAT(PE_PRERZANGLE) += DFLOAT(PE_PRERZINC);
   }
 
@@ -1714,6 +1764,231 @@ void ProcessModes(int set) {
   // Post rotation increment.
   if (DBOOL(PE_POSTRZ)) {
     DFLOAT(PE_POSTRZANGLE) += DFLOAT(PE_POSTRZINC);
+  }
+}
+
+void SnailSeed(int set, int position) {
+  int currentSet = set; // Override global currentSet for D*.
+  int i;
+  int x = 0, y = 0;
+  int tp = 0;
+  int dir = 0;
+  int xh,xl,yh,yl;
+  xh = TENSOR_WIDTH;
+  xl = 0;
+  yh = TENSOR_HEIGHT;
+  yl = 0;
+  for (i = 0; i < TENSOR_HEIGHT * TENSOR_WIDTH; i++) {
+    if (position == tp) {
+      //~ printf("tp: %i, (%i, %i)\n", tp, x, y);
+      SetPixel(x, y, DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
+      break;
+    }
+    tp++;
+    if (tp >= TENSOR_HEIGHT * TENSOR_WIDTH) {
+      DBOOL(PE_SNAIL) = NO;
+    }
+    switch(dir) {
+      case 0:
+        x++;
+        if (x >= xh - 1) {
+          dir = 1;
+          xh--;
+        }
+        break;
+      case 1:
+        y++;
+        if (y >= yh - 1) {
+          dir = 2;
+          yh--;
+        }
+        break;
+      case 2:
+        x--;
+        if (x <= xl) {
+          dir = 3;
+          xl++;
+        }
+        break;
+      case 3:
+        y--;
+        if (y <= yl + 1) {
+          dir = 0;
+          yl++;
+        }
+        break;
+      default:
+        break;
+    }
+  }
+}
+
+void FastSnailSeed(int set, int position) {
+  int currentSet = set; // Overrides global currentSet for D*.
+  int i;
+  int x = -1, y = 0;
+  int tp = 0;
+  int dir = 0;
+  int xh,xl,yh,yl;
+  xh = TENSOR_WIDTH - 1;
+  xl = 0;
+  yh = TENSOR_HEIGHT - 1;
+  yl = 1;
+  for (i = 0; i < TENSOR_HEIGHT * TENSOR_WIDTH; i++) {
+    if (position == tp) {
+      //~ printf("tp: %i, (%i, %i)\n", tp, x, y);
+      SetPixel(x, y, DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
+      SetPixel(x, y + 1, DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
+      SetPixel(x + 1, y + 1, DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
+      SetPixel(x + 1, y, DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
+      break;
+    }
+    tp++;
+    if (tp >= TENSOR_HEIGHT * TENSOR_WIDTH / 4 + 5) {
+      DBOOL(PE_FASTSNAIL) = NO;
+      break;
+    }
+    switch(dir) {
+      case 0:
+        x++;
+        x++;
+        if (x >= xh - 1) {
+          dir = 1;
+          xh--;
+          xh--;
+        }
+        break;
+      case 1:
+        y++;
+        y++;
+        if (y >= yh - 1) {
+          dir = 2;
+          yh--;
+          yh--;
+        }
+        break;
+      case 2:
+        x--;
+        x--;
+        if (x < 0) {
+          x++;
+        }
+        if (x <= xl) {
+          dir = 3;
+          xl++;
+          xl++;
+        }
+        break;
+      case 3:
+        y--;
+        y--;
+        if (y <= yl + 1) {
+          dir = 0;
+          yl++;
+          yl++;
+        }
+        break;
+      default:
+        break;
+    }
+  }
+}
+
+// Crossing bars
+typedef struct cbars_t {
+  unsigned char inProgress;
+  dir_e orient;
+  int x, y;
+} cbars_t;
+#define CBARSMAX 100
+void CrossBars(int set) {
+  int currentSet = set; // Override global currentSet for D*.
+  static cbars_t cbars[CBARSMAX];
+  static unsigned char initial = YES;
+  int i;
+
+  if (initial) {
+    initial = NO;
+    for (i = 0 ; i < CBARSMAX; i++) {
+      cbars[i].inProgress = NO;
+    }
+  }
+
+  // Find out if we add a new one.
+  for (i = 0 ; i < CBARSMAX; i++) {
+    if (!cbars[i].inProgress) {
+      if (!(rand() % DINT(PE_CBLIKELY))) {
+        cbars[i].inProgress = YES;
+        // H or V?
+        switch (DENUM(PE_CROSSBAR)) {
+          case CB_VERT:
+            cbars[i].orient = rand() % 2 ? DIR_UP : DIR_DOWN;
+            break;
+          case CB_HORZ:
+            cbars[i].orient = rand() % 2 ? DIR_LEFT : DIR_RIGHT;
+            break;
+          default:
+          case CB_BOTH:
+            cbars[i].orient = rand() % 2 ? (rand() % 2 ? DIR_RIGHT : DIR_LEFT) : (rand() % 2 ? DIR_UP : DIR_DOWN);
+            break;
+        }
+
+        switch (cbars[i].orient) {
+          case DIR_UP:
+            cbars[i].x = rand() % tensorWidth;
+            cbars[i].y = tensorHeight - 1;
+            break;
+          case DIR_DOWN:
+            cbars[i].x = rand() % tensorWidth;
+            cbars[i].y = 0;
+            break;
+          case DIR_LEFT:
+            cbars[i].y = rand() % tensorHeight;
+            cbars[i].x = 0;
+            break;
+          default:
+          case DIR_RIGHT:
+            cbars[i].y = rand() % tensorHeight;
+            cbars[i].x = tensorWidth - 1;
+            break;
+        }
+        break;  // The for loop.
+      }
+    }
+  }
+
+  // Process the array.
+  for (i = 0; i < CBARSMAX; i++) {
+    if (cbars[i].inProgress) {
+      SetPixel(cbars[i].x, cbars[i].y, DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
+      switch(cbars[i].orient) {
+        case DIR_UP:
+          cbars[i].y--;
+          if (cbars[i].y < 0) {
+            cbars[i].inProgress = NO;
+          }
+          break;
+        case DIR_DOWN:
+          cbars[i].y++;
+          if (cbars[i].y >= tensorHeight) {
+            cbars[i].inProgress = NO;
+          }
+          break;
+        case DIR_LEFT:
+          cbars[i].x++;
+          if (cbars[i].x >= tensorWidth) {
+            cbars[i].inProgress = NO;
+          }
+          break;
+        case DIR_RIGHT:
+        default:
+          cbars[i].x--;
+          if (cbars[i].x < 0) {
+            cbars[i].inProgress = NO;
+          }
+          break;
+      }
+    }
   }
 }
 
@@ -1875,6 +2150,20 @@ int HandleCommand(command_e command) {
   }
 
   switch(command) {
+    case COM_CROSSB_RST: SENUM(set, PE_CROSSBAR) = CB_NONE; break;
+    case COM_CROSSB_UP: SENUM(set, PE_CROSSBAR) = (SENUM(set, PE_CROSSBAR) + 1) % CB_COUNT; break;
+    case COM_CROSSB_DOWN:
+      SENUM(set, PE_CROSSBAR)--;
+      if (SENUM(set, PE_CROSSBAR) < 0) SENUM(set, PE_CROSSBAR) = CB_COUNT - 1;
+      break;
+    case COM_SNAILFAST:
+      SBOOL(set, PE_FASTSNAIL) = !SBOOL(set, PE_FASTSNAIL);
+      SINT(set, PE_FASTSNAILP) = 0;
+      break;
+    case COM_SNAIL:
+      SBOOL(set, PE_SNAIL) = !SBOOL(set, PE_SNAIL);
+      SINT(set, PE_SNAIL_POS) = 0;
+      break;
     case COM_BLEND_RST: alternateBlend = 0; break;
     case COM_BLEND_INC:
       alternateBlend += SFLOAT(set, PE_FLOATINC);
@@ -1919,17 +2208,39 @@ int HandleCommand(command_e command) {
     case COM_BGALL: SBOOL(set, PE_BGCOLORALL) = YES; break;
     case COM_IMAGEALL: SBOOL(set, PE_IMAGEALL) = YES; break;
     case COM_RDOT: SBOOL(set, PE_RANDOMDOT) = !SBOOL(set, PE_RANDOMDOT); break;
-    case COM_FGCYCLE_RST: SENUM(set, PE_FGCYCLE) = patternSet[PE_FGCYCLE].initial.e; break;
-    case COM_BGCYCLE_RST: SENUM(set, PE_BGCYCLE) = patternSet[PE_BGCYCLE].initial.e; break;
-    case COM_FGCYCLE_UP: SENUM(set, PE_FGCYCLE) = (SENUM(set, PE_FGCYCLE) + 1) % CM_COUNT; break;
-    case COM_BGCYCLE_UP: SENUM(set, PE_BGCYCLE) = (SENUM(set, PE_BGCYCLE) + 1) % CM_COUNT; break;
+    case COM_FGCYCLE_RST:
+      SENUM(set, PE_FGCYCLE) = patternSet[PE_FGCYCLE].initial.e;
+      SCOLOR(set, PE_FGC) = namedPalette[SENUM(set, PE_FGE)].color;
+      break;
+    case COM_BGCYCLE_RST:
+      SENUM(set, PE_BGCYCLE) = patternSet[PE_BGCYCLE].initial.e;
+      SCOLOR(set, PE_BGC) = namedPalette[SENUM(set, PE_BGE)].color;
+      break;
+    case COM_FGCYCLE_UP:
+      SENUM(set, PE_FGCYCLE) = (SENUM(set, PE_FGCYCLE) + 1) % CM_COUNT;
+      if (SENUM(set, PE_FGCYCLE) == CM_NONE) {
+        SCOLOR(set, PE_FGC) = namedPalette[SENUM(set, PE_FGE)].color;
+      }
+      break;
+    case COM_BGCYCLE_UP:
+      SENUM(set, PE_BGCYCLE) = (SENUM(set, PE_BGCYCLE) + 1) % CM_COUNT;
+      if (SENUM(set, PE_BGCYCLE) == CM_NONE) {
+        SCOLOR(set, PE_BGC) = namedPalette[SENUM(set, PE_BGE)].color;
+      }
+      break;
     case COM_FGCYCLE_DOWN:
       SENUM(set, PE_FGCYCLE)--;
       if (SENUM(set, PE_FGCYCLE) < 0) SENUM(set, PE_FGCYCLE) = CM_COUNT - 1;
+      if (SENUM(set, PE_FGCYCLE) == CM_NONE) {
+        SCOLOR(set, PE_FGC) = namedPalette[SENUM(set, PE_FGE)].color;
+      }
       break;
     case COM_BGCYCLE_DOWN:
       SENUM(set, PE_BGCYCLE)--;
       if (SENUM(set, PE_BGCYCLE) < 0) SENUM(set, PE_BGCYCLE) = CM_COUNT - 1;
+      if (SENUM(set, PE_BGCYCLE) == CM_NONE) {
+        SCOLOR(set, PE_BGC) = namedPalette[SENUM(set, PE_BGE)].color;
+      }
       break;
     case COM_CYCLESET:
       cyclePatternSets = !cyclePatternSets;
@@ -1947,6 +2258,7 @@ int HandleCommand(command_e command) {
       SENUM(set, PE_SHIFTMAGENTA) = SM_HOLD;
       SENUM(set, PE_SHIFTYELLOW) = SM_HOLD;
       SENUM(set, PE_SHIFTRED) = SM_HOLD;
+      SENUM(set, PE_CROSSBAR) = CB_NONE;
       cyclePatternSets = NO;
       break;
     // For load, we want to replace the displayed set.
@@ -2097,6 +2409,15 @@ int HandleCommand(command_e command) {
     case COM_RANDOM_INC:
       SINT(set, PE_RANDOMDOTCOEF) += max(1, SINT(set, PE_RANDOMDOTCOEF) / 50);
       if (SINT(set, PE_RANDOMDOTCOEF) > 20000) SINT(set, PE_RANDOMDOTCOEF) = 20000;
+      break;
+    case COM_CB_DOWN:
+      SINT(set, PE_CBLIKELY) -= max(1, SINT(set, PE_CBLIKELY) / 50);
+      if (SINT(set, PE_CBLIKELY) < 1) SINT(set, PE_CBLIKELY) = 1;
+      break;
+    case COM_CB_RST: SINT(set, PE_CBLIKELY) = patternSet[PE_CBLIKELY].initial.i; break;
+    case COM_CB_UP:
+      SINT(set, PE_CBLIKELY) += max(1, SINT(set, PE_CBLIKELY) / 50);
+      if (SINT(set, PE_CBLIKELY) > 20000) SINT(set, PE_CBLIKELY) = 20000;
       break;
     case COM_POSTROT_DEC: SFLOAT(set, PE_POSTRZANGLE) -= SFLOAT(set, PE_FLOATINC); break;
     case COM_POSTROT_RST: SFLOAT(set, PE_POSTRZANGLE) = INITIAL_POSTROT_ANGLE; break;
@@ -2349,8 +2670,10 @@ void FadeAll(int inc, fadeModes_e fadeMode, unsigned char *buffer) {
 
 // Set a single pixel a particular color.
 void SetPixel(int x, int y, color_t color, unsigned char *buffer) {
-  if ((x >= tensorWidth) || (y >= tensorHeight)) {
-    fprintf(stderr, "Attempt to set pixel outside of frame buffer! %i, %i\n", x, y);
+  if ((x >= tensorWidth) || (y >= tensorHeight) ||
+      (x < 0) || (y < 0)) {
+    //~ fprintf(stderr, "Attempt to set pixel outside of frame buffer! %i, %i\n", x, y);
+    return;
   }
   buffer[(y * tensorWidth * 3) + (x * 3) + 0] = color.r;
   buffer[(y * tensorWidth * 3) + (x * 3) + 1] = color.g;
@@ -2464,7 +2787,7 @@ void UpdateDisplays(int set, unsigned char sendToTensor, float intensity_limit) 
   if (DBOOL(PE_POSTRZ)) {
 
     // Apply the post rotation, so that it doesn't affect the feedback buffer.
-    Rotate(DFLOAT(PE_POSTRZANGLE), DFLOAT(PE_POSTEXP), DBOOL(PE_ALIAS), fba, buffer);
+    Rotate(DFLOAT(PE_POSTRZANGLE), DFLOAT(PE_POSTEXP), DBOOL(PE_ALIAS), fba, buffer, YES);
 
   } else {
 
@@ -2525,31 +2848,84 @@ void BlendAlternate(unsigned char *fba) {
 }
 
 // Rotate
-void Rotate(double angle, double expansion, int aliasmode, unsigned char *fb_dst, unsigned char *fb_src) {
-  SDL_Surface *rotatedSurface;
-  SDL_Surface *scratch;
+//
+void Rotate(double angle, double expansion, int aliasmode, unsigned char *fb_dst, unsigned char *fb_src, unsigned char exclude) {
+  SDL_Surface *rotatedSurface = NULL;
+  SDL_Surface *s1 = NULL;
+  SDL_Surface *s2 = NULL;
   SDL_Rect offset;
 
-  scratch = SDL_CreateRGBSurface(0, tensorWidth, tensorHeight, 32, 0, 0, 0, 0);
-  FBToSurface(scratch, fb_src);
-
-  // Rotate / scale it.
-  rotatedSurface = rotozoomSurface (scratch, angle, expansion, aliasmode ? 1 : 0);
-  if (!rotatedSurface) {
-    fprintf(stderr, "Error rotating surface: %s\n", SDL_GetError());
+  // Create a surface for the current wall image.
+  s1 = SDL_CreateRGBSurface(0, tensorWidth, tensorHeight, 32, 0, 0, 0, 0);
+  if (!s1) {
+    fprintf(stderr, "Unable to create rotation surface: %s\n", SDL_GetError());
     return;
   }
 
-  // Recenter and copy it back to the scratchSurface
-  offset.x = 0 - (rotatedSurface->w - scratch->w) / 2;
-  offset.y = 0 - (rotatedSurface->h - scratch->h) / 2;
-  SDL_FillRect(scratch, NULL, 0);
-  SDL_BlitSurface(rotatedSurface, NULL, scratch, &offset);
+  // Grab the image to the surface.
+  FBToSurface(s1, fb_src);
+
+  // To prevent edge cut-off when rotating, we'll do the rotation on a larger
+  // surface, then we'll blit it back over the original surface, keepind the
+  // rotation and black blending the outer edges by a small amount.
+  s2 = SDL_CreateRGBSurface(0, tensorWidth * 4, tensorHeight * 4, 32, 0xff000000, 0x00ff0000, 0x0000ff00, 0x000000ff);
+  if (!s2) {
+    fprintf(stderr, "Unable to create 2nd rotation surface: %s\n", SDL_GetError());
+    SDL_FreeSurface(s1);
+    return;
+  }
+
+  // Add the outer blending
+  if (exclude) {
+    SDL_FillRect(s2, NULL, SDL_MapRGBA(s2->format, 0, 0, 0, 255));
+  } else {
+    SDL_FillRect(s2, NULL, SDL_MapRGBA(s2->format, 0, 0, 0, 5));
+  }
+
+  // Copy the small surface to the large one.
+  offset.x = (s2->w - s1->w) / 2;
+  offset.y = (s2->h - s1->h) / 2;
+  SDL_SetSurfaceBlendMode(s1, SDL_BLENDMODE_NONE);
+  SDL_BlitSurface(s1, NULL, s2, &offset);
+
+  // Rotate / scale it.
+  rotatedSurface = rotozoomSurface (s2, angle, expansion, aliasmode ? 1 : 0);
+  if (!rotatedSurface) {
+    fprintf(stderr, "Error rotating surface: %s\n", SDL_GetError());
+    SDL_FreeSurface(s2);
+    SDL_FreeSurface(s1);
+    return;
+  }
+  SDL_FreeSurface(s2);
+
+  // Create a new surface of the wall size.
+  s2 = SDL_CreateRGBSurface(0, tensorWidth, tensorHeight, 32, 0,0,0,0);
+  if (!s2) {
+    fprintf(stderr, "Error creating rotation surface 3: %s\n", SDL_GetError());
+    SDL_FreeSurface(s1);
+    SDL_FreeSurface(rotatedSurface);
+    return;
+  }
+
+  // Copy the original surface back in.
+  offset.x = (s2->w - s1->w) / 2;
+  offset.y = (s2->h - s1->h) / 2;
+  SDL_SetSurfaceBlendMode(s1, SDL_BLENDMODE_NONE);
+  SDL_BlitSurface(s1, NULL, s2, NULL);
+
+  // Copy the rotated surface over with blending around the edges.
+  offset.x = 0 - (rotatedSurface->w - s2->w) / 2;
+  offset.y = 0 - (rotatedSurface->h - s2->h) / 2;
+  SDL_SetSurfaceBlendMode(rotatedSurface, SDL_BLENDMODE_BLEND);
+  SDL_BlitSurface(rotatedSurface, NULL, s2, &offset);
 
   // Copy the result back to the frame buffer.
-  SurfaceToFB(fb_dst, scratch);
+  SurfaceToFB(fb_dst, s2);
+
+  // Free the memories
   SDL_FreeSurface(rotatedSurface);
-  SDL_FreeSurface(scratch);
+  SDL_FreeSurface(s2);
+  SDL_FreeSurface(s1);
 }
 
 
@@ -3001,7 +3377,7 @@ void RandomDots(color_t color, unsigned int rFreq, unsigned char *buffer) {
 
 color_t ColorCycle(int set, colorCycleModes_e cycleMode, int *cycleSaver, int cycleInc) {
   color_t colorTemp = cBlack;
-  int inpos, inposo;
+  int inpos, inposo, inposn;
   int currentSet = set;
 
   // If the mode changed, we should make sure our position in the cycle limits
@@ -3105,8 +3481,34 @@ color_t ColorCycle(int set, colorCycleModes_e cycleMode, int *cycleSaver, int cy
       }
       break;
 
+    case CM_TERTTOBLACK:
+      *cycleSaver = (*cycleSaver + cycleInc) % (256 * 24);
+      if (*cycleSaver < 0) {
+        *cycleSaver += (256 * 24);
+        if (*cycleSaver < 0) {
+          *cycleSaver = 256 * 24;  // Extra sanity.
+        }
+      }
+      inpos = (*cycleSaver / 256) % 2;
+      inposn = *cycleSaver / 256 / 2;
+      inposo = *cycleSaver % 256;
+      //~ printf("1: %i, 2: %i, 3: %i, cyc: %i\n", inpos, inposn, inposo, *cycleSaver);
+      switch(inpos) {
+        case 0: // blk - FG
+          colorTemp.r = ((255.0 - inposo) / 255) * namedPalette[DENUM(PE_BGE)].color.r + ((inposo / 255.0) * namedPalette[paletteTercolors[inposn]].color.r);
+          colorTemp.g = ((255.0 - inposo) / 255) * namedPalette[DENUM(PE_BGE)].color.g + ((inposo / 255.0) * namedPalette[paletteTercolors[inposn]].color.g);
+          colorTemp.b = ((255.0 - inposo) / 255) * namedPalette[DENUM(PE_BGE)].color.b + ((inposo / 255.0) * namedPalette[paletteTercolors[inposn]].color.b);
+          break;
 
+        case 1: // FG - blk
+          colorTemp.r = ((inposo / 255.0) * namedPalette[DENUM(PE_BGE)].color.r) + ((255.0 - inposo) / 255) * namedPalette[paletteTercolors[inposn]].color.r;
+          colorTemp.g = ((inposo / 255.0) * namedPalette[DENUM(PE_BGE)].color.g) + ((255.0 - inposo) / 255) * namedPalette[paletteTercolors[inposn]].color.g;
+          colorTemp.b = ((inposo / 255.0) * namedPalette[DENUM(PE_BGE)].color.b) + ((255.0 - inposo) / 255) * namedPalette[paletteTercolors[inposn]].color.b;
 
+        default:
+          break;
+      }
+      break;
 
     case CM_INVALID: case CM_NONE: case CM_COUNT:
     //~ default:
@@ -3149,13 +3551,16 @@ void WriteCommand(int index, const command_t *comList, color_t fg, color_t bg) {
     return;
   }
 
+  // Add the text from the displayCommand structure.
+  ind += snprintf(ind, end - ind, " %s", comList[index].text);
+
   // Handle the modifier keys - worked well when we had only one modifier key
   // possible for each command, but now... Strategy: Show the modifiers from
   // the first command in the list that doesn't have KMOD_NONE, and assume it
   // will be the same for all three.
   for (i = 0; i < MOUSE_COUNT; i++) {
     if (comList[index].commands[i].mod != KMOD_NONE) {
-      ind += snprintf(ind, end - ind, "%s%s%s",
+      ind += snprintf(ind, end - ind, " %s%s%s",
         comList[index].commands[i].mod & KMOD_CTRL ? "<c> " : "",
         comList[index].commands[i].mod & KMOD_SHIFT ? "<s> " : "",
         comList[index].commands[i].mod & KMOD_ALT ? "<a> " : "");
@@ -3171,10 +3576,9 @@ void WriteCommand(int index, const command_t *comList, color_t fg, color_t bg) {
   ind += snprintf(ind, end - ind, "%s%s", SDL_GetKeyName(comList[index].commands[MOUSE_WHEEL_DOWN].key),
     strlen(SDL_GetKeyName(comList[index].commands[MOUSE_WHEEL_DOWN].key)) ? " " : "");
 
-  if (strlen(text)) ind += snprintf(ind, end - ind, "- ");
-
-  // Add the text from the displayCommand structure.
-  ind += snprintf(ind, end - ind, "%s", comList[index].text);
+  //~ if (modified) {
+    //~ ind += snprintf(ind, end - ind, ")");
+  //~ }
 
   // Write it.
   WriteLine(text, comList[index].line, comList[index].col, fg, bg);
@@ -3227,8 +3631,9 @@ void UpdateInfoDisplay(int set) {
   WriteInt(currentSet, ROW_PA + 8, COL_PA + 1, 10);
   WriteString(operateText[displaySet], ROW_PA + 10, COL_PA + 1, 10);
   WriteFloat(alternateBlend, ROW_PA + 12, COL_PA + 1, 10, 5);
-  WriteFloat(alternateBlendRate, ROW_PA + 13, COL_PA + 1, 10, 5);
-  WriteBool(autoBlend, ROW_PA + 14, COL_PA + 1, 10);
+  WriteBool(autoBlend, ROW_PA + 13, COL_PA + 1, 10);
+  WriteFloat(alternateBlendRate, ROW_PA + 14, COL_PA + 1, 10, 5);
+
 
   // Show the status bar
   snprintf(text, sizeof(text), "%-50s", cText);
@@ -3355,184 +3760,9 @@ void DrawSBox(SDL_Renderer *r, SDL_Rect rect, color_t color) {
   DrawBox(r, rect.x, rect.y, rect.w, rect.h, color);
 }
 
-// Draw an image to the output with appropriate rotation and expansion.
+// Draw an image to the output with rotation and expansion.
 // Rotation is acheived using SDL_gfx primitive rotozoom.
-// Angle is given in degrees.
-void DrawImageA(SDL_Surface *image, double angle, float xoffset, float yoffset, double expansion, int aliasmode, unsigned char *fb_dst) {
-  SDL_Surface *rotatedImage = NULL;
-  SDL_Surface *scratch = NULL;
-  SDL_Rect offset;
-
-  float x, y, ax, ay;
-  float w, h, aw, ah;
-  float b, c, d, e;
-  float ox, oy;
-  float tanTheta;
-  float cosTheta;
-  float sinTheta;
-  float cw, ch;
-  float cn, cm;
-  float theta, nw, nh;
-  static float nwmax = -10;
-  static float nwmin = 10;
-  static float nhmax = -10;
-  static float nhmin = 10;
-
-
-
-  // Don't if it isn't.
-  if (!image) return;
-
-  // Rotate and scale the image.  We don't care about centers yet because the
-  // rotozoom function generates a new surface that isn't the same as as the new
-  // surface, maintaining roughly the same center while expanding the edges to
-  // fit the rotated image.
-  rotatedImage = rotozoomSurface (image, angle, expansion, aliasmode ? 1 : 0);
-  if (!rotatedImage) {
-    fprintf(stderr, "Error rotating image: %s\n", SDL_GetError());
-    return;
-  }
-
-  if (angle > 0) {
-    angle = fmod(angle, 360);
-  } else {
-    angle = fabs(angle);
-    angle = fmod(angle, 360);
-    angle = 360.0 - angle;
-  }
-
-  w = image->w;
-  h = image->h;
-  aw = expansion * w;
-  ah = expansion * h;
-  x = xoffset * w;
-  y = yoffset * h;
-  ax = x * expansion;
-  ay = y * expansion;
-
-
-
-  if (angle < 90.0) {
-    theta = angle;
-    tanTheta = tan((M_PI / 180.0) * theta);
-    cosTheta = cos((M_PI / 180.0) * theta);
-    sinTheta = sin((M_PI / 180.0) * theta);
-    b = ay * tanTheta;
-    ox = (b + ax) * cosTheta;
-    e = (aw - ax) * tanTheta;
-    oy = (ay + e) * cosTheta;
-    nw = ah * sinTheta + aw * cosTheta;
-    nh = aw * sinTheta + ah * cosTheta;
-    //~ ox = c - x;
-    //~ oy = d - y;
-  } else if (angle < 180.0) {
-    theta = angle - 90.0;
-    tanTheta = tan((M_PI / 180.0) * theta);
-    cosTheta = cos((M_PI / 180.0) * theta);
-    sinTheta = sin((M_PI / 180.0) * theta);
-    b = (ah - ay) * tanTheta;
-    oy = ((aw - ax) + b) * cosTheta;
-    e = (aw - ax) * tanTheta;
-    ox = (e + ay) * cosTheta;
-    nw = ah * sinTheta + aw * cosTheta;
-    nh = aw * sinTheta + ah * cosTheta;
-    //~ oy = c - y;
-    //~ ox = d - x;
-  } else if (angle < 270.0) {
-    theta = angle - 180.0;
-    tanTheta = tan((M_PI / 180.0) * theta);
-    cosTheta = cos((M_PI / 180.0) * theta);
-    sinTheta = sin((M_PI / 180.0) * theta);
-    b = (ah - ay) * tanTheta;
-    ox = ((aw - ax) + b) * cosTheta;
-    //~ ox = c - x;
-    e = ax * tanTheta;
-    oy = ((ah - ay) + e) * cosTheta;
-    //~ oy = d - y;
-    nw = ah * sinTheta + aw * cosTheta;
-    nh = aw * sinTheta + ah * cosTheta;
-  } else {
-    theta = angle - 270.0;
-    tanTheta = tan((M_PI / 180.0) * theta);
-    cosTheta = cos((M_PI / 180.0) * theta);
-    sinTheta = sin((M_PI / 180.0) * theta);
-    b = ax * tanTheta;
-    ox = ((ah - ay) + b) * cosTheta;
-    //~ ox = c - x;
-    e = ay * tanTheta;
-    oy = (ax + e) * cosTheta;
-    //~ oy = d - y;
-    nw = ah * sinTheta + aw * cosTheta;
-    nh = aw * sinTheta + ah * cosTheta;
-  }
-  //~ nwmax = fmaxf(nw - rotatedImage->w, nwmax);
-  //~ nwmin = fminf(nw - rotatedImage->w, nwmin);
-  //~ nhmax = fmaxf(nh - rotatedImage->h, nhmax);
-  //~ nhmin = fminf(nh - rotatedImage->h, nhmin);
-  //~ printf("nwmax: %f, nwmin: %f, mhmax: %f, nhmin: %f\n", nwmax, nwmin, nhmax, nhmin);
-  //~ ox = ox - ((nw - rotatedImage->w)*((xoffset - 0.5)*2));
-  printf("nw: %f, w: %i, fact: %f, ox = %f", nw, rotatedImage->w, nw / rotatedImage->w, ox);
-  ox = ox * ((float) rotatedImage->w / nw);
-  printf(", oxn = %f\n", ox);
-  oy = oy * ((float) rotatedImage->h / nh);
-  //~ oy = oy / ((nh / (float)rotatedImage->h) );
-  //~ oy = oy - ((nh - rotatedImage->h)*((yoffset - 0.5)*2));
-  //~ printf("x: %f\n", ((nw - rotatedImage->w) * ((xoffset - 0.5) * 2)));
-  //~ printf("nw %f = %i, nh %f = %i\n", nw, rotatedImage->w, nh, rotatedImage->h);
-  //~ printf("nw diff = %f, nh diff = %f\n", nw - rotatedImage->w, nh - rotatedImage->h);
-  //~ printf("w = %i, h = %i, aw = %i, ah = %i, x = %i, y = %i, ", (int) w, (int) h, (int) aw, (int) ah, (int)x, (int)y);
-  //~ printf("ax = %i, ay = %i, ", (int) ax, (int) ay);
-  //~ printf("tan = %f, cos = %f, ", tanTheta, cosTheta);
-  //~ printf("b = %i, b+ax = %i, c = %i, ox = %i, ", (int)b, (int)(b + ax), (int)c, (int)ox);
-  //~ printf("e = %i, d = %i, oy = %i, ", (int)e, (int)d, (int)oy);
-  //~ printf("x = %i, y = %i, ox = %i, oy = %i, offx = %i, offy = %i, ", (int) x, (int) y, (int) ox, (int) oy, (int) ((tensorWidth / 2) - x - ox), (int) ((tensorHeight / 2) - y - oy));
-  //~ printf("\n");
-
-
-
-  // Create a surface to copy the image to.
-  scratch = SDL_CreateRGBSurface(0, tensorWidth, tensorHeight, 32, 0, 0, 0, 0);
-  if (!scratch) {
-    fprintf(stderr, "Error creating scratch image: %s\n", SDL_GetError());
-    SDL_FreeSurface(rotatedImage);
-    return;
-  }
-
-
-
-  // Recenter the image.  Our offsets choose the center about which to do the
-  // rotation and expansion.  We just have to calculate where the new center
-  // ended up and put it back over the old center to effect that.
-  //~ offset.x = (tensorWidth / 2) - (int)(ox);
-  //~ offset.y = (tensorHeight / 2) - (int)(oy);
-  offset.x = (tensorWidth / 2) - (int)(ox + 0.5);
-  offset.y = (tensorHeight / 2) - (int)(oy + 0.5);
-  //~ offset.x = (tensorWidth / 2) - (int)(rotatedImage->w * xoffset);
-  //~ offset.y = (tensorHeight / 2) - (int)(rotatedImage->h * yoffset);
-
-  //~ printf("ox: %i = %f, oy: %i = %f, ", (int)(ox + 0.5), ox, (int)(oy + 0.5), oy);
-  //~ printf("nw: %i, nh: %i, ", rotatedImage->w, rotatedImage->h);
-  //~ printf("ncx: %i, ncy: %i, ", (int)(rotatedImage->w * xoffset), (int)(rotatedImage->h * yoffset));
-  //~ printf("\n");
-
-
-  SDL_BlitSurface(rotatedImage, NULL, scratch, &offset);
-  SDL_FreeSurface(rotatedImage);
-//~
-  //~ rotatedImage = SDL_CreateRGBSurface(0, tensorWidth, tensorHeight, 32, 0, 0, 0, 0);
-  //~ offset.x = 0;
-  //~ offset.y = 0;
-  //~ SDL_BlitSurface(scratch, NULL, rotatedImage, &offset);
-
-  SurfaceToFB(fb_dst, scratch);
-  SDL_FreeSurface(scratch);
-  //~ SDL_FreeSurface(rotatedImage);
-
-}
-
-// Draw an image to the output with appropriate rotation and expansion.
-// Rotation is acheived using SDL_gfx primitive rotozoom.
-// Angle is given in degrees.
+// Angle is given in degrees.  Offsets specify the center (0..1).
 void DrawImage(SDL_Surface *image, double angle, float xoffset, float yoffset, double expansion, int aliasmode, unsigned char *fb_dst) {
   SDL_Surface *s1 = NULL;
   SDL_Surface *s2 = NULL;
