@@ -1,0 +1,31 @@
+Tensor ip address map. To use this map, rename the file to tensorIP.map. Lines
+beginning with anything other than a digit are considered a comment. 18 IP
+addresses are expected.  Each group of 6 corresponds to a panel.  The file 
+tensorIP.map.default shows the defaults used if no alternate map is found. Any
+characters other than a digit, comma, or space, will cause the rest of the
+line to be ignored.  The order of the addresses matters.  The section headings
+below are non functional comments.  Don't start a comment line with a digit.
+
+Panel 1
+10.5.1.15
+10.5.1.9
+10.5.1.19
+10.5.1.20
+10.5.1.6
+10.5.1.7
+
+Panel 2
+10.5.1.23
+10.5.1.17
+10.5.1.18
+10.5.1.22
+10.5.1.16
+10.5.1.13
+
+Panel 3
+10.5.1.25
+10.5.1.1
+10.5.1.21
+10.5.1.24
+10.5.1.14
+10.5.1.3

@@ -7,8 +7,8 @@ project(tensorPattern)
 
 # Let's set a version number.
 # This file must be manually changed to effect version change.
-set (VERSION_MAJOR 6)
-set (VERSION_MINOR 1)
+set (VERSION_MAJOR 7)
+set (VERSION_MINOR 0)
 set (VERSION_PATCH 0)
 set (VERSION_PRERELEASE)
 
@@ -38,8 +38,6 @@ file(COPY fonts/DroidSansMono.ttf DESTINATION ${PROJECT_BINARY_DIR})
 file(RENAME ${PROJECT_BINARY_DIR}/DroidSansMono.ttf ${PROJECT_BINARY_DIR}/font.ttf)
 
 # Aux files
-file(GLOB IMAGES images/*)
-file(COPY ${IMAGES} DESTINATION ${PROJECT_BINARY_DIR})
-file(GLOB PRELOAD preload/*.now)
-file(COPY ${PRELOAD} DESTINATION ${PROJECT_BINARY_DIR})
+file(GLOB MEDIA media/*)
+file(COPY ${MEDIA} DESTINATION ${PROJECT_BINARY_DIR})
 

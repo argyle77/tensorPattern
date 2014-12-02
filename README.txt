@@ -1,17 +1,25 @@
-Tensor pattern generation - Version 6.1.0
+Tensor pattern generation - Version 7.0.0
   
 "Frostbyte was an enigineer."
 
-This pattern generator outputs UDP to the tensor wall. A preview
-window shows the pattern and interface using SDL2.
+This pattern generator sends UDP packets to the tensor wall. A preview window
+shows the pattern to be sent and the interface for altering the pattern using
+SDL2.
 
-Controls are listed next to the previews. Modes and parameters
-can be adjusted with the mouse and mouse wheel.  Unmodified keys,
-backspace, and esc alter the text buffer.  Pattern sets can be saved
-and loaded from disk.  Saved patterns 0-9 are loaded automatically
-at startup.  Images can be loaded by placing them in the build 
-directory and editing the ImageName value in the *.now save files.
-Patterns can be edited live or in the alternate preview.
+Controls are listed next to the previews.  Modes and parameters can be adjusted
+with the mouse and mouse wheel.  Unmodified keys, backspace, and esc alter the
+text buffer.  Clicking directly on the preview draws with the foreground color.
+There are 10 pattern sets in memory at all times which can be chose between by
+pressing <ctrl> 0-9.  Pattern sets can be saved and loaded from disk.  Saved
+pattern sets 0-9 are automatically loaded at startup.  Images can be loaded by
+placing the image file in the build directory, editing the ImageName value in
+one of the *.now save files, and then loading that pattern into memory using
+<ctrl> <shift> 0-9 a-z.  Pattern sets can be edited live or in the alternate
+preview window.  The control set corresponds to the highlighted preview.
+
+If Tensor topology has changed, the IP addresses for the sections can be edited
+in tensorIP.map, and if necessary, the pixels themselves can be remapped using
+tensorPixel.map.
 
 Required libraries:
 libsdl2-dev (>=2.0.2)
@@ -19,8 +27,9 @@ libsdl2-ttf-dev (>=2.0.0)
 libsdl2-gfx-dev (>=1.0.0-2)
 libsdl2-image-dev (>=2.0.0)
 
-Hint, also perhaps build-essential, cmake, and git.
-(Ubuntu and derivatives)
+Hint, also perhaps build-essential, cmake, git, and maybe pkgconfig.
+(Ubuntu and derivatives - specifically tested on Linux Mint 17, 32 and 64 bit
+xfce editions)
 
 Build instructions:
   git clone https://github.com/argyle77/tensorPattern.git
@@ -30,6 +39,7 @@ Build instructions:
   cmake ..
   make
 
-The binary must be run from the build directory, or the font won't be found.
+The binary must be run from the build directory, or the fonts, images, and save
+files won't be found.
   ./tensorSDL
 

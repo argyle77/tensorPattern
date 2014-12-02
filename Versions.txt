@@ -70,3 +70,8 @@ Version 6.0:
 Version 6.1:
   Added some seeds, added image recentering.  Lots of tweaks.
   Added some preload files.
+
+Version 7.0:
+  Added draw on previews with mouse.  Added pixel map and
+  ip address map files for remapping without recompiling.
+

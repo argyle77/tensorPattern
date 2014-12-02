@@ -9,17 +9,18 @@
 #include <stdio.h> // File io
 #include <stdlib.h>
 #include <unistd.h>
+#include <string.h>  // memcpy
+#include <time.h>
+
 #include <SDL.h>
 #include <SDL_ttf.h>
 #include <SDL2_rotozoom.h>
 #include <SDL2_gfxPrimitives.h>
 #include <SDL_image.h>
-#include <time.h>
+
 #include "drv-tensor.h"
 #include "my_font.h"
-#include <string.h>  // memcpy
 #include "version.h"
-#include <errno.h>
 
 // Defines
 #define NO 0
@@ -31,6 +32,10 @@
 #define INVALID (-1)
 #define FOREVER for(;;)
 #define GUIFRAMEDELAY 25
+
+#define IP_STRING_SIZE 16
+#define TENSOR_IP_PER_PANEL 6
+#define TENSOR_PANEL_COUNT 3
 
 // Preview window definitions
 #define WINDOW_WIDTH 1024
@@ -50,7 +55,7 @@
 
 // Initial Values
 #define INITIAL_MULTIPLIER 1.0
-#define INITIAL_DIFF_COEF 0.002
+#define INITIAL_DIFF_COEF 0.012
 #define INITIAL_FADE_INC -1
 #define INITIAL_RAND_MOD 100
 #define INITIAL_RAINBOW_INC 8
@@ -81,6 +86,11 @@
 #define PLANE_YELLOW  (PLANE_RED | PLANE_GREEN)
 #define PLANE_MAGENTA (PLANE_RED | PLANE_BLUE)
 #define PLANE_ALL     (PLANE_RED | PLANE_BLUE | PLANE_GREEN)
+
+// Points
+typedef struct point_t {
+  int x, y;
+} point_t;
 
 // Colors / palettes
 
@@ -130,13 +140,13 @@ const color_t cLtGray = CD_LTGRAY;
 const color_t cGray = CD_GRAY;
 const color_t cDkGray = CD_DKGRAY;
 const color_t cBlack = CD_BLACK;
-const color_t cDkYellow = CD_DKYELLOW;
+//~ const color_t cDkYellow = CD_DKYELLOW;
 
 // Colors for the info display texts.
 #define DISPLAY_COLOR_PARMS cAzure
 #define DISPLAY_COLOR_PARMSBG cBlack
 #define DISPLAY_COLOR_TITLES cBlack
-#define DISPLAY_COLOR_TITLESBG cDkYellow
+#define DISPLAY_COLOR_TITLESBG cGray
 #define DISPLAY_COLOR_TEXTS cWhite
 #define DISPLAY_COLOR_TEXTSBG cBlack
 #define DISPLAY_COLOR_TEXTS_HL cBlack
@@ -145,6 +155,8 @@ const color_t cDkYellow = CD_DKYELLOW;
 #define DISPLAY_COLOR_TBUFBG cBlack
 #define DISPLAY_COLOR_INFO cGreen
 #define DISPLAY_COLOR_INFOBG cBlack
+#define DISPLAY_COLOR_LABEL cYellow
+#define DISPLAY_COLOR_LABELBG cBlack
 
 // Named color palette structures and constants
 
@@ -310,28 +322,19 @@ const cyclePalette_t paletteGry = { paletteGrycolors, (sizeof(paletteGrycolors) 
 // startup to make sure this occurs.
 typedef enum patternElement_e {
   PE_INVALID = -1,
-  // Modes
-  PE_CELLFUN = 0, PE_BOUNCER, PE_FADE, PE_DIFFUSE, PE_ROLLOVER,
-  PE_SCROLL, PE_HBARS, PE_VBARS, PE_FGCOLORALL, PE_BGCOLORALL, PE_IMAGEALL,
-  PE_RANDOMDOT, PE_FADEMODE, PE_POSTRZ, PE_PRERZ, PE_ALIAS,
-  PE_MULTIPLY, PE_BARSEED, PE_NORED, PE_NOGREEN, PE_NOBLUE, PE_SHIFTRED,
-  PE_SHIFTGREEN, PE_SHIFTBLUE, PE_SHIFTCYAN, PE_SHIFTYELLOW, PE_SHIFTMAGENTA,
-  PE_POSTIMAGE,
-  // Parameters
-  PE_FGE, PE_BGE, PE_FADEINC, PE_DIFFUSECOEF, PE_SCROLLDIR, PE_RANDOMDOTCOEF,
-  PE_FGCYCLE, PE_BGCYCLE, PE_FGRAINBOW, PE_BGRAINBOW, PE_POSTEXP, PE_FLOATINC,
-  PE_POSTRZANGLE, PE_POSTRZINC, PE_MULTIPLYBY, PE_DELAY,
-  // Internal parameters
-  PE_CYCLESAVEFG, PE_CYCLESAVEBG, PE_FGC, PE_BGC, PE_CELLFUNCOUNT, PE_BOUNCESCR,
-  // Text
-  PE_TEXTBUFFER, PE_TEXTMODE, PE_FONTFLIP, PE_FONTDIR, PE_TEXTOFFSET,
-  PE_TEXTINDEX, PE_PIXELINDEX, PE_SCROLLDIRLAST, PE_TEXTSEED,
-  // Frame buffer
-  PE_FRAMEBUFFER,
-  //
-  PE_PRERZANGLE, PE_PRERZALIAS, PE_PRERZINC, PE_PRERZEXPAND, PE_FRAMECOUNT,
-  PE_IMAGEANGLE, PE_IMAGEALIAS, PE_IMAGEINC, PE_IMAGEEXP,
-  PE_IMAGEXOFFSET, PE_IMAGEYOFFSET, PE_IMAGENAME,
+  PE_CELLFUN = 0, PE_BOUNCER, PE_FADE, PE_DIFFUSE, PE_ROLLOVER, PE_SCROLL,
+  PE_HBARS, PE_VBARS, PE_FGCOLORALL, PE_BGCOLORALL, PE_IMAGEALL, PE_RANDOMDOT,
+  PE_FADEMODE, PE_POSTRZ, PE_PRERZ, PE_ALIAS, PE_MULTIPLY, PE_BARSEED, PE_NORED,
+  PE_NOGREEN, PE_NOBLUE, PE_SHIFTRED, PE_SHIFTGREEN, PE_SHIFTBLUE, PE_SHIFTCYAN,
+  PE_SHIFTYELLOW, PE_SHIFTMAGENTA, PE_POSTIMAGE, PE_FGE, PE_BGE, PE_FADEINC,
+  PE_DIFFUSECOEF, PE_SCROLLDIR, PE_RANDOMDOTCOEF, PE_FGCYCLE, PE_BGCYCLE,
+  PE_FGRAINBOW, PE_BGRAINBOW, PE_POSTEXP, PE_FLOATINC, PE_POSTRZANGLE,
+  PE_POSTRZINC, PE_MULTIPLYBY, PE_DELAY, PE_CYCLESAVEFG, PE_CYCLESAVEBG, PE_FGC,
+  PE_BGC, PE_CELLFUNCOUNT, PE_BOUNCESCR, PE_TEXTBUFFER, PE_TEXTMODE,
+  PE_FONTFLIP, PE_FONTDIR, PE_TEXTOFFSET, PE_TEXTINDEX, PE_PIXELINDEX,
+  PE_SCROLLDIRLAST, PE_TEXTSEED, PE_FRAMEBUFFER, PE_PRERZANGLE, PE_PRERZALIAS,
+  PE_PRERZINC, PE_PRERZEXPAND, PE_FRAMECOUNT, PE_IMAGEANGLE, PE_IMAGEALIAS,
+  PE_IMAGEINC, PE_IMAGEEXP, PE_IMAGEXOFFSET, PE_IMAGEYOFFSET, PE_IMAGENAME,
   PE_SNAIL, PE_SNAIL_POS, PE_FASTSNAIL, PE_FASTSNAILP, PE_CROSSBAR, PE_CBLIKELY,
   PE_COUNT // LAst
 } patternElement_e;
@@ -446,7 +449,7 @@ patternElement_t patternSet[] = {
   { PE_FASTSNAIL,   "FastSnail",   ET_BOOL,   {.b = NO} },
   { PE_FASTSNAILP,  "FastSnailP",  ET_INT,    {.i = 0} },
   { PE_CROSSBAR,    "Crossbar",    ET_ENUM,   {.e = CB_NONE}, .etype = E_CROSSBAR },
-  { PE_CBLIKELY,    "CrossLikely", ET_INT,    {.i = INITIAL_RAND_MOD } },
+  { PE_CBLIKELY,    "CrossLikely", ET_INT,    {.i = 2002 } },
 };
 #define PSET_SIZE (sizeof(patternSet) / sizeof(patternElement_t))
 #define GLOBAL_PATTERN_ELEMENT_ARRAY patternSet
@@ -481,50 +484,46 @@ patternElement_t patternSet[] = {
 #define DSTRING(varElement) ( SSTRING(currentSet, varElement) )
 #define DBUFFER(varElement) ( SBUFFER(currentSet, varElement) )
 
-// User Commands
+// User Commands - Order mostly unimportant.
 typedef enum command_e {
   COM_INVALID = -1, COM_NONE = 0,
   COM_CELL = 1, COM_BOUNCE, COM_FADE, COM_DIFFUSE, COM_TEXT, COM_ROLL,
-  COM_SCROLL, COM_HBAR, COM_VBAR, COM_FGALL, COM_BGALL, COM_RDOT,
-  COM_CYCLESET, COM_FADEMODE, COM_TEXTRESET, COM_POSTROTATE,
-  COM_MODEOFF, COM_PREROTATE, COM_AA, COM_MULTIPLY, COM_SIDEBAR, COM_NORED,
-  COM_NOGREEN, COM_NOBLUE, COM_IMAGE, COM_STEP_INC, COM_STEP_DEC, COM_STEP_RST,
-  COM_DIFFUSE_INC, COM_DIFFUSE_DEC, COM_DIFFUSE_RST, COM_EXPAND_INC,
-  COM_EXPAND_DEC, COM_EXPAND_RST, COM_FADE_INC, COM_FADE_DEC, COM_FADE_RST,
-  COM_PREROT_INC, COM_PREROT_DEC, COM_PREROT_RST, COM_POSTROT_INC, COM_POSTROT_DEC,
+  COM_SCROLL, COM_HBAR, COM_VBAR, COM_FGALL, COM_BGALL, COM_RDOT, COM_CYCLESET,
+  COM_FADEMODE, COM_TEXTRESET, COM_POSTROTATE, COM_MODEOFF, COM_PREROTATE,
+  COM_AA, COM_MULTIPLY, COM_SIDEBAR, COM_NORED, COM_NOGREEN, COM_NOBLUE,
+  COM_IMAGE, COM_STEP_INC, COM_STEP_DEC, COM_STEP_RST, COM_DIFFUSE_INC,
+  COM_DIFFUSE_DEC, COM_DIFFUSE_RST, COM_EXPAND_INC, COM_EXPAND_DEC,
+  COM_EXPAND_RST, COM_FADE_INC, COM_FADE_DEC, COM_FADE_RST, COM_PREROT_INC,
+  COM_PREROT_DEC, COM_PREROT_RST, COM_POSTROT_INC, COM_POSTROT_DEC,
   COM_POSTROT_RST, COM_MULT_INC, COM_MULT_DEC, COM_MULT_RST, COM_POSTSPEED_INC,
   COM_POSTSPEED_DEC, COM_POSTSPEED_RST, COM_RANDOM_INC, COM_RANDOM_DEC,
-  COM_RANDOM_RST, COM_CYCLE_MODE, COM_CYCLE_MODE_DOWN,
-  COM_SCROLL_UP, COM_SCROLL_DOWN, COM_SCROLL_LEFT, COM_SCROLL_RIGHT, COM_SCROLL_DOWNC, COM_SCROLL_LEFTC,
-  COM_SCROLL_RIGHTC, COM_SCROLL_UPC, COM_DELAY_INC, COM_DELAY_DEC,
-  COM_DELAY_RST, COM_FG_INC, COM_FG_DEC, COM_BG_INC, COM_BG_DEC, COM_BACKSPACE,
-  COM_DELETE, COM_TEXT_REVERSE, COM_TEXT_FLIP, COM_TEXTO_INC, COM_TEXTO_DEC,
-  COM_TEXT_MODE_UP, COM_TEXT_MODE_DOWN, COM_RP_UP, COM_RP_DOWN, COM_GP_UP, COM_GP_DOWN, COM_BP_UP, COM_BP_DOWN,
-  COM_CP_UP, COM_CP_DOWN, COM_YP_UP, COM_YP_DOWN, COM_MP_UP, COM_MP_DOWN, COM_EXIT,
-  COM_ORIENTATION, COM_RETURN, COM_SCROLL_CYCLE_UP, COM_SCROLL_CYCLE_DOWN, COM_LOAD0, COM_LOAD1,
+  COM_RANDOM_RST, COM_CYCLE_MODE, COM_CYCLE_MODE_DOWN, COM_SCROLL_UP,
+  COM_SCROLL_DOWN, COM_SCROLL_LEFT, COM_SCROLL_RIGHT, COM_SCROLL_DOWNC,
+  COM_SCROLL_LEFTC, COM_SCROLL_RIGHTC, COM_SCROLL_UPC, COM_DELAY_INC,
+  COM_DELAY_DEC, COM_DELAY_RST, COM_FG_INC, COM_FG_DEC, COM_BG_INC, COM_BG_DEC,
+  COM_BACKSPACE, COM_DELETE, COM_TEXT_REVERSE, COM_TEXT_FLIP, COM_TEXTO_INC,
+  COM_TEXTO_DEC, COM_TEXT_MODE_UP, COM_TEXT_MODE_DOWN, COM_RP_UP, COM_RP_DOWN,
+  COM_GP_UP, COM_GP_DOWN, COM_BP_UP, COM_BP_DOWN, COM_CP_UP, COM_CP_DOWN,
+  COM_YP_UP, COM_YP_DOWN, COM_MP_UP, COM_MP_DOWN, COM_EXIT, COM_ORIENTATION,
+  COM_RETURN, COM_SCROLL_CYCLE_UP, COM_SCROLL_CYCLE_DOWN, COM_LOAD0, COM_LOAD1,
   COM_LOAD2, COM_LOAD3, COM_LOAD4, COM_LOAD5, COM_LOAD6, COM_LOAD7, COM_LOAD8,
   COM_LOAD9, COM_LOADSET0, COM_LOADSET1, COM_LOADSET2, COM_LOADSET3,
   COM_LOADSET4, COM_LOADSET5, COM_LOADSET6, COM_LOADSET7, COM_LOADSET8,
   COM_LOADSET9, COM_COPYSET0, COM_COPYSET1, COM_COPYSET2, COM_COPYSET3,
   COM_COPYSET4, COM_COPYSET5, COM_COPYSET6, COM_COPYSET7, COM_COPYSET8,
   COM_COPYSET9, COM_PREROTINC_RST, COM_PREROTINC_INC, COM_PREROTINC_DEC,
-  COM_PREEXP_INC, COM_PREEXP_DEC, COM_PREEXP_RST, COM_PREALIAS,
-  COM_RP_RST, COM_GP_RST, COM_BP_RST, COM_MP_RST, COM_YP_RST, COM_CP_RST,
-  COM_FGRAINBOW_INC, COM_FGRAINBOW_DEC, COM_FGRAINBOW_RST,
-  COM_BGRAINBOW_INC, COM_BGRAINBOW_DEC, COM_BGRAINBOW_RST,
-  COM_FGCYCLE_RST, COM_FGCYCLE_UP, COM_FGCYCLE_DOWN,
-  COM_BGCYCLE_RST, COM_BGCYCLE_UP, COM_BGCYCLE_DOWN,
-  COM_IMAGEALL,
-  COM_FCOUNT_RST, COM_FCOUNT_INC, COM_FCOUNT_DEC,
-  COM_IMANGLE_RST, COM_IMANGLE_INC, COM_IMANGLE_DEC,
-  COM_IMINC_RST, COM_IMINC_INC, COM_IMINC_DEC,
-  COM_IMEXP_RST, COM_IMEXP_INC, COM_IMEXP_DEC, COM_IMALIAS,
-  COM_IMXOFFSET_RST, COM_IMXOFFSET_INC, COM_IMXOFFSET_DEC,
-  COM_IMYOFFSET_RST, COM_IMYOFFSET_INC, COM_IMYOFFSET_DEC,
-  COM_ALTERNATE_INC, COM_ALTERNATE_DEC,
-  COM_LIVE_INC, COM_LIVE_DEC, COM_OPERATE, COM_EXCHANGE,
-  COM_BLEND_RST, COM_BLEND_INC, COM_BLEND_DEC,
-  COM_BLENDINC_RST, COM_BLENDINC_INC, COM_BLENDINC_DEC,
+  COM_PREEXP_INC, COM_PREEXP_DEC, COM_PREEXP_RST, COM_PREALIAS, COM_RP_RST,
+  COM_GP_RST, COM_BP_RST, COM_MP_RST, COM_YP_RST, COM_CP_RST, COM_FGRAINBOW_INC,
+  COM_FGRAINBOW_DEC, COM_FGRAINBOW_RST, COM_BGRAINBOW_INC, COM_BGRAINBOW_DEC,
+  COM_BGRAINBOW_RST, COM_FGCYCLE_RST, COM_FGCYCLE_UP, COM_FGCYCLE_DOWN,
+  COM_BGCYCLE_RST, COM_BGCYCLE_UP, COM_BGCYCLE_DOWN, COM_IMAGEALL,
+  COM_FCOUNT_RST, COM_FCOUNT_INC, COM_FCOUNT_DEC, COM_IMANGLE_RST,
+  COM_IMANGLE_INC, COM_IMANGLE_DEC, COM_IMINC_RST, COM_IMINC_INC, COM_IMINC_DEC,
+  COM_IMEXP_RST, COM_IMEXP_INC, COM_IMEXP_DEC, COM_IMALIAS, COM_IMXOFFSET_RST,
+  COM_IMXOFFSET_INC, COM_IMXOFFSET_DEC, COM_IMYOFFSET_RST, COM_IMYOFFSET_INC,
+  COM_IMYOFFSET_DEC, COM_ALTERNATE_INC, COM_ALTERNATE_DEC, COM_LIVE_INC,
+  COM_LIVE_DEC, COM_OPERATE, COM_EXCHANGE, COM_BLEND_RST, COM_BLEND_INC,
+  COM_BLEND_DEC, COM_BLENDINC_RST, COM_BLENDINC_INC, COM_BLENDINC_DEC,
   COM_BLENDSWITCH, COM_SNAIL, COM_SNAILFAST, COM_CB_RST, COM_CB_UP, COM_CB_DOWN,
   COM_CROSSB_RST, COM_CROSSB_UP, COM_CROSSB_DOWN,
   COM_COUNT // Last
@@ -559,25 +558,25 @@ const command_t displayCommand[] = {
   // Pattern sets
   #define ROW_PA 0
   #define COL_PA 2
-  {ROW_PA + 1, COL_PA, "Cycle pattern sets:",   PE_INVALID,  {{KMOD_CTRL, SDLK_g, COM_CYCLESET}}},
-  {ROW_PA + 2, COL_PA, "Frames this set:", PE_FRAMECOUNT, {{0, 0, COM_FCOUNT_RST}, {0, 0, COM_FCOUNT_INC}, {0, 0, COM_FCOUNT_DEC}}},
+  {ROW_PA + 1, COL_PA, "Cycle through pattern sets",   PE_INVALID,  {{KMOD_CTRL, SDLK_g, COM_CYCLESET}}},
+  {ROW_PA + 2, COL_PA, "Frames to play this set:", PE_FRAMECOUNT, {{0, 0, COM_FCOUNT_RST}, {0, 0, COM_FCOUNT_INC}, {0, 0, COM_FCOUNT_DEC}}},
   {ROW_PA + 8, COL_PA, "Live pattern set (left):",PE_INVALID, {{0, 0, COM_LIVE_INC}, {}, {0, 0, COM_LIVE_DEC}}},
   {ROW_PA + 9, COL_PA, "Alternate preview set (right):",PE_INVALID, {{0, 0, COM_ALTERNATE_INC}, {}, {0, 0, COM_ALTERNATE_DEC}}},
-  {ROW_PA + 10,COL_PA, "Controls set:",     PE_INVALID, {{0, 0, COM_OPERATE}}},
+  {ROW_PA + 10,COL_PA, "Control operate on set:",     PE_INVALID, {{0, 0, COM_OPERATE}}},
   {ROW_PA + 11,COL_PA, "Exchange live and alternate sets", PE_INVALID, {{0, 0, COM_EXCHANGE}}},
-  {ROW_PA + 12,COL_PA, "Blend in alternate amount:", PE_INVALID, {{0, 0, COM_BLEND_RST}, {0, 0, COM_BLEND_INC}, {0, 0, COM_BLEND_DEC}}},
+  {ROW_PA + 12,COL_PA, "Alternate set blending amount:", PE_INVALID, {{0, 0, COM_BLEND_RST}, {0, 0, COM_BLEND_INC}, {0, 0, COM_BLEND_DEC}}},
   {ROW_PA + 13,COL_PA, "Auto blend & switch sets", PE_INVALID, {{0, 0, COM_BLENDSWITCH}}},
   {ROW_PA + 14,COL_PA, "Auto blend rate:", PE_INVALID, {{0, 0, COM_BLENDINC_RST},{0, 0, COM_BLENDINC_INC}, {0, 0, COM_BLENDINC_DEC}}},
 
   // Auxillary
   #define ROW_A 46
   #define COL_A 4
-  {ROW_A + 1, COL_A, "Delay(ms):", PE_DELAY,    {{KMOD_ALT | KMOD_CTRL, SDLK_i, COM_DELAY_RST}, {KMOD_ALT | KMOD_CTRL, SDLK_u, COM_DELAY_INC}, {KMOD_ALT | KMOD_CTRL, SDLK_o, COM_DELAY_DEC}}},
+  {ROW_A + 1, COL_A, "Frame delay(ms):", PE_DELAY,    {{0, 0, COM_DELAY_RST}, {0, 0, COM_DELAY_INC}, {0, 0, COM_DELAY_DEC}}},
   {ROW_A + 2, COL_A, "Float step:", PE_FLOATINC, {{KMOD_ALT, SDLK_COMMA, COM_STEP_RST}, {KMOD_ALT, SDLK_m, COM_STEP_INC}, {KMOD_ALT, SDLK_PERIOD, COM_STEP_DEC}}},
   {ROW_A + 3, COL_A, "All modes off",   PE_INVALID,  {{KMOD_CTRL, SDLK_l, COM_MODEOFF}}},
 
   // Plane suppression
-  #define ROW_P 36
+  #define ROW_P 37
   #define COL_P 0
   {ROW_P + 1, COL_P, "Supress red:",     PE_NORED,    {{KMOD_CTRL, SDLK_m, COM_NORED}}},
   {ROW_P + 2, COL_P, "Supress green:",   PE_NOGREEN,  {{KMOD_CTRL, SDLK_COMMA, COM_NOGREEN}}},
@@ -596,7 +595,7 @@ const command_t displayCommand[] = {
   {ROW_R + 2, COL_R, "Randomness:", PE_RANDOMDOTCOEF, {{KMOD_ALT, SDLK_LEFTBRACKET, COM_RANDOM_RST}, {KMOD_ALT, SDLK_p, COM_RANDOM_INC}, {KMOD_ALT, SDLK_RIGHTBRACKET, COM_RANDOM_DEC}}},
 
   // One shot seeds
-  #define ROW_O 22
+  #define ROW_O 23
   #define COL_O 0
   {ROW_O + 1, COL_O, "Horizontal bars", PE_INVALID,  {{KMOD_CTRL, SDLK_i, COM_HBAR}}},
   {ROW_O + 2, COL_O, "Vertical bars",   PE_INVALID,  {{KMOD_CTRL, SDLK_o, COM_VBAR}}},
@@ -681,7 +680,7 @@ const command_t displayCommand[] = {
   {ROW_I + 7, COL_I, "Anti-alias:",    PE_IMAGEALIAS, {{0, 0, COM_IMALIAS}}},
 
   // Text
-  #define ROW_T (40)
+  #define ROW_T (41)
   #define COL_T (0)
   {ROW_T + 1, COL_T, "Text seed:",         PE_TEXTSEED,   {{KMOD_CTRL, SDLK_t, COM_TEXT}}},
   {ROW_T + 3, COL_T, "Delete last letter", PE_INVALID,    {{KMOD_NONE, SDLK_BACKSPACE, COM_BACKSPACE}}},
@@ -758,30 +757,35 @@ displayText_t displayText[] = {
 };
 #define DISPLAYTEXT_SIZE (sizeof(displayText) / sizeof(displayText_t))
 
-displayText_t headerText[] = {
+displayText_t labelText[] = {
   {21, 0,          "Live Preview          FPS:"},
   {21, 4,          "Alternate Preview     FPS:"},
   {53, 4,          "                  GUI FPS:"},
-  {51, 0,          "Text buffer:              "},
-  {ROW_PA, COL_PA, "Pattern sets:             "},
-  {ROW_P, COL_P,   "Plane suppression:        "},
-  {ROW_A, COL_A,   "Auxiliary:                "},
-  {ROW_MI, COL_MI, "Misc:                     "},
-  {ROW_I, COL_I,   "Image:                    "},
-  {ROW_R, COL_R,   "Random dots:              "},
-  {ROW_C, COL_C,   "Colors:                   "},
-  {ROW_D, COL_D,   "Diffusion:                "},
-  {ROW_O, COL_O,   "One-shot seeds:           "},
-  {ROW_F, COL_F,   "Fader:                    "},
-  {ROW_M, COL_M,   "Multiplier:               "},
-  {ROW_T, COL_T,   "Text entry:               "},
-  {ROW_S, COL_S,   "Scrollers:                "},
-  {ROW_PR, COL_PR, "Post rotation:            "},
-  {ROW_PE, COL_PE, "Pre rotation:             "}
+};
+#define LABELTEXT_SIZE (sizeof(labelText) / sizeof(displayText_t))
+
+displayText_t headerText[] = {
+  {51, 0,          "Text buffer:"},
+  {ROW_PA, COL_PA, "Pattern sets:"},
+  {ROW_P, COL_P,   "Plane suppression:"},
+  {ROW_A, COL_A,   "Auxiliary:"},
+  {ROW_MI, COL_MI, "Misc:"},
+  {ROW_I, COL_I,   "Image:"},
+  {ROW_R, COL_R,   "Random dots:"},
+  {ROW_C, COL_C,   "Colors:"},
+  {ROW_D, COL_D,   "Diffusion:"},
+  {ROW_O, COL_O,   "One-shot seeds:"},
+  {ROW_F, COL_F,   "Fader (adder):"},
+  {ROW_M, COL_M,   "Multiplier:"},
+  {ROW_T, COL_T,   "Text entry:"},
+  {ROW_S, COL_S,   "Scrollers:"},
+  {ROW_PR, COL_PR, "Post rotation:"},
+  {ROW_PE, COL_PE, "Pre rotation:"}
 };
 #define HEADERTEXT_SIZE (sizeof(headerText) / sizeof(displayText_t))
 
-// Globals - We do love our globals.
+// Globals - We do love our globals.  My guess is their proliferation is the
+// sign of a badly structured program.
 TTF_Font *screenFont;
 SDL_Window *mainWindow = NULL;
 SDL_Renderer *mwRenderer = NULL;
@@ -815,6 +819,12 @@ unsigned char confirmRequired = NO;
 char keySave;
 int setSave;
 unsigned char refresh = NO;
+SDL_Rect liveBox, altBox;
+point_t tensorPixelMap [TENSOR_WIDTH * TENSOR_HEIGHT];
+unsigned char useDefaultPixelMap = YES;
+const char **ipmap1;
+const char **ipmap2;
+const char **ipmap3;
 
 // Prototypes
 void DrawNewFrame(int set, unsigned char primary);
@@ -877,11 +887,17 @@ void BlendAlternate(unsigned char *fba);
 void DrawConfirmationBox(SDL_Rect *yesBox, SDL_Rect *noBox, unsigned char selected);
 void DrawSBox(SDL_Renderer *r, SDL_Rect rect, color_t color);
 void DrawSRectangle(SDL_Renderer *r, SDL_Rect rect, color_t color);
-unsigned char Intersects(int x, int y, SDL_Rect rect);
+unsigned char Intersects(point_t point, SDL_Rect box);
 void CenterText(SDL_Rect box, char * text, color_t fg, color_t bg);
 void SnailSeed(int set, int position);
 void FastSnailSeed(int set, int position);
 void CrossBars(int set);
+point_t GetDisplayPixel(point_t mouse, SDL_Rect box);
+void LoadTensorMaps(void);
+void LoadPixelMap(void);
+void LoadIPMap(void);
+void GenerateDefaultPixelMap(void);
+
 
 // Main
 int main(int argc, char *argv[]) {
@@ -893,16 +909,23 @@ int main(int argc, char *argv[]) {
   SDL_Event event;
   unsigned char drawNewFrameA = NO;
   unsigned char drawNewFrameB = NO;
-  int x, y;
+  //~ int x, y;
   int thisHover = INVALID;
   int lastHover = INVALID;
   int mouseDownOn = INVALID;
+  unsigned char mouseDown = NO;
   SDL_Rect box = {0, 0, 0, 0}, boxOld = {0, 0, 0, 0};
   SDL_Rect boxYes, boxNo;
+  point_t mouse, tpixel;
 
   // Unbuffer the console...
   setvbuf(stdout, (char *)NULL, _IONBF, 0);
   setvbuf(stderr, (char *)NULL, _IONBF, 0);
+
+  // Print the version #.
+  fprintf(stdout, "Tensor pattern generator v%s.%s.%s%s%s\n",
+    MAJOR_VERSION, MINOR_VERSION, PATCH_VERSION,
+    strlen(PRERELEASE_VERSION) != 0 ? "." : "", PRERELEASE_VERSION);
 
   // Commandline parameter for limiting the intensity.
   if (argc == 2) {
@@ -912,7 +935,7 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  // Verify the integrity of some of the data structures.  This is to enforce
+  // Verify the integrity of some of the data structures.  This enforces
   // consistency for enumerated array access.
   VerifyStructuralIntegrity();
 
@@ -958,13 +981,18 @@ int main(int argc, char *argv[]) {
     imageSeed[i] = NULL;
   }
 
-  // Initialize tensor communications and aspect.
-  tensor_init();
+  // Initialize Tensor.
   //tensor_landscape_p = 1;  // Landscape mode (good for single panel).
   tensor_landscape_p = 0;  // Portrait mode (normal).
 
   // Set the widths / heights
   SetDims();  // After set tensor_landscape_p.
+
+  // Load the tensor map.
+  LoadTensorMaps();
+
+  // Initialize tensor communications.
+  tensor_init(ipmap1, ipmap2, ipmap3);
 
   // Draw a border around the preview
   DrawPreviewBorder(PREVIEW_A_POSITION_X, PREVIEW_A_POSITION_Y, YES);
@@ -1041,19 +1069,19 @@ int main(int argc, char *argv[]) {
 
         case SDL_MOUSEMOTION:
           // The mouse moved.  See where it is.
-          x = event.motion.x;
-          y = event.motion.y;
+          mouse.x = event.motion.x;
+          mouse.y = event.motion.y;
 
           // Confirmation dialog?
           if (confirmRequired) {
 
             // Check for intersection with confirmation boxes.
             thisHover = INVALID;
-            if (Intersects(x, y, boxYes)) {
+            if (Intersects(mouse, boxYes)) {
               thisHover = YES;
               confirmed = YES;
               box = boxYes;
-            } else if (Intersects(x, y, boxNo)) {
+            } else if (Intersects(mouse, boxNo)) {
               thisHover = NO;
               confirmed = NO;
               box = boxNo;
@@ -1084,7 +1112,7 @@ int main(int argc, char *argv[]) {
               box.h = (displayCommand[i].line + 1) * DISPLAY_TEXT_HEIGHT - box.y + 1;
 
               // Is it in the rectangle of command i?
-              if (Intersects(x, y, box)) {
+              if (Intersects(mouse, box)) {
 
                 // Yep.
                 thisHover = i;
@@ -1093,12 +1121,12 @@ int main(int argc, char *argv[]) {
                 if ((!SameRectangle(box, boxOld)) || (lastHover == INVALID)) {
 
                   // Yeah, so draw the new highlight.
-                  DrawBox(mwRenderer, box.x, box.y, box.w, box.h, DISPLAY_COLOR_TEXTSBG_HL);
+                  DrawSBox(mwRenderer, box, DISPLAY_COLOR_TEXTSBG_HL);
                   WriteCommand(i, displayCommand, DISPLAY_COLOR_TEXTS_HL, DISPLAY_COLOR_TEXTSBG_HL);
 
                   // And if it came off a different command, remove that highlight.
                   if (lastHover != INVALID) {
-                    DrawBox(mwRenderer, boxOld.x, boxOld.y, boxOld.w, boxOld.h, DISPLAY_COLOR_TEXTSBG);
+                    DrawSBox(mwRenderer, boxOld, DISPLAY_COLOR_TEXTSBG);
                     WriteCommand(lastHover, displayCommand, DISPLAY_COLOR_TEXTS, DISPLAY_COLOR_TEXTSBG);
                   }
 
@@ -1114,7 +1142,7 @@ int main(int argc, char *argv[]) {
 
             // Not over a new command? May have to clear the old highlight anyway.
             if ((thisHover == INVALID) && (lastHover != INVALID)) {
-              DrawBox(mwRenderer, boxOld.x, boxOld.y, boxOld.w, boxOld.h, DISPLAY_COLOR_TEXTSBG);
+              DrawSBox(mwRenderer, boxOld, DISPLAY_COLOR_TEXTSBG);
               WriteCommand(lastHover, displayCommand, DISPLAY_COLOR_TEXTS, DISPLAY_COLOR_TEXTSBG);
               lastHover = INVALID;
             }
@@ -1153,6 +1181,7 @@ int main(int argc, char *argv[]) {
           // Mouse button unpushed.  Consider this a click.  If we're over
           // the same item we down clicked on, execute a command.
           if (event.button.button == SDL_BUTTON_LEFT) {
+            mouseDown = NO;
             if ((thisHover != INVALID) && (thisHover == mouseDownOn)) {
               if (confirmRequired) {
                 if (thisHover == YES) {
@@ -1177,6 +1206,7 @@ int main(int argc, char *argv[]) {
           // Mouse button pushed.  Make a note of the item it was pushed over.
           if (event.button.button == SDL_BUTTON_LEFT) {
             mouseDownOn = thisHover;
+            mouseDown = YES;
           }
           break;
 
@@ -1284,6 +1314,26 @@ int main(int argc, char *argv[]) {
       nanosleep((struct timespec[]) {{0,1000000}}, NULL);
     }
 
+    // Mouse pixel drawing direct to the display.
+    // Check if the mouse is hovering over the display
+    if (Intersects(mouse, liveBox)) {
+
+      // Which pixel?
+      tpixel = GetDisplayPixel(mouse, liveBox);
+      if (mouseDown) {
+        // Mouse button is clicked on the display. Draw on the pixel.
+        SetPixel(tpixel.x, tpixel.y, SCOLOR(currentSet, PE_FGC), SBUFFER(currentSet, PE_FRAMEBUFFER));
+      }
+
+    // The alternate display too.
+    } else if (Intersects(mouse, altBox)) {
+      tpixel = GetDisplayPixel(mouse, altBox);
+      if (mouseDown) {
+        SetPixel(tpixel.x, tpixel.y, SCOLOR(alternateSet, PE_FGC), SBUFFER(alternateSet, PE_FRAMEBUFFER));
+      }
+    }
+
+    // Check for gui refresh.
     if (refresh) {
       refresh = NO;
       ClearWindow();
@@ -1607,6 +1657,20 @@ void ProcessModes(int set) {
     DCOLOR(PE_BGC) = ColorCycle(currentSet, DENUM(PE_BGCYCLE), &DINT(PE_CYCLESAVEBG), DINT(PE_BGRAINBOW));
   }
 
+  // Slap an image down on the display (every frame).
+  if (DBOOL(PE_POSTIMAGE)) {
+    DrawImage(imageSeed[currentSet], DFLOAT(PE_IMAGEANGLE), DFLOAT(PE_IMAGEXOFFSET), DFLOAT(PE_IMAGEYOFFSET),
+      DFLOAT(PE_IMAGEEXP), DBOOL(PE_IMAGEALIAS), DBUFFER(PE_FRAMEBUFFER));
+    DFLOAT(PE_IMAGEANGLE) += DFLOAT(PE_IMAGEINC);
+  }
+
+  // Image one-shot
+  if (DBOOL(PE_IMAGEALL)) {
+    DrawImage(imageSeed[currentSet], DFLOAT(PE_IMAGEANGLE), DFLOAT(PE_IMAGEXOFFSET), DFLOAT(PE_IMAGEYOFFSET),
+      DFLOAT(PE_IMAGEEXP), DBOOL(PE_IMAGEALIAS), DBUFFER(PE_FRAMEBUFFER));
+    DBOOL(PE_IMAGEALL) = NO;
+  }
+
   // Seed the entire array with the foreground color.
   if (DBOOL(PE_FGCOLORALL)) {
     ColorAll(DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
@@ -1651,20 +1715,6 @@ void ProcessModes(int set) {
   // Draw a solid bar up the side we are scrolling from.
   if (DBOOL(PE_BARSEED)) {
     DrawSideBar(currentSet);
-  }
-
-  // Slap an image down over the display (every frame).
-  if (DBOOL(PE_POSTIMAGE)) {
-    DrawImage(imageSeed[currentSet], DFLOAT(PE_IMAGEANGLE), DFLOAT(PE_IMAGEXOFFSET), DFLOAT(PE_IMAGEYOFFSET),
-      DFLOAT(PE_IMAGEEXP), DBOOL(PE_IMAGEALIAS), DBUFFER(PE_FRAMEBUFFER));
-    DFLOAT(PE_IMAGEANGLE) += DFLOAT(PE_IMAGEINC);
-  }
-
-  // Image one-shot
-  if (DBOOL(PE_IMAGEALL)) {
-    DrawImage(imageSeed[currentSet], DFLOAT(PE_IMAGEANGLE), DFLOAT(PE_IMAGEXOFFSET), DFLOAT(PE_IMAGEYOFFSET),
-      DFLOAT(PE_IMAGEEXP), DBOOL(PE_IMAGEALIAS), DBUFFER(PE_FRAMEBUFFER));
-    DBOOL(PE_IMAGEALL) = NO;
   }
 
   // Write a column of text on the side opposite of the scroll direction.
@@ -3113,7 +3163,19 @@ void Scroll (dir_e direction, int rollovermode, unsigned char *fb, unsigned char
 
 
 void UpdateTensor(unsigned char *buffer) {
-  tensor_send(buffer);
+  unsigned char sendBuf [TENSOR_BYTES];
+  int x, y;
+  color_t temp;
+
+  // Apply the pixel map
+  for (y = 0; y < tensorHeight; y++) {
+    for (x = 0; x < tensorWidth; x++) {
+      temp = GetPixel(x, y, buffer);
+      SetPixel(tensorPixelMap[x + (y * tensorWidth)].x, tensorPixelMap[x + (y * tensorWidth)].y, temp, sendBuf);
+    }
+  }
+
+  tensor_send(sendBuf);
 }
 
 
@@ -3523,13 +3585,26 @@ color_t ColorCycle(int set, colorCycleModes_e cycleMode, int *cycleSaver, int cy
 // Write the static menu information to the display.
 void InitDisplayTexts(void) {
   int i;
+  SDL_Rect box;
+
   // DrawBox(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT, cDkGray);
   for (i = 0; i < DISPLAYCOMMAND_SIZE; i++) {
     WriteCommand(i, displayCommand, DISPLAY_COLOR_TEXTS, DISPLAY_COLOR_TEXTSBG);
   }
 
   for (i = 0; i < HEADERTEXT_SIZE; i++) {
+    box.x = colToPixel[headerText[i].col];
+    box.y = headerText[i].line * DISPLAY_TEXT_HEIGHT;
+    box.w = colToPixel[headerText[i].col + 1] - box.x;
+    box.h = (headerText[i].line + 1) * DISPLAY_TEXT_HEIGHT - box.y + 1;
+
+    // Yeah, so draw the highlight.
+    DrawBox(mwRenderer, box.x, box.y, box.w, box.h, DISPLAY_COLOR_TITLESBG);
     WriteLine(headerText[i].text, headerText[i].line, headerText[i].col, DISPLAY_COLOR_TITLES, DISPLAY_COLOR_TITLESBG);
+  }
+
+  for (i = 0; i < LABELTEXT_SIZE; i++) {
+    WriteLine(labelText[i].text, labelText[i].line, labelText[i].col, DISPLAY_COLOR_LABEL, DISPLAY_COLOR_LABELBG);
   }
 
   for (i = 0; i < OTHERCOMMAND_SIZE; i++) {
@@ -3546,6 +3621,7 @@ void WriteCommand(int index, const command_t *comList, color_t fg, color_t bg) {
   char *ind = text;
   char * const end = text + sizeof(text);
   int i;
+  unsigned char modified = NO;
 
   if (displayCommand[index].line == -1) {
     return;
@@ -3560,25 +3636,39 @@ void WriteCommand(int index, const command_t *comList, color_t fg, color_t bg) {
   // will be the same for all three.
   for (i = 0; i < MOUSE_COUNT; i++) {
     if (comList[index].commands[i].mod != KMOD_NONE) {
+      modified = YES;
       ind += snprintf(ind, end - ind, " %s%s%s",
-        comList[index].commands[i].mod & KMOD_CTRL ? "<c> " : "",
-        comList[index].commands[i].mod & KMOD_SHIFT ? "<s> " : "",
-        comList[index].commands[i].mod & KMOD_ALT ? "<a> " : "");
+        comList[index].commands[i].mod & KMOD_CTRL ? "<c>" : "",
+        comList[index].commands[i].mod & KMOD_SHIFT ? "<s>" : "",
+        comList[index].commands[i].mod & KMOD_ALT ? "<a>" : "");
       break;  // Found the first, skip the rest.
     }
   }
 
-  // Handle the key selection
-  ind += snprintf(ind, end - ind, "%s%s", SDL_GetKeyName(comList[index].commands[MOUSE_WHEEL_UP].key),
-    strlen(SDL_GetKeyName(comList[index].commands[MOUSE_WHEEL_UP].key)) ? " " : "");
-  ind += snprintf(ind, end - ind, "%s%s", SDL_GetKeyName(comList[index].commands[MOUSE_CLICK].key),
-    strlen(SDL_GetKeyName(comList[index].commands[MOUSE_CLICK].key)) ? " " : "");
-  ind += snprintf(ind, end - ind, "%s%s", SDL_GetKeyName(comList[index].commands[MOUSE_WHEEL_DOWN].key),
-    strlen(SDL_GetKeyName(comList[index].commands[MOUSE_WHEEL_DOWN].key)) ? " " : "");
+  if (modified) ind += snprintf(ind, end - ind, " ");
 
-  //~ if (modified) {
-    //~ ind += snprintf(ind, end - ind, ")");
-  //~ }
+  // Handle the key selection. TODO: Fix this mess.
+  if (modified) {
+    ind += snprintf(ind, end - ind, "%s%s", SDL_GetKeyName(comList[index].commands[MOUSE_WHEEL_UP].key),
+      strlen(SDL_GetKeyName(comList[index].commands[MOUSE_WHEEL_UP].key)) ? " " : "");
+    ind += snprintf(ind, end - ind, "%s%s", SDL_GetKeyName(comList[index].commands[MOUSE_CLICK].key),
+      strlen(SDL_GetKeyName(comList[index].commands[MOUSE_CLICK].key)) ? " " : "");
+    ind += snprintf(ind, end - ind, "%s%s", SDL_GetKeyName(comList[index].commands[MOUSE_WHEEL_DOWN].key),
+      strlen(SDL_GetKeyName(comList[index].commands[MOUSE_WHEEL_DOWN].key)) ? " " : "");
+  } else {
+    ind += snprintf(ind, end - ind, "%s%s%s",
+      strlen(SDL_GetKeyName(comList[index].commands[MOUSE_WHEEL_UP].key)) ? " - " : "",
+      SDL_GetKeyName(comList[index].commands[MOUSE_WHEEL_UP].key),
+      strlen(SDL_GetKeyName(comList[index].commands[MOUSE_WHEEL_UP].key)) ? " " : "");
+    ind += snprintf(ind, end - ind, "%s%s%s",
+      strlen(SDL_GetKeyName(comList[index].commands[MOUSE_CLICK].key)) ? " - " : "",
+      SDL_GetKeyName(comList[index].commands[MOUSE_CLICK].key),
+      strlen(SDL_GetKeyName(comList[index].commands[MOUSE_CLICK].key)) ? " " : "");
+    ind += snprintf(ind, end - ind, "%s%s%s",
+      strlen(SDL_GetKeyName(comList[index].commands[MOUSE_WHEEL_DOWN].key)) ? " - " : "",
+      SDL_GetKeyName(comList[index].commands[MOUSE_WHEEL_DOWN].key),
+      strlen(SDL_GetKeyName(comList[index].commands[MOUSE_WHEEL_DOWN].key)) ? " " : "");
+  }
 
   // Write it.
   WriteLine(text, comList[index].line, comList[index].col, fg, bg);
@@ -3729,13 +3819,42 @@ void ClearWindow(void) {
 
 // Set some dimensions according to orientation
 void SetDims(void) {
-   if (tensor_landscape_p) {
+  int x,y;
+  int maxdim;
+  int xoffset, yoffset;
+
+  // Set the width and height according to portrait mode.
+  if (tensor_landscape_p) {
     tensorWidth = TENSOR_HEIGHT;
     tensorHeight = TENSOR_WIDTH;
   } else {
     tensorWidth = TENSOR_WIDTH;
     tensorHeight = TENSOR_HEIGHT;
   }
+
+  // Define the preview boxes for mouse detection
+  x = (tensorWidth * PREVIEW_PIXEL_SIZE);
+  y = (tensorHeight * PREVIEW_PIXEL_SIZE);
+  maxdim = max(x, y);
+  xoffset = PREVIEW_A_POSITION_X + PREVIEW_BORDER_THICKNESS + (maxdim - x) / 2;
+  yoffset = PREVIEW_A_POSITION_Y + PREVIEW_BORDER_THICKNESS + (maxdim - y) / 2;
+
+  liveBox.x = xoffset;
+  liveBox.y = yoffset;
+  liveBox.w = x - 1;
+  liveBox.h = y - 1;
+
+  // Alternate preview
+  xoffset = PREVIEW_B_POSITION_X + PREVIEW_BORDER_THICKNESS + (maxdim - x) / 2;
+  yoffset = PREVIEW_B_POSITION_Y + PREVIEW_BORDER_THICKNESS + (maxdim - y) / 2;
+
+  altBox.x = xoffset;
+  altBox.y = yoffset;
+  altBox.w = x - 1;
+  altBox.h = y - 1;
+
+  // Regenerate the default pixel map?
+  GenerateDefaultPixelMap();
 }
 
 // Outline
@@ -4325,7 +4444,7 @@ void CopyPatternSet(int dst, int src) {
   }
 }
 
-#define BORDER_WIDTH 10
+#define CONFBOX_BORDER_WIDTH 10
 // Confirmation box for dangerous actions.
 void DrawConfirmationBox(SDL_Rect *yesBox, SDL_Rect *noBox, unsigned char selected) {
   SDL_Surface *t1 = NULL, *t2 = NULL, *t3 = NULL;
@@ -4364,8 +4483,8 @@ void DrawConfirmationBox(SDL_Rect *yesBox, SDL_Rect *noBox, unsigned char select
 
   // Calculations of the box's positions and sizes.
   tHeight = max(max(t1->h, t2->h), t3->h);
-  boxHeight = 3 * tHeight + 4 * BORDER_WIDTH;
-  boxWidth = max(4 * BORDER_WIDTH + max(t2->w, t3->w) * 2, 2 * BORDER_WIDTH + t1->w);
+  boxHeight = 3 * tHeight + 4 * CONFBOX_BORDER_WIDTH;
+  boxWidth = max(4 * CONFBOX_BORDER_WIDTH + max(t2->w, t3->w) * 2, 2 * CONFBOX_BORDER_WIDTH + t1->w);
   boxX = (WINDOW_WIDTH / 2) - (boxWidth / 2);
   boxY = (WINDOW_HEIGHT / 2) - (boxHeight / 2);
 
@@ -4396,7 +4515,7 @@ void DrawConfirmationBox(SDL_Rect *yesBox, SDL_Rect *noBox, unsigned char select
     fprintf(stderr, "Unable to create text render texture: %s\n", SDL_GetError());
     exit(EXIT_FAILURE);
   }
-  rect.x = boxX + BORDER_WIDTH;
+  rect.x = boxX + CONFBOX_BORDER_WIDTH;
   rect.y = boxY + boxHeight / 4 - tHeight / 2;
   rect.w = t1->w;
   rect.h = t1->h;
@@ -4432,12 +4551,14 @@ void DrawConfirmationBox(SDL_Rect *yesBox, SDL_Rect *noBox, unsigned char select
 }
 
 
-unsigned char Intersects(int x, int y, SDL_Rect box){
-  if ((y >= box.y) && (y <= box.y + box.h) && (x >= box.x) && (x <= box.x + box.w)) return YES;
+// Does a point intersect a box?
+unsigned char Intersects(point_t point, SDL_Rect box){
+  if ((point.y >= box.y) && (point.y <= box.y + box.h) && (point.x >= box.x) && (point.x <= box.x + box.w)) return YES;
   return NO;
 }
 
 
+// Centers some text inside a box.
 void CenterText(SDL_Rect box, char * text, color_t fg, color_t bg) {
   SDL_Surface *textS = NULL;
   SDL_Texture *texture = NULL;
@@ -4464,4 +4585,409 @@ void CenterText(SDL_Rect box, char * text, color_t fg, color_t bg) {
   SDL_FreeSurface(textS);
   SDL_RenderCopy(mwRenderer, texture, NULL, &rect);
   SDL_DestroyTexture(texture);
+}
+
+
+// Figure out which pixel of the display the mouse is over.
+point_t GetDisplayPixel(point_t mouse, SDL_Rect box) {
+  point_t pixel;
+  pixel.x = (mouse.x - box.x) / PREVIEW_PIXEL_SIZE;
+  pixel.y = (mouse.y - box.y) / PREVIEW_PIXEL_SIZE;
+  return(pixel);
+}
+
+
+
+// Allows for remapping of pixel output and ip addresses without recompiling.
+void LoadTensorMaps(void) {
+  LoadPixelMap();
+  LoadIPMap();
+}
+
+
+// For remapping individual pixels sent to tensor without recompiling.
+void LoadPixelMap(void) {
+
+  // Vars
+  int x, y, xx, yy;
+  FILE *fp = NULL;
+  char filename[] = "tensorPixel.map";
+  unsigned char validData = YES;
+  int inchar;
+  unsigned char commentLine = NO;
+  char chunk[5];
+  int digit = 0;
+  int value;
+  int count = 0;
+  point_t tempMap[TENSOR_WIDTH * TENSOR_HEIGHT];
+
+  // Populate the default pixel map.
+  GenerateDefaultPixelMap();
+
+  // Print the default pixel map.
+  //for (y = 0; y < tensorHeight; y++) {
+  //  for (x = 0; x < tensorWidth; x++) {
+  //    printf("%i %i, ", tensorPixelMap[x + (y * tensorWidth)].x, tensorPixelMap[x + (y * tensorWidth)].y);
+  //  }
+  //  printf("\n");
+  //}
+
+  // Test for existence of a pixel map on disk.
+  fp = fopen(filename, "r");
+  if (!fp) {
+    fprintf(stderr, "Pixel map file \"%s\" not found. Using internal default pixel map.\n", filename);
+    return;
+  }
+
+  // Read in the pixel map character by character. Pixel map is formatted as a
+  // series of x y coordinates separated by spaces, commas, and/or newlines. The
+  // map may be preceeded or interspersed by any number of comment lines not
+  // beginning with a digit (0-9). Any character other than a digit, a comma, a
+  // space, or a newline in the map itself will cause the rest of the line to be
+  // ignored. There must be exactly TENSOR_WIDTH * TENSORHEIGHT coordinate sets
+  // to read in, otherwise the default map will be used. Remapped pixels are
+  // read as a list of x, then y coordinates, read from left to right, then top
+  // to bottom of the preview.
+  FOREVER {
+
+    // Read in a character.
+    inchar = fgetc(fp);
+
+    // If this line was a comment and we've hit the newline, go on to process
+    // the next line.
+    if (commentLine && inchar == '\n') {
+      commentLine = NO;
+      continue;  // Restart FOREVER loop.
+    }
+
+    // If this line is a comment line, ignore the input.
+    if (commentLine) continue;  // Restart FOREVER loop.
+
+    // If not a comment line, check for a digit.
+    if (inchar >= '0' && inchar <= '9') {
+
+      // Get the next digit and place it into the chunk string.
+      chunk[digit] = inchar;
+      chunk[digit + 1] = '\0';  // Keep it terminated.
+
+      // Increase the digit number and check for nonsensically large numbers.
+      digit++;
+      if (digit >= 4) {
+        fprintf(stderr, "Too many digits found in a coordinate in pixel map file \"%s\"!", filename);
+        validData = NO;
+        break;  // End FOREVER loop.
+      }
+
+    // Check for space, comma, newline, and EOF - these end the reading of a
+    // coordinate.
+    } else if (inchar == ' ' || inchar == ',' || inchar == '\n' || inchar == EOF) {
+
+      // If we have digits in our chunk, then we have a coordinate to add to the
+      // list.
+      if (digit != 0) {
+
+        // Convert the chunk to a number.
+        value = atoi(chunk);
+
+        // Check the number's range.
+        if (value < 0 || value >= max(tensorHeight, tensorWidth)) {
+          fprintf(stderr, "Coordinate too large (%i >= %i) in pixel map file \"%s\"!", value, max(tensorHeight, tensorWidth), filename);
+          validData = NO;
+          break;
+        }
+
+        // Even coordinates = x, odd coordinates = y.
+        if (count % 2 == 0) {
+          tempMap[count / 2].x = value;
+        } else {
+          tempMap[count / 2].y = value;
+        }
+
+        // Reset digit count for the next chunk.
+        digit = 0;
+        chunk[0] = '\0';
+
+        // Increase the coordinate count and see if we gathered too many.
+        count++;
+        if (count > TENSOR_HEIGHT * TENSOR_WIDTH * 2) {
+          fprintf(stderr, "Too many coordinates (%i) found in pixel map file \"%s\"!", count, filename);
+          validData = NO;
+          break;  // End FOREVER loop.
+        }
+      }
+
+    // All other characters result in the rest of the line being ignored.
+    } else {
+      commentLine = YES;
+      continue;  // Restart FOREVER loop.
+    }
+
+    // End of file breaks the loop.
+    if (inchar == EOF) break;
+  }
+
+  // Close the file.
+  fclose(fp);
+
+  // Is the data valid so far?
+  if (!validData) {
+    fprintf(stderr, " Using internal default map.\n");
+    return;
+  }
+
+  // Print out the pixel map that was read in.
+  //for (y = 0; y < tensorHeight; y++) {
+  //  for (x = 0; x < tensorWidth; x++) {
+  //    printf("%i %i, ", tempMap[x + (y * tensorWidth)].x, tempMap[x + (y * tensorWidth)].y);
+  //  }
+  //  printf("\n");
+  //}
+
+  // Did we get the right number of coordinates?
+  if (count != TENSOR_HEIGHT * TENSOR_WIDTH * 2) {
+    fprintf(stderr, "Wrong number of coordinates found in pixel map file \"%s\": %i != %i. Using internal default map.\n",
+      filename, count, TENSOR_HEIGHT * TENSOR_WIDTH * 2);
+    return;
+  }
+
+  // Check for map uniqueness.  Any preview pixel sent to more than one tensor
+  // pixel can only result in duplication on the display.
+  for (y = 0; y < tensorHeight; y++) {
+    for (x = 0; x < tensorWidth; x++) {
+
+      // Check each pixel against every other pixel.
+      for (yy = 0; yy < tensorHeight; yy++) {
+        for (xx = 0; xx < tensorWidth; xx++) {
+
+          // Skip the self.
+          if (x != xx || y != yy) {
+            if (tempMap[x + (y * tensorWidth)].x == tempMap[xx + (yy * tensorWidth)].x &&
+                tempMap[x + (y * tensorWidth)].y == tempMap[xx + (yy * tensorWidth)].y) {
+              fprintf(stderr, "Coordinate %i identical to coordinate %i.\n",
+                x + (y * tensorWidth), xx + (yy * tensorWidth));
+              validData = NO;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Unique?
+  if (!validData) {
+    fprintf(stderr, "Map \"%s\" is not unique.  Using internal default map.\n", filename);
+    return;
+  }
+
+  // Consider the new map validish and copy it into program memory.
+  for (y = 0; y < tensorHeight; y++) {
+    for (x = 0; x < tensorWidth; x++) {
+      tensorPixelMap[x + (y * tensorWidth)].x = tempMap[x + (y * tensorWidth)].x;
+      tensorPixelMap[x + (y * tensorWidth)].y = tempMap[x + (y * tensorWidth)].y;
+    }
+  }
+
+  // Haven't really thought through the whole portrait vs landscape thing, so
+  // I don't know if the map is really valid.
+  useDefaultPixelMap = NO;
+  fprintf(stdout, "Found and using valid(ish) pixel map from file \"%s\".\n", filename);
+}
+
+
+void GenerateDefaultPixelMap(void) {
+  int x, y;
+  // If we loaded a pixel map from a file, we won't be doing this.
+  if (!useDefaultPixelMap) return;
+
+  // Populate the pixel map with default values.
+  for (y = 0; y < tensorHeight; y++) {
+    for (x = 0; x < tensorWidth; x++) {
+      tensorPixelMap[x + (y * tensorWidth)].x = x;
+      tensorPixelMap[x + (y * tensorWidth)].y = y;
+    }
+  }
+}
+
+
+// For remapping the IP addresses used by the UDP broadcast without recompiling.
+// Function is only called once.  I didn't free some memory I malloced in the
+// error handling bits, but who cares?
+void LoadIPMap(void) {
+  char filename[] = "tensorIP.map";
+  FILE *fp = NULL;
+  int inchar;
+  int i;
+  unsigned char commentLine = NO;
+  int digit = 0;
+  int count = 0;
+  int value = 0;
+  const char **tempMap1 = NULL;
+  const char **tempMap2 = NULL;
+  const char **tempMap3 = NULL;
+  char *ipString = NULL;
+  char chunk[5];
+  char *ind;
+  char *end;
+  char *start;
+  unsigned char validData = YES;
+
+  // Populate the ip map with the default values (from drv-tensor.h).
+  ipmap1 = Tensor_Section1_def;
+  ipmap2 = Tensor_Section2_def;
+  ipmap3 = Tensor_Section3_def;
+
+  // Open the file.
+  fp = fopen(filename, "r");
+  if (!fp) {
+    fprintf(stderr, "IP address map file \"%s\" not found. Using internal defaults.\n", filename);
+    return;
+  }
+
+  // Allocate the space necessary to hold all of the ip strings.
+  ipString = malloc(IP_STRING_SIZE * TENSOR_PANEL_COUNT * TENSOR_IP_PER_PANEL * sizeof(char));
+  if (!ipString) {
+    fprintf(stderr, "Unable to allocate memory to read ip address strings from ip map file!\n");
+    fclose(fp);
+    exit(EXIT_FAILURE);
+  }
+  ind = ipString;
+  end = ipString + (IP_STRING_SIZE * TENSOR_PANEL_COUNT * TENSOR_IP_PER_PANEL * sizeof(char));
+  start = ipString;
+
+  // Allocate the space necessary to hold the ip map.
+  tempMap1 = malloc(TENSOR_IP_PER_PANEL * sizeof(char *));
+  tempMap2 = malloc(TENSOR_IP_PER_PANEL * sizeof(char *));
+  tempMap3 = malloc(TENSOR_IP_PER_PANEL * sizeof(char *));
+  if (!tempMap1 || !tempMap2 || !tempMap3) {
+    fprintf(stderr, "Unable to allocate memory to hold ip map from file!\n");
+    fclose(fp);
+    exit(EXIT_FAILURE);
+  }
+
+  // Process the file character by character.  Expected file format is a list
+  // of 18 dotted quad decimal ip4 addresses in order.  Spaces or commas and
+  // newlines will be accepted in place of dots, or in between addresses.  Any
+  // line with a character other than a digit, dot, comma, or space will be
+  // ignored from that point until newline as a comment.  Processing is
+  // terminated upon received the expected number of values.
+  FOREVER {
+
+    // Get the next character.
+    inchar = fgetc(fp);
+
+    // If this line was a comment and we got to the newline, process the next
+    // line as if it might not be a comment.
+    if (commentLine && inchar == '\n') {
+      commentLine = NO;
+      continue;
+    }
+
+    // If this line is a comment line, ignore the rest of it.
+    if (commentLine) continue;
+
+    // If we got a digit, add it to the current chunk of digits.
+    if (inchar >= '0' && inchar <= '9') {
+      chunk[digit] = inchar;
+      chunk[digit + 1] = '\0';  // Keep the string terminated.
+      digit++;
+
+      // If we got too many digits, throw out the rest of the file.
+      if (digit >= 4) {
+        fprintf(stderr, "Too many digits found in ip address from map file \"%s\"! Using internal default map.\n", filename);
+        validData = NO;
+        break;
+      }
+
+    // If we got a space, a dot, a comma, a newline, or an EOF, process the last
+    // chunk and add it to our address.
+    } else if (inchar == ' ' || inchar == '.' || inchar == '\n' || inchar == ',' || inchar == EOF) {
+
+      // Some digits accumulated.  Evaluate.
+      if (digit != 0) {
+
+        value = atoi(chunk);
+        if (value < 0 || value > 255) {
+          fprintf(stderr, "IP out of range (%i) in ip map file \"%s\"! Using internal default map.\n", value, filename);
+          validData = NO;
+          break;
+        }
+
+        // Append it to the ip string.
+        ind += snprintf(ind, end - ind, "%i", value);
+        if (count % 4 < 3) {
+          // Put dots after the first 3 values.
+          ind += snprintf(ind, end - ind, ".");
+
+        // If we got the fourth value, place it in the map.
+        } else {
+
+          // After the fourth, terminate the string.
+          *ind = '\0';
+          ind++;
+
+          // Put it in the correct section of the map.
+          switch(count / (TENSOR_IP_PER_PANEL * 4)) {
+            case 0:
+              tempMap1[(count / 4) % TENSOR_IP_PER_PANEL] = start;
+              break;
+            case 1:
+              tempMap2[(count / 4) % TENSOR_IP_PER_PANEL] = start;
+              break;
+            case 2:
+              tempMap3[(count / 4) % TENSOR_IP_PER_PANEL] = start;
+              break;
+            default:  // No need to point out this error - it doesn't occur.
+              break;
+          }
+
+          // Put the start pointer on the next ipstring.
+          start = ind;
+        }
+
+        // Set up for the next chunk.
+        digit = 0;
+        count++;
+
+        // If we got enough chunks, stop processing.
+        if (count >= 4 * TENSOR_IP_PER_PANEL * TENSOR_PANEL_COUNT) break;
+      }
+
+    // Any other character makes this a comment line.
+    } else {
+      commentLine = YES;
+      continue;
+    }
+
+    if (inchar == EOF) break;  // End of file ends processing of the file.
+  }
+
+  // Close the file.
+  fclose(fp);
+
+  // Was there an error?
+  if (!validData) {
+    return;
+  }
+
+  // Did we get enough values?
+  if (count != 4 * TENSOR_IP_PER_PANEL * TENSOR_PANEL_COUNT) {
+    fprintf(stderr, "Expected %i full ip addresses, got %i (%i chunks != %i) in ip map file \"%s\". Using internal default map.\n",
+      TENSOR_IP_PER_PANEL * TENSOR_PANEL_COUNT, count / 4, count,
+      TENSOR_IP_PER_PANEL * TENSOR_PANEL_COUNT * 4, filename);
+    return;
+  }
+
+  // TODO - More validation?
+
+  // Print out the ip addresses we just read.
+  fprintf(stdout, "Using ip address map \"%s\"\n", filename);
+  fprintf(stdout, "%-16s   %-16s   %-16s\n", "Panel 1", "Panel 2", "Panel 3");
+  for (i = 0; i < TENSOR_IP_PER_PANEL; i++) {
+    fprintf(stdout, "%-16s   %-16s   %-16s\n", tempMap1[i], tempMap2[i], tempMap3[i]);
+  }
+
+  // Reassign the ip addresses.
+  ipmap1 = tempMap1;
+  ipmap2 = tempMap2;
+  ipmap3 = tempMap3;
 }

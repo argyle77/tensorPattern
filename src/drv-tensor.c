@@ -25,35 +25,21 @@
 
 #include "drv-tensor.h"
 
-const char *Tensor_IPs_1_old[]={
-  "10.5.1.15","10.5.1.9","10.5.1.19",
-  "10.5.1.23","10.5.1.17","10.5.1.18",
-  "10.5.1.25","10.5.1.1","10.5.1.21"};
-
-const char *Tensor_IPs_2_old[]={
-  "10.5.1.20","10.5.1.6","10.5.1.7",
-  "10.5.1.22","10.5.1.16","10.5.1.13",
-  "10.5.1.24","10.5.1.14","10.5.1.3"};
-
-const char *Tensor_Section1[] = {
+const char *Tensor_Section1_def[] = {
   "10.5.1.15","10.5.1.9","10.5.1.19",
   "10.5.1.20","10.5.1.6","10.5.1.7"
 };
 
-const char *Tensor_Section2[] = {
+const char *Tensor_Section2_def[] = {
   "10.5.1.23","10.5.1.17","10.5.1.18",
   "10.5.1.22","10.5.1.16","10.5.1.13"
 };
 
-const char *Tensor_Section3[] = {
+const char *Tensor_Section3_def[] = {
   "10.5.1.25","10.5.1.1","10.5.1.21",
   "10.5.1.24","10.5.1.14","10.5.1.3"
 };
 
-const char *Tensor_Section_Crap[] = {
-  "10.1.1.25","10.1.1.1","10.1.1.21",
-  "10.1.1.24","10.1.1.14","10.1.1.3"
-};
 
 const char *Tensor_IPs_1[9];
 const char *Tensor_IPs_2[9];
@@ -64,7 +50,7 @@ int tensor_sock;
 
 /*--------------------------------------------------------------------------*/
 
-static int tensor_init_ips()
+static int tensor_init_ips(const char **Tensor_Section1, const char **Tensor_Section2, const char **Tensor_Section3)
 {
   int i;
 
@@ -102,11 +88,11 @@ static int tensor_init_ips()
   return(0);
 }
 
-int tensor_init(void) {
+int tensor_init(const char **Tensor_Section1, const char **Tensor_Section2, const char **Tensor_Section3) {
 
   int i;
 
-  tensor_init_ips();
+  tensor_init_ips(Tensor_Section1, Tensor_Section2, Tensor_Section3);
 
   if ((tensor_sock=socket(PF_INET,SOCK_DGRAM,0))==-1) {
     return -1;
