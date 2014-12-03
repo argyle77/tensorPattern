@@ -32,6 +32,7 @@
 #define INVALID (-1)
 #define FOREVER for(;;)
 #define GUIFRAMEDELAY 25
+typedef unsigned char bool_t;
 
 #define IP_STRING_SIZE 16
 #define TENSOR_IP_PER_PANEL 6
@@ -199,6 +200,23 @@ const char *colorsText[] = { "red", "orange", "yellow", "chartreuse", "green",
   "lt gray", "gray", "dk gray", "black" };
 #define COLORSTEXT_SIZE (sizeof(colorsText) / sizeof(const char *))
 
+// Color palette cycle modes
+typedef enum colorCycleModes_e{
+  CM_INVALID = -1,
+  CM_NONE = 0, CM_RGB, CM_CMY, CM_SECONDARY, CM_TERTIARY, CM_GRAY, CM_RAINBOW,
+  CM_RANDOM, CM_FGBGFADE, CM_TERTTOBLACK,
+  CM_COUNT // Last.
+} colorCycleModes_e;
+const char *colorCycleText[] = { "None", "R-G-B", "C-M-Y", "Secondary", "Tertiary", "Graystep", "Rainbow", "Random", "FG-BG Fade", "Tertiary-Blk" };
+#define COLORCYCLETEXT_SIZE (sizeof(colorCycleText) / sizeof(const char *))
+
+// Color selector types
+typedef struct colorSelector_t {
+  color_t color1;
+  color_t color2;
+  colorCycleModes_e cycleMode;
+} colorSelector_t;
+
 // Enumerations and Strings.
 
 // Scroller directions
@@ -236,16 +254,6 @@ typedef enum textMode_e {
 } textMode_e;
 const char *textModeText[] = { "8 Row", "9 Row Stag", "10 Row", "Full BG" };
 #define TEXTMODETEXT_SIZE (sizeof(textModeText) / sizeof(const char *))
-
-// Color palette cycle modes
-typedef enum colorCycleModes_e{
-  CM_INVALID = -1,
-  CM_NONE = 0, CM_RGB, CM_CMY, CM_SECONDARY, CM_TERTIARY, CM_GRAY, CM_RAINBOW,
-  CM_RANDOM, CM_FGBGFADE, CM_TERTTOBLACK,
-  CM_COUNT // Last.
-} colorCycleModes_e;
-const char *colorCycleText[] = { "None", "R-G-B", "C-M-Y", "Secondary", "Tertiary", "Graystep", "Rainbow", "Random", "FG-BG Fade", "Tertiary-Blk" };
-#define COLORCYCLETEXT_SIZE (sizeof(colorCycleText) / sizeof(const char *))
 
 typedef enum operateOn_e {
   OO_INVALID = -1,
@@ -336,6 +344,7 @@ typedef enum patternElement_e {
   PE_PRERZINC, PE_PRERZEXPAND, PE_FRAMECOUNT, PE_IMAGEANGLE, PE_IMAGEALIAS,
   PE_IMAGEINC, PE_IMAGEEXP, PE_IMAGEXOFFSET, PE_IMAGEYOFFSET, PE_IMAGENAME,
   PE_SNAIL, PE_SNAIL_POS, PE_FASTSNAIL, PE_FASTSNAILP, PE_CROSSBAR, PE_CBLIKELY,
+  PE_MIRROR_V, PE_MIRROR_H,
   PE_COUNT // LAst
 } patternElement_e;
 
@@ -354,7 +363,7 @@ typedef union default_u {
   float f;         // Float
   color_t c;       // Color type - the big one.
   char *s;         // String pointer.
-  unsigned char b; // Boolean flag.
+  bool_t b;        // Boolean flag.
   // No buffer initializer.
 } default_u;
 
@@ -449,7 +458,9 @@ patternElement_t patternSet[] = {
   { PE_FASTSNAIL,   "FastSnail",   ET_BOOL,   {.b = NO} },
   { PE_FASTSNAILP,  "FastSnailP",  ET_INT,    {.i = 0} },
   { PE_CROSSBAR,    "Crossbar",    ET_ENUM,   {.e = CB_NONE}, .etype = E_CROSSBAR },
-  { PE_CBLIKELY,    "CrossLikely", ET_INT,    {.i = 2002 } },
+  { PE_CBLIKELY,    "CrossLikely", ET_INT,    {.i = 1002 } },
+  { PE_MIRROR_V,    "MirrorV",     ET_BOOL,   {.b = NO } },
+  { PE_MIRROR_H,    "MirrorH",     ET_BOOL,   {.b = NO } },
 };
 #define PSET_SIZE (sizeof(patternSet) / sizeof(patternElement_t))
 #define GLOBAL_PATTERN_ELEMENT_ARRAY patternSet
@@ -525,7 +536,9 @@ typedef enum command_e {
   COM_LIVE_DEC, COM_OPERATE, COM_EXCHANGE, COM_BLEND_RST, COM_BLEND_INC,
   COM_BLEND_DEC, COM_BLENDINC_RST, COM_BLENDINC_INC, COM_BLENDINC_DEC,
   COM_BLENDSWITCH, COM_SNAIL, COM_SNAILFAST, COM_CB_RST, COM_CB_UP, COM_CB_DOWN,
-  COM_CROSSB_RST, COM_CROSSB_UP, COM_CROSSB_DOWN,
+  COM_CROSSB_RST, COM_CROSSB_UP, COM_CROSSB_DOWN, COM_FG_WHEEL_UP,
+  COM_FG_WHEEL_DOWN, COM_BG_WHEEL_UP, COM_BG_WHEEL_DOWN, COM_MIRROR_V,
+  COM_MIRROR_H,
   COM_COUNT // Last
 } command_e;
 
@@ -583,13 +596,13 @@ const command_t displayCommand[] = {
   {ROW_P + 3, COL_P, "Supress blue:",    PE_NOBLUE,   {{KMOD_CTRL, SDLK_PERIOD, COM_NOBLUE}}},
 
   // Diffusion
-  #define ROW_D 20
+  #define ROW_D 18
   #define COL_D 2
   {ROW_D + 1, COL_D, "Enable:",      PE_DIFFUSE,     {{KMOD_CTRL, SDLK_r, COM_DIFFUSE}}},
   {ROW_D + 2, COL_D, "Coefficient:", PE_DIFFUSECOEF, {{KMOD_ALT, SDLK_w, COM_DIFFUSE_RST}, {KMOD_ALT, SDLK_q, COM_DIFFUSE_INC}, {KMOD_ALT, SDLK_e, COM_DIFFUSE_DEC}}},
 
   // Random Dots
-  #define ROW_R 16
+  #define ROW_R 15
   #define COL_R 2
   {ROW_R + 1, COL_R, "Enable:",     PE_RANDOMDOT,     {{KMOD_CTRL, SDLK_s, COM_RDOT}}},
   {ROW_R + 2, COL_R, "Randomness:", PE_RANDOMDOTCOEF, {{KMOD_ALT, SDLK_LEFTBRACKET, COM_RANDOM_RST}, {KMOD_ALT, SDLK_p, COM_RANDOM_INC}, {KMOD_ALT, SDLK_RIGHTBRACKET, COM_RANDOM_DEC}}},
@@ -615,17 +628,23 @@ const command_t displayCommand[] = {
   {ROW_MI + 5, COL_MI, "Crossbar randomness:",  PE_CBLIKELY, {{0, 0, COM_CB_RST}, {0, 0, COM_CB_UP}, {0, 0, COM_CB_DOWN}}},
 
   // Fader
-  #define ROW_F 24
+  #define ROW_F 21
   #define COL_F 2
   {ROW_F + 1, COL_F, "Enable:",           PE_FADE,     {{KMOD_CTRL, SDLK_e,  COM_FADE}}},
   {ROW_F + 2, COL_F, "Amount:",     PE_FADEINC,  {{KMOD_ALT, SDLK_x, COM_FADE_RST}, {KMOD_ALT, SDLK_z, COM_FADE_INC}, {KMOD_ALT, SDLK_c, COM_FADE_DEC}}},
   {ROW_F + 3, COL_F, "Mode:",      PE_FADEMODE, {{KMOD_CTRL, SDLK_h, COM_FADEMODE}}},
 
   // Multiplier
-  #define ROW_M 29
+  #define ROW_M 25
   #define COL_M 2
   {ROW_M + 1, COL_M, "Enable:",      PE_MULTIPLY, {{KMOD_CTRL, SDLK_c, COM_MULTIPLY}}},
   {ROW_M + 2, COL_M, "Multiply by:", PE_MULTIPLYBY, {{KMOD_ALT, SDLK_i, COM_MULT_RST}, {KMOD_ALT, SDLK_u, COM_MULT_INC}, {KMOD_ALT, SDLK_o, COM_MULT_DEC}}},
+
+  // Mirrors
+  #define ROW_MIR 28
+  #define COL_MIR 2
+  {ROW_MIR + 1, COL_MIR, "Vertical Mirror", PE_MIRROR_V, {{0, 0, COM_MIRROR_V}}},
+  {ROW_MIR + 2, COL_MIR, "Horizontal Mirror", PE_MIRROR_H, {{0, 0, COM_MIRROR_H}}},
 
   // Colors
   #define ROW_C 33
@@ -780,7 +799,8 @@ displayText_t headerText[] = {
   {ROW_T, COL_T,   "Text entry:"},
   {ROW_S, COL_S,   "Scrollers:"},
   {ROW_PR, COL_PR, "Post rotation:"},
-  {ROW_PE, COL_PE, "Pre rotation:"}
+  {ROW_PE, COL_PE, "Pre rotation:"},
+  {ROW_MIR, COL_MIR, "Mirrors:"},
 };
 #define HEADERTEXT_SIZE (sizeof(headerText) / sizeof(displayText_t))
 
@@ -791,9 +811,9 @@ SDL_Window *mainWindow = NULL;
 SDL_Renderer *mwRenderer = NULL;
 SDL_Surface *imageSeed[PATTERN_SET_COUNT];
 int tensorWidth, tensorHeight;
-unsigned char cyclePatternSets = NO;  // cyclePatternSets mode is a global (for now).
+bool_t cyclePatternSets = NO;  // cyclePatternSets mode is a global (for now).
 int cycleFrameCount = INITIAL_FRAMECYCLECOUNT;    // Frame Count for cycling.
-unsigned char enableTensor = YES;
+bool_t enableTensor = YES;
 int currentSet = 0;
 int alternateSet = 1;
 operateOn_e displaySet = OO_CURRENT;
@@ -802,7 +822,7 @@ int previewFrameCountA = 0, previewFPSA = 0;
 int previewFrameCountB = 0, previewFPSB = 0;
 int guiFrameCount = 0, guiFPS = 0;
 float alternateBlend = 0, alternateBlendRate = 0.01;
-unsigned char autoBlend = NO;
+bool_t autoBlend = NO;
 #define CHAR_W (8)
 #define ACOL (0)
 #define BCOL (ACOL + 27 * CHAR_W)
@@ -813,15 +833,12 @@ unsigned char autoBlend = NO;
 const int colToPixel[] = {ACOL, BCOL, CCOL, DCOL, ECOL, FCOL, WINDOW_WIDTH};
 Uint32 FPSEventType, DRAWEventTypeA, DRAWEventTypeB, GUIEventType, CONFIRMEventType;
 unsigned char fbb[TENSOR_BYTES];
-char cText[100] = "";  // For confirming actions.
-unsigned char confirmed = NO;
-unsigned char confirmRequired = NO;
+char statusText[100] = "";  // For confirming actions.
 char keySave;
 int setSave;
-unsigned char refresh = NO;
 SDL_Rect liveBox, altBox;
 point_t tensorPixelMap [TENSOR_WIDTH * TENSOR_HEIGHT];
-unsigned char useDefaultPixelMap = YES;
+bool_t useDefaultPixelMap = YES;
 const char **ipmap1;
 const char **ipmap2;
 const char **ipmap3;
@@ -842,25 +859,25 @@ void Scroll (dir_e direction, int rollovermode, unsigned char *fb, unsigned char
 void WriteSlice(int set);
 void CellFun(int set);
 void DrawSideBar(int set);
-void Diffuse(float diffusionCoeff, unsigned char *buffer);
+void Diffuse(float diffusionCoeff, bool_t isToroid, unsigned char *buffer);
 void HorizontalBars(color_t color, unsigned char *buffer);
 void VerticalBars(color_t color, unsigned char *buffer);
-void SavePatternSet(char key, int set);
+void SavePatternSet(char key, int set, bool_t overWrite);
 void LoadPatternSet(char key, int set);
 void RandomDots(color_t color, unsigned int rFreq, unsigned char *buffer);
 color_t ColorCycle(int set, colorCycleModes_e cycleMode, int *cycleSaver, int cycleInc);
 void ColorAll(color_t color, unsigned char *fb);
 void SetDims(void);
-void UpdateDisplays(int set, unsigned char sendToTensor, float intensity_limit);
+void UpdateDisplays(int set, bool_t sendToTensor, float intensity_limit);
 void UpdateGUI(void);
 void UpdateTensor(unsigned char *buffer);
-void DrawPreviewBorder(int x, int y, unsigned char active);
+void DrawPreviewBorder(int x, int y, bool_t active);
 void UpdatePreview(int xOffset, int yOffset, unsigned char *buffer);
 void InitDisplayTexts(void);
 void UpdateInfoDisplay(int set);
 void ClearWindow(void);
 void WriteLine(char * thisText, int line, int col, color_t color, color_t bgColor);
-void WriteBool(int value, int row, int col, int width);
+void WriteBool(bool_t value, int row, int col, int width);
 void WriteInt(int value, int row, int col, int width);
 void WriteFloat(float value, int row, int col, int width, int precision);
 void WriteString(const char *text, int line, int col, int width);
@@ -870,24 +887,26 @@ unsigned char * SurfaceToFB(unsigned char *FB, SDL_Surface *surface);
 void Rotate(double angle, double expansion, int aliasmode, unsigned char *fb_dst, unsigned char *fb_src, unsigned char exclude);
 void Multiply(float multiplier, unsigned char *buffer);
 void DrawRectangle(SDL_Renderer *r, int x, int y, int w, int h, color_t color);
+void DrawSRectangle(SDL_Renderer *r, SDL_Rect rect, color_t color);
 void DrawBox(SDL_Renderer *r, int x, int y, int w, int h, color_t color);
+void DrawSBox(SDL_Renderer *r, SDL_Rect rect, color_t color);
 void ClearRed(int set);
 void ClearGreen(int set);
 void ClearBlue(int set);
-void DrawImage(SDL_Surface *image, double angle, float xoffset, float yoffset, double expansion, int aliasmode, unsigned char *fb_dst);
+void DrawImage(SDL_Surface *image, double angle, float xoffset, float yoffset, double expansion, bool_t aliasmode, unsigned char *fb_dst);
 int min(int a, int b);
 int max(int a, int b);
 unsigned char SameRectangle(SDL_Rect a, SDL_Rect b);
-int HandleCommand(command_e command);
-int HandleKey(SDL_Keycode key, SDL_Keymod mod);
-void AllocatePatternData(void);
-void VerifyStructuralIntegrity(void);
+bool_t HandleCommand(int set, command_e command);
+bool_t HandleKey(int set, SDL_Keycode key, SDL_Keymod mod);
+bool_t HandleConfirmation(SDL_Keycode key, bool_t *selected);
+bool_t AllocatePatternData(void);
+bool_t VerifyStructuralIntegrity(void);
 void CopyPatternSet(int dst, int src);
 void BlendAlternate(unsigned char *fba);
-void DrawConfirmationBox(SDL_Rect *yesBox, SDL_Rect *noBox, unsigned char selected);
-void DrawSBox(SDL_Renderer *r, SDL_Rect rect, color_t color);
-void DrawSRectangle(SDL_Renderer *r, SDL_Rect rect, color_t color);
-unsigned char Intersects(point_t point, SDL_Rect box);
+void DrawConfirmationBox(SDL_Rect *yesBox, SDL_Rect *noBox, bool_t selected);
+
+bool_t Intersects(point_t point, SDL_Rect box);
 void CenterText(SDL_Rect box, char * text, color_t fg, color_t bg);
 void SnailSeed(int set, int position);
 void FastSnailSeed(int set, int position);
@@ -898,25 +917,31 @@ void LoadPixelMap(void);
 void LoadIPMap(void);
 void GenerateDefaultPixelMap(void);
 
+void VerticalMirror(unsigned char * buffer);
+void HorizontalMirror(unsigned char * buffer);
 
 // Main
 int main(int argc, char *argv[]) {
 
   // Variable declarations
   int i;
-  unsigned char exitProgram = NO;
   char caption_temp[100];
   SDL_Event event;
-  unsigned char drawNewFrameA = NO;
-  unsigned char drawNewFrameB = NO;
-  //~ int x, y;
   int thisHover = INVALID;
   int lastHover = INVALID;
-  int mouseDownOn = INVALID;
-  unsigned char mouseDown = NO;
   SDL_Rect box = {0, 0, 0, 0}, boxOld = {0, 0, 0, 0};
   SDL_Rect boxYes, boxNo;
   point_t mouse, tpixel;
+  int leftMouseDownOn = INVALID;
+  bool_t leftMouseDown = NO;
+  //~ int rightMouseDownOn = INVALID;
+  bool_t rightMouseDown = NO;
+  bool_t confirmRequired = NO;
+  bool_t refresh = NO;
+  bool_t confirmed = NO;
+  bool_t drawNewFrameA = NO;
+  bool_t drawNewFrameB = NO;
+  bool_t exitProgram = NO;
 
   // Unbuffer the console...
   setvbuf(stdout, (char *)NULL, _IONBF, 0);
@@ -930,17 +955,17 @@ int main(int argc, char *argv[]) {
   // Commandline parameter for limiting the intensity.
   if (argc == 2) {
     global_intensity_limit = atof(argv[1]);
-    if (global_intensity_limit < -0.0001 || global_intensity_limit > 1.0001) {
+    if (global_intensity_limit < 0.0 || global_intensity_limit > 1.0) {
       global_intensity_limit = 1.0;
     }
   }
 
-  // Verify the integrity of some of the data structures.  This enforces
-  // consistency for enumerated array access.
-  VerifyStructuralIntegrity();
+  // Verify the integrity of some of the data structures. Enforces consistency
+  // for enumerated array access.  Errors here are programmer failures.
+  if (!VerifyStructuralIntegrity()) exit(EXIT_FAILURE);
 
-  // Allocate pattern set memory
-  AllocatePatternData();
+  // Allocate the pattern set memory
+  if (!AllocatePatternData()) exit(EXIT_FAILURE);
 
   // Initialize SDL components.
   if (SDL_Init(SDL_INIT_VIDEO|SDL_INIT_TIMER) != 0) {
@@ -966,7 +991,7 @@ int main(int argc, char *argv[]) {
 
   // Load the font.  Should be a fixed width font.
   if(TTF_Init() < 0) {
-    fprintf(stderr, "Couldn't initialize TTF: %s\n", TTF_GetError());
+    fprintf(stderr, "Couldn't initialize SDL TTF: %s\n", TTF_GetError());
     exit(EXIT_FAILURE);
   } else {
     screenFont = TTF_OpenFont("font.ttf", DISPLAY_FONT_SIZE);
@@ -988,13 +1013,13 @@ int main(int argc, char *argv[]) {
   // Set the widths / heights
   SetDims();  // After set tensor_landscape_p.
 
-  // Load the tensor map.
+  // Load the ip and pixels maps.
   LoadTensorMaps();
 
   // Initialize tensor communications.
   tensor_init(ipmap1, ipmap2, ipmap3);
 
-  // Draw a border around the preview
+  // Draw a border around the previews
   DrawPreviewBorder(PREVIEW_A_POSITION_X, PREVIEW_A_POSITION_Y, YES);
   DrawPreviewBorder(PREVIEW_B_POSITION_X, PREVIEW_B_POSITION_Y, NO);
 
@@ -1013,6 +1038,7 @@ int main(int argc, char *argv[]) {
       imageSeed[i] = IMG_Load(SSTRING(i, PE_IMAGENAME));
     }
   }
+
   cycleFrameCount = DINT(PE_FRAMECOUNT);
 
   // Bam - Show the (blank) preview.
@@ -1028,15 +1054,15 @@ int main(int argc, char *argv[]) {
   GUIEventType = SDL_RegisterEvents(1);
   CONFIRMEventType = SDL_RegisterEvents(1);
 
-
-  // Init the processing timer.
+  // Init the live preview timer.
   if (!SDL_AddTimer(DINT(PE_DELAY), TriggerFrameDrawA, NULL)) {
-    fprintf(stderr, "Can't initialize the processing timer! %s\n", SDL_GetError());
+    fprintf(stderr, "Can't initialize the live preview timer! %s\n", SDL_GetError());
     exit(EXIT_FAILURE);
   }
 
+  // Init the alternate preview timer.
   if (!SDL_AddTimer(SINT(alternateSet, PE_DELAY), TriggerFrameDrawB, NULL)) {
-    fprintf(stderr, "Can't initialize the 2nd processing timer! %s\n", SDL_GetError());
+    fprintf(stderr, "Can't initialize the alternate preview timer! %s\n", SDL_GetError());
     exit(EXIT_FAILURE);
   }
 
@@ -1046,9 +1072,10 @@ int main(int argc, char *argv[]) {
     exit(EXIT_FAILURE);
   }
 
-  // GUI update timer.  Normally the gui is updated by the preview frame update,
-  // but this can be reduced in speed.  To ensure that the gui stays responsive
-  // between frames, there is a third timer for this purpose.
+  // GUI update timer. The gui is updated when the preview frames update, but
+  // frame update speeds are adjustable. To ensure that the gui stays responsive
+  // between frames, there is a timer for this purpose.  Current setting places
+  // this timer at 40Hz.
   if (!SDL_AddTimer(GUIFRAMEDELAY, TriggerGUIUpdate, NULL)) {
     fprintf(stderr, "Can't initialize the gui update timer! %s\n", SDL_GetError());
     exit(EXIT_FAILURE);
@@ -1059,22 +1086,31 @@ int main(int argc, char *argv[]) {
 
     // Act on queued events.
     while (SDL_PollEvent(&event)) {
-
       switch(event.type) {
 
+        // Evaluate keypresses.
         case SDL_KEYDOWN:
-          // Evaluate the keypress.
-          exitProgram = HandleKey(event.key.keysym.sym, event.key.keysym.mod);
+          // Confirmation boxes must be dealt with before other key presses.
+          if (confirmRequired) {
+            if (!HandleConfirmation(event.key.keysym.sym, &confirmed)) {
+              // The box was dealt with, so we'll turn it off.
+              confirmRequired = NO;
+              refresh = YES;
+            }
+          } else {
+            exitProgram = HandleKey(displaySet ? alternateSet : currentSet,
+              event.key.keysym.sym, event.key.keysym.mod);
+          }
           break;
 
+        // The mouse moved.
         case SDL_MOUSEMOTION:
-          // The mouse moved.  See where it is.
+          // See where it is.
           mouse.x = event.motion.x;
           mouse.y = event.motion.y;
 
           // Confirmation dialog?
           if (confirmRequired) {
-
             // Check for intersection with confirmation boxes.
             thisHover = INVALID;
             if (Intersects(mouse, boxYes)) {
@@ -1093,13 +1129,13 @@ int main(int argc, char *argv[]) {
                 lastHover = thisHover;
               }
             }
-
             // Not over a new command? May have to clear the old highlight anyway.
             if ((thisHover == INVALID) && (lastHover != INVALID)) {
               lastHover = INVALID;
               confirmed = NO;
             }
 
+          // No confirmation dialog.
           } else {
             // Check if its hovering over a command.
             thisHover = INVALID;
@@ -1151,27 +1187,64 @@ int main(int argc, char *argv[]) {
 
         case SDL_MOUSEWHEEL:
           if (confirmRequired) break;  // Not if the confirmation box is up.
-          // The mouse wheel moved.  See if we should act on that.
+          // The mouse wheel moved.  See if we should act on that.  We don't
+          // check HandleCommand return codes because there are no mouse wheel
+          // commands that exit the program.
           if (thisHover != INVALID) {
 
             // Wheel down.
             if (event.wheel.y < 0) {
-
               // If there are no mouse wheel commands for this item, consider it a click.
               if (displayCommand[thisHover].commands[MOUSE_WHEEL_DOWN].command == COM_NONE) {
-                exitProgram = HandleCommand(displayCommand[thisHover].commands[MOUSE_CLICK].command);
+                HandleCommand(displaySet ? alternateSet : currentSet,
+                  displayCommand[thisHover].commands[MOUSE_CLICK].command);
               } else {
-                exitProgram = HandleCommand(displayCommand[thisHover].commands[MOUSE_WHEEL_DOWN].command);
+                HandleCommand(displaySet ? alternateSet : currentSet,
+                  displayCommand[thisHover].commands[MOUSE_WHEEL_DOWN].command);
               }
 
             // Wheel up.
             } else {
-
               // If there are no mouse wheel commands for this item, consider it a click.
               if (displayCommand[thisHover].commands[MOUSE_WHEEL_UP].command == COM_NONE) {
-                exitProgram = HandleCommand(displayCommand[thisHover].commands[MOUSE_CLICK].command);
+                HandleCommand(displaySet ? alternateSet : currentSet,
+                  displayCommand[thisHover].commands[MOUSE_CLICK].command);
               } else {
-                exitProgram = HandleCommand(displayCommand[thisHover].commands[MOUSE_WHEEL_UP].command);
+                HandleCommand(displaySet ? alternateSet : currentSet,
+                  displayCommand[thisHover].commands[MOUSE_WHEEL_UP].command);
+              }
+            }
+
+          // Mouse wheel action over the live preview lets us change colors
+          // without having to go to the command.
+          } else if (Intersects(mouse, liveBox)) {
+            if (!rightMouseDown) {
+              if (event.wheel.y < 0) { // Wheel down
+                HandleCommand(currentSet, COM_FG_WHEEL_DOWN);
+              } else { // Wheel up
+                HandleCommand(currentSet, COM_FG_WHEEL_UP);
+              }
+            } else {
+              // Holding down the right mouse button while wheeling changes the
+              // background color instead.
+              if (event.wheel.y < 0) { // Wheel down
+                HandleCommand(currentSet, COM_BG_WHEEL_DOWN);
+              } else { // Wheel up
+                HandleCommand(currentSet, COM_BG_WHEEL_UP);
+              }
+            }
+          } else if (Intersects(mouse, altBox)) {
+            if (!rightMouseDown) {
+              if (event.wheel.y < 0) { // Wheel down
+                HandleCommand(alternateSet, COM_FG_WHEEL_DOWN);
+              } else { // Wheel up
+                HandleCommand(alternateSet, COM_FG_WHEEL_UP);
+              }
+            } else {
+              if (event.wheel.y < 0) { // Wheel down
+                HandleCommand(alternateSet, COM_BG_WHEEL_DOWN);
+              } else { // Wheel up
+                HandleCommand(alternateSet, COM_BG_WHEEL_UP);
               }
             }
           }
@@ -1181,38 +1254,40 @@ int main(int argc, char *argv[]) {
           // Mouse button unpushed.  Consider this a click.  If we're over
           // the same item we down clicked on, execute a command.
           if (event.button.button == SDL_BUTTON_LEFT) {
-            mouseDown = NO;
-            if ((thisHover != INVALID) && (thisHover == mouseDownOn)) {
+            leftMouseDown = NO;
+            if ((thisHover != INVALID) && (thisHover == leftMouseDownOn)) {
               if (confirmRequired) {
                 if (thisHover == YES) {
-                  confirmed = YES;
-                  SavePatternSet(keySave, setSave);
-                  confirmRequired = NO;
-                  confirmed = NO;
+                  SavePatternSet(keySave, setSave, YES);
                 } else {
-                  confirmed = NO;
-                  confirmRequired = NO;
-                  snprintf(cText, sizeof(cText), "Save action cancelled.");
+                  snprintf(statusText, sizeof(statusText), "Save action cancelled.");
                 }
+                confirmRequired = NO;
                 refresh = YES;
               } else {
-                exitProgram = HandleCommand(displayCommand[thisHover].commands[MOUSE_CLICK].command);
+                exitProgram = HandleCommand(displaySet ? alternateSet : currentSet,
+                  displayCommand[thisHover].commands[MOUSE_CLICK].command);
               }
             }
+          } else if (event.button.button == SDL_BUTTON_RIGHT) {
+            rightMouseDown = NO;
           }
           break;
 
         case SDL_MOUSEBUTTONDOWN:
           // Mouse button pushed.  Make a note of the item it was pushed over.
           if (event.button.button == SDL_BUTTON_LEFT) {
-            mouseDownOn = thisHover;
-            mouseDown = YES;
+            leftMouseDownOn = thisHover;
+            leftMouseDown = YES;
+          } else if (event.button.button == SDL_BUTTON_RIGHT) {
+            //~ rightMouseDownOn = thisHover;
+            rightMouseDown = YES;
           }
           break;
 
         case SDL_QUIT:
           // Window closed or <ctrl> c pushed in terminal.  Exit program.
-          exitProgram = 1;
+          exitProgram = YES;
           break;
 
         case SDL_WINDOWEVENT:
@@ -1224,27 +1299,14 @@ int main(int argc, char *argv[]) {
             case SDL_WINDOWEVENT_EXPOSED:
               refresh = YES;
               break;
-            case SDL_WINDOWEVENT_ENTER:
-            case SDL_WINDOWEVENT_LEAVE:
-            case SDL_WINDOWEVENT_FOCUS_LOST:
-            case SDL_WINDOWEVENT_FOCUS_GAINED:
-              // Included for event debugging.  I think I was actually trying to
-              // debug a video card bug.  My card is cranky sometimes and likes
-              // to forget its memory occasionally.
-              break;
             default:
               //~ fprintf(stderr, "Unhandled SDL window event: %i\n", event.window.event);
               break;
           }
           break;
 
-        case SDL_KEYUP:
-        case SDL_TEXTINPUT:
-          // Included for event debugging.
-          break;
-
         default:
-          // There are two registered user events to check for here.  They can't
+          // There are five registered user events to check for here. They can't
           // be tested in the case statement because they are not compile-time
           // integer constants.
           if (event.type == DRAWEventTypeA) {
@@ -1265,71 +1327,96 @@ int main(int argc, char *argv[]) {
             previewFrameCountB = 0;
 
           } else if (event.type == GUIEventType) {
-            // Update the text display.
+            // Update the informational display.
             UpdateInfoDisplay(displaySet ? alternateSet : currentSet);
             if (confirmRequired) DrawConfirmationBox(&boxYes, &boxNo, confirmed);
             UpdateGUI();
             guiFrameCount++;
 
           } else if (event.type == CONFIRMEventType) {
-            // Draw the confirmation box.
-            //~ DrawConfirmationBox(&boxYes, &boxNo, NO);
-            //~ UpdateGUI();
+            // Prep the confirmation box.
             lastHover = NO;
             confirmed = NO;
             boxOld = boxNo;
+            confirmRequired = YES;
           } else {
             //~ fprintf(stderr, "Unhandled SDL event: %i\n", event.type);
           }
           break;
-      }
-    }
+      }  // End event switch
+    }  // End event polling loop.
 
-    // Draw a new frame once every n ms, where n defaults to 60.
-    if ((drawNewFrameA) || (drawNewFrameB)) {
-      if (drawNewFrameA) {
-        drawNewFrameA = NO;
-        previewFrameCountA++;
-        DrawNewFrame(currentSet, YES);
-        if (cyclePatternSets) {
-          cycleFrameCount--;
-          if (cycleFrameCount < 0) {
-            currentSet = (currentSet + 1) % PATTERN_SET_COUNT;
-            cycleFrameCount = DINT(PE_FRAMECOUNT);
-          }
-          if (cycleFrameCount > DINT(PE_FRAMECOUNT)) {
-            cycleFrameCount = DINT(PE_FRAMECOUNT);
-          }
+    // Draw a new frame if the timer expired for the live set.
+    if (drawNewFrameA) {
+      drawNewFrameA = NO;
+      previewFrameCountA++;
+      DrawNewFrame(currentSet, YES);
+
+      // Deal with the pattern set cycle timer
+      if (cyclePatternSets) {
+        cycleFrameCount--;
+        if (cycleFrameCount < 0) {
+          currentSet = (currentSet + 1) % PATTERN_SET_COUNT;
+          cycleFrameCount = DINT(PE_FRAMECOUNT);
+        }
+        if (cycleFrameCount > DINT(PE_FRAMECOUNT)) {
+          cycleFrameCount = DINT(PE_FRAMECOUNT);
         }
       }
-      if (drawNewFrameB) {
-        drawNewFrameB = NO;
-        previewFrameCountB++;
-        DrawNewFrame(alternateSet, NO);
-      }
+
+    // Draw a new frame if the timer expired for the preview set.
+    } else if (drawNewFrameB) {
+      drawNewFrameB = NO;
+      previewFrameCountB++;
+      DrawNewFrame(alternateSet, NO);
+
     } else {
-      // Large delays make the CPU spin. Its because we;re stuck in a tight
-      // loop, polling for events that never occur.  Best to get out of the way...
-      // Idle the processor for 1 ms.
+      // Large frame delays make the CPU spin because we get stuck in a tight
+      // event polling loop looking for events that never occur.  Best to get
+      // out of the way... Idle the processor for 1 ms.
       nanosleep((struct timespec[]) {{0,1000000}}, NULL);
     }
 
-    // Mouse pixel drawing direct to the display.
-    // Check if the mouse is hovering over the display
+    // Are we trying to draw on the previews with the mouse?  We do this here
+    // because we want to continue to draw whether or not there are mouse events.
     if (Intersects(mouse, liveBox)) {
-
-      // Which pixel?
+      // Mouse hovering over the live preview.  Which display pixel?
       tpixel = GetDisplayPixel(mouse, liveBox);
-      if (mouseDown) {
-        // Mouse button is clicked on the display. Draw on the pixel.
-        SetPixel(tpixel.x, tpixel.y, SCOLOR(currentSet, PE_FGC), SBUFFER(currentSet, PE_FRAMEBUFFER));
+      // Mirror corrections
+      if (SBOOL(currentSet, PE_MIRROR_V)) {
+        if (tpixel.x > tensorWidth / 2) {
+          tpixel.x = (tensorWidth - 1) - tpixel.x;
+        }
       }
-
-    // The alternate display too.
+      if (SBOOL(currentSet, PE_MIRROR_H)) {
+        if (tpixel.y > tensorHeight / 2) {
+          tpixel.y = (tensorHeight - 1) - tpixel.y;
+        }
+      }
+      // Is one of the mouse buttons down?
+      if (leftMouseDown) {
+        SetPixel(tpixel.x, tpixel.y, SCOLOR(currentSet, PE_FGC), SBUFFER(currentSet, PE_FRAMEBUFFER));
+      } else if (rightMouseDown) {
+        SetPixel(tpixel.x, tpixel.y, SCOLOR(currentSet, PE_BGC), SBUFFER(currentSet, PE_FRAMEBUFFER));
+      }
     } else if (Intersects(mouse, altBox)) {
+      // The alternate display.
       tpixel = GetDisplayPixel(mouse, altBox);
-      if (mouseDown) {
+      // Mirror corrections
+      if (SBOOL(alternateSet, PE_MIRROR_V)) {
+        if (tpixel.x > tensorWidth / 2) {
+          tpixel.x = (tensorWidth - 1) - tpixel.x;
+        }
+      }
+      if (SBOOL(alternateSet, PE_MIRROR_H)) {
+        if (tpixel.y > tensorHeight / 2) {
+          tpixel.y = (tensorHeight - 1) - tpixel.y;
+        }
+      }
+      if (leftMouseDown) {
         SetPixel(tpixel.x, tpixel.y, SCOLOR(alternateSet, PE_FGC), SBUFFER(alternateSet, PE_FRAMEBUFFER));
+      } else if (rightMouseDown) {
+        SetPixel(tpixel.x, tpixel.y, SCOLOR(alternateSet, PE_BGC), SBUFFER(alternateSet, PE_FRAMEBUFFER));
       }
     }
 
@@ -1420,20 +1507,21 @@ Uint32 TriggerGUIUpdate(Uint32 interval, void *param) {
 // Check to make sure that some of the program's data sets are built correctly.
 // This is done to ensure that certain arrays can be accessed via enumeration
 // values rather than indicies (i.e. enumerations must match indecies).
-void VerifyStructuralIntegrity(void) {
+bool_t VerifyStructuralIntegrity(void) {
   int i;
+  bool_t rc = YES;
 
   // patternElement_e and patternSet array.
   for (i = 0; i < PSET_SIZE; i++) {
     if (i != patternSet[i].index) {
       fprintf(stderr, "Programmer error: patternElement_e does not match patternSet array!\n");
       fprintf(stderr, "Element %i, \"%s\" has incorrect enumeration value %i!\n", i, patternSet[i].name, patternSet[i].index);
-      exit(EXIT_FAILURE);
+      rc = NO;
     }
   }
   if (PSET_SIZE != PE_COUNT) {
     fprintf(stderr, "Programmer error: Mismatched patternSet(%i) != patternElement_e(%i)!\n", (int) PSET_SIZE, PE_COUNT);
-    exit(EXIT_FAILURE);
+    rc = NO;
   }
 
   // color_e and namedPalette array.
@@ -1441,16 +1529,16 @@ void VerifyStructuralIntegrity(void) {
     if (i != namedPalette[i].index) {
       fprintf(stderr, "Programmer error: color_e does not match namedPalette array!\n");
       fprintf(stderr, "Element %i, has incorrect enumeration value %i!\n", i, namedPalette[i].index);
-      exit(EXIT_FAILURE);
+      rc = NO;
     }
   }
   if (CE_COUNT != NAMEDPALETTE_SIZE) {
     fprintf(stderr, "Programmer error: Mismatched namedPalette(%i) != color_e(%i)!\n", (int) NAMEDPALETTE_SIZE, CE_COUNT);
-    exit(EXIT_FAILURE);
+    rc = NO;
   }
   if (CE_COUNT != COLORSTEXT_SIZE) {
     fprintf(stderr, "Programmer error: Mismatched color_e(%i) != colorText(%i)!\n", CE_COUNT, (int) COLORSTEXT_SIZE);
-    exit(EXIT_FAILURE);
+    rc = NO;
   }
 
   // enums_e and enumerations array.
@@ -1458,47 +1546,48 @@ void VerifyStructuralIntegrity(void) {
     if (i != enumerations[i].type) {
       fprintf(stderr, "Programmer error: enums_e does not match enumerations array!\n");
       fprintf(stderr, "Element %i, has incorrect enumeration value %i!\n", i, enumerations[i].type);
-      exit(EXIT_FAILURE);
+      rc = NO;
     }
   }
   if (E_COUNT != ENUMERATIONS_SIZE) {
     fprintf(stderr, "Programmer error: Mismatched enums_e(%i) != enumerations(%i)!\n", E_COUNT, (int) ENUMERATIONS_SIZE);
-    exit(EXIT_FAILURE);
+    rc = NO;
   }
 
   // Texts - we can only do a count on these.
   if (DIR_COUNT != DIRTEXT_SIZE) {
     fprintf(stderr, "Programmer error: Mismatched dir_e(%i) != dirText(%i)!\n", DIR_COUNT, (int) DIRTEXT_SIZE);
-    exit(EXIT_FAILURE);
+    rc = NO;
   }
   if (FM_COUNT != FADEMODETEXT_SIZE) {
     fprintf(stderr, "Programmer error: Mismatched fadeModes_e(%i) != fadeModeText(%i)!\n", FM_COUNT, (int) FADEMODETEXT_SIZE);
-    exit(EXIT_FAILURE);
+    rc = NO;
   }
   if (SM_COUNT != SHIFTTEXT_SIZE) {
     fprintf(stderr, "Programmer error: Mismatched shiftModes_e(%i) != shiftText(%i)!\n", SM_COUNT, (int) SHIFTTEXT_SIZE);
-    exit(EXIT_FAILURE);
+    rc = NO;
   }
   if (TS_COUNT != TEXTMODETEXT_SIZE) {
     fprintf(stderr, "Programmer error: Mismatched textMode_e(%i) != textModeText(%i)!\n", TS_COUNT, (int) TEXTMODETEXT_SIZE);
-    exit(EXIT_FAILURE);
+    rc = NO;
   }
   if (CM_COUNT != COLORCYCLETEXT_SIZE) {
     fprintf(stderr, "Programmer error: Mismatched colorCycleModes_e(%i) != colorCycleText(%i)!\n", CM_COUNT, (int) COLORCYCLETEXT_SIZE);
-    exit(EXIT_FAILURE);
+    rc = NO;
   }
   if (CB_COUNT != CROSSBARTEXT_SIZE) {
     fprintf(stderr, "Programmer error: Mismatched crossBar_e(%i) != crossbarText(%i)!\n", CB_COUNT, (int) CROSSBARTEXT_SIZE);
-    exit(EXIT_FAILURE);
+    rc = NO;
   }
   if (OO_COUNT != OPERATETEXT_SIZE) {
     fprintf(stderr, "Programmer error: Mismatched operateOn_e(%i) != operateText(%i)!\n", OO_COUNT, (int) OPERATETEXT_SIZE);
-    exit(EXIT_FAILURE);
+    rc = NO;
   }
+  return rc;
 }
 
 // Allocate the data memory for the pattern sets.
-void AllocatePatternData(void) {
+bool_t AllocatePatternData(void) {
   int i, j;
 
   // Allocate data for each element based on type.  Allocated data will be an
@@ -1510,7 +1599,7 @@ void AllocatePatternData(void) {
         patternSet[i].data = malloc(sizeof(int) * PATTERN_SET_COUNT);
         if (!patternSet[i].data) {
           fprintf(stderr, "Unable to allocate int %i - %s\n", i, patternSet[i].name);
-          exit(EXIT_FAILURE);
+          return NO;
         } else {
           for(j = 0; j < PATTERN_SET_COUNT; j++) {
             SINT(j, i) = patternSet[i].initial.i;
@@ -1522,7 +1611,7 @@ void AllocatePatternData(void) {
         patternSet[i].data = malloc(sizeof(float) * PATTERN_SET_COUNT);
         if (!patternSet[i].data) {
           fprintf(stderr, "Unable to allocate float %i - %s\n", i, patternSet[i].name);
-          exit(EXIT_FAILURE);
+          return NO;
         } else {
           for(j = 0; j < PATTERN_SET_COUNT; j++) {
             SFLOAT(j, i) = patternSet[i].initial.f;
@@ -1534,7 +1623,7 @@ void AllocatePatternData(void) {
         patternSet[i].data = malloc(sizeof(color_t) * PATTERN_SET_COUNT);
         if (!patternSet[i].data) {
           fprintf(stderr, "Unable to allocate color %i - %s\n", i, patternSet[i].name);
-          exit(EXIT_FAILURE);
+          return NO;
         } else {
           for(j = 0; j < PATTERN_SET_COUNT; j++) {
             SCOLOR(j, i) = patternSet[i].initial.c;
@@ -1546,7 +1635,7 @@ void AllocatePatternData(void) {
         patternSet[i].data = malloc(sizeof(unsigned char) * PATTERN_SET_COUNT);
         if (!patternSet[i].data) {
           fprintf(stderr, "Unable to allocate flag %i - %s\n", i, patternSet[i].name);
-          exit(EXIT_FAILURE);
+          return NO;
         } else {
           for(j = 0; j < PATTERN_SET_COUNT; j++) {
             SBOOL(j, i) = patternSet[i].initial.b;
@@ -1557,12 +1646,12 @@ void AllocatePatternData(void) {
       case ET_STRING:
         if (patternSet[i].size <= 0) {
           fprintf(stderr, "Invalid size for element %i (%s) of type string - %i\n", i, patternSet[i].name, patternSet[i].size);
-          exit(EXIT_FAILURE);
+          return NO;
         }
         patternSet[i].data = malloc(sizeof(char) * patternSet[i].size * PATTERN_SET_COUNT);
         if (!patternSet[i].data) {
           fprintf(stderr, "Unable to allocate string %i - %s\n", i, patternSet[i].name);
-          exit(EXIT_FAILURE);
+          return NO;
         } else {
           for (j = 0; j < PATTERN_SET_COUNT; j++) {
             strncpy(SSTRING(j, i), patternSet[i].initial.s, patternSet[i].size);
@@ -1574,13 +1663,13 @@ void AllocatePatternData(void) {
       case ET_BUFFER:
         if (patternSet[i].size <= 0) {
           fprintf(stderr, "Invalid size for element %i (%s) of type string - %i\n", i, patternSet[i].name, patternSet[i].size);
-          exit(EXIT_FAILURE);
+          return NO;
         }
         // Allocate and intialize to 0.
         patternSet[i].data = calloc(patternSet[i].size * PATTERN_SET_COUNT, sizeof(unsigned char));
         if (!patternSet[i].data) {
           fprintf(stderr, "Unable to allocate buffer %i - %s\n", i, patternSet[i].name);
-          exit(EXIT_FAILURE);
+          return NO;
         }
         break;
 
@@ -1624,7 +1713,10 @@ void AllocatePatternData(void) {
       //~ }
     //~ }
   //~ }
+  return YES;
 }
+
+
 // The thing that happens at every frame.
 void DrawNewFrame(int set, unsigned char primary) {
 
@@ -1776,7 +1868,7 @@ void ProcessModes(int set) {
 
   // Averager
   if (DBOOL(PE_DIFFUSE)) {
-    Diffuse(DFLOAT(PE_DIFFUSECOEF), DBUFFER(PE_FRAMEBUFFER));
+    Diffuse(DFLOAT(PE_DIFFUSECOEF), DBOOL(PE_ROLLOVER), DBUFFER(PE_FRAMEBUFFER));
   }
 
   // Clear screen.
@@ -1811,9 +1903,42 @@ void ProcessModes(int set) {
     ClearGreen(currentSet);
   }
 
+  // Mirrors
+  if (DBOOL(PE_MIRROR_V)) {
+    VerticalMirror(DBUFFER(PE_FRAMEBUFFER));
+  }
+
+  if (DBOOL(PE_MIRROR_H)) {
+    HorizontalMirror(DBUFFER(PE_FRAMEBUFFER));
+  }
+
   // Post rotation increment.
   if (DBOOL(PE_POSTRZ)) {
     DFLOAT(PE_POSTRZANGLE) += DFLOAT(PE_POSTRZINC);
+  }
+}
+
+void VerticalMirror(unsigned char * buffer) {
+  int x, y;
+  color_t temp;
+
+  for (x = 0; x < tensorWidth / 2; x++) {
+    for (y = 0; y < tensorHeight; y++) {
+      temp = GetPixel(x, y, buffer);
+      SetPixel((tensorWidth - 1) - x, y, temp, buffer);
+    }
+  }
+}
+
+void HorizontalMirror(unsigned char * buffer) {
+  int x, y;
+  color_t temp;
+
+  for (x = 0; x < tensorWidth; x++) {
+    for (y = 0; y < tensorHeight / 2; y++) {
+      temp = GetPixel(x, y, buffer);
+      SetPixel(x, (tensorHeight - 1) - y, temp, buffer);
+    }
   }
 }
 
@@ -2042,19 +2167,48 @@ void CrossBars(int set) {
   }
 }
 
+// Key press processing for confirmation boxes.
+bool_t HandleConfirmation(SDL_Keycode key, unsigned char *selected) {
+  unsigned char confirmationStillRequired = NO;
+
+  switch (key) {
+    case SDLK_y:
+      SavePatternSet(keySave, setSave, YES);
+      break;
+
+    case SDLK_n:
+    case SDLK_ESCAPE:
+      snprintf(statusText, sizeof(statusText), "Save action cancelled.");
+      break;
+
+    case SDLK_RETURN:
+    case SDLK_SPACE:
+      if (*selected == YES) {
+        SavePatternSet(keySave, setSave, YES);
+      } else {
+        snprintf(statusText, sizeof(statusText), "Save action cancelled.");
+      }
+      break;
+
+    case SDLK_LEFT: case SDLK_RIGHT: case SDLK_UP: case SDLK_DOWN:
+      *selected = !(*selected);
+      confirmationStillRequired = YES;
+      break;
+
+    default:
+      confirmationStillRequired = YES;
+      break;
+  }
+  return confirmationStillRequired;
+}
+
+
 // Key press processing.
-int HandleKey(SDL_Keycode key, SDL_Keymod mod) {
+bool_t HandleKey(int set, SDL_Keycode key, SDL_Keymod mod) {
   int i, j;
-  int set = currentSet;
-
-  // Make sure we're operating on the right set.
-  if (displaySet == OO_ALTERNATE) {
-    set = alternateSet;
-  };
-
 
   // Prolly not necessary.
-  if (key == SDLK_UNKNOWN) return 0;
+  if (key == SDLK_UNKNOWN) return NO;  // NO = Don't exit the program
 
   // To make exact comparisons to mod, left or right equivalents of modifier
   // keys must both be set if one is set.
@@ -2062,54 +2216,11 @@ int HandleKey(SDL_Keycode key, SDL_Keymod mod) {
   if (mod & KMOD_ALT) mod |= KMOD_ALT;
   if (mod & KMOD_SHIFT) mod |= KMOD_SHIFT;
 
-  // Check for confirmation dialog
-  if (confirmRequired) {
-    switch (key) {
-      case SDLK_y:
-        confirmed = YES;
-        SavePatternSet(keySave, setSave);
-        confirmRequired = NO;
-        confirmed = NO;
-        refresh = YES;
-        break;
-
-      case SDLK_n:
-      case SDLK_ESCAPE:
-        snprintf(cText, sizeof(cText), "Save action cancelled.");
-        confirmRequired = NO;
-        confirmed = NO;
-        refresh = YES;
-        break;
-
-      case SDLK_RETURN:
-        if (confirmed == YES) {
-          SavePatternSet(keySave, setSave);
-          confirmRequired = NO;
-          confirmed = NO;
-          refresh = YES;
-        } else {
-          snprintf(cText, sizeof(cText), "Save action cancelled.");
-          confirmRequired = NO;
-          confirmed = NO;
-          refresh = YES;
-        }
-        break;
-
-      case SDLK_LEFT: case SDLK_RIGHT: case SDLK_UP: case SDLK_DOWN:
-        confirmed = !confirmed;
-        break;
-
-      default:
-        break;
-    }
-    return 0;
-  }
-
   // Check to see if the key combination activates a command.
   for ( i = 0 ; i < DISPLAYCOMMAND_SIZE; i++) {
     for (j = 0; j < MOUSE_COUNT; j++) {
       if ((displayCommand[i].commands[j].key == key) && (displayCommand[i].commands[j].mod == mod)) {
-        return(HandleCommand(displayCommand[i].commands[j].command));
+        return(HandleCommand(set, displayCommand[i].commands[j].command));
       }
     }
   }
@@ -2118,7 +2229,7 @@ int HandleKey(SDL_Keycode key, SDL_Keymod mod) {
   for ( i = 0 ; i < OTHERCOMMAND_SIZE; i++) {
     for (j = 0 ; j < MOUSE_COUNT; j++) {
       if ((otherCommand[i].commands[j].key == key) && (otherCommand[i].commands[j].mod == mod)) {
-        return(HandleCommand(otherCommand[i].commands[j].command));
+        return(HandleCommand(set, otherCommand[i].commands[j].command));
       }
     }
   }
@@ -2127,8 +2238,8 @@ int HandleKey(SDL_Keycode key, SDL_Keymod mod) {
   // Save the current pattern set as <key>.now (for 0-9, a-z, only)
   if (mod == (KMOD_ALT | KMOD_SHIFT)) {
     if ((key >= 'a' && key <= 'z') || (key >= '0' && key <= '9')) {
-      SavePatternSet(key, set);
-      return 0;
+      SavePatternSet(key, set, NO);
+      return NO;  // NO = Don't exit the program
     }
   }
 
@@ -2136,7 +2247,7 @@ int HandleKey(SDL_Keycode key, SDL_Keymod mod) {
   if (mod == (KMOD_CTRL | KMOD_SHIFT)) {
     if ((key >= 'a' && key <= 'z') || (key >= '0' && key <= '9')) {
       LoadPatternSet(key, set);
-      return 0;
+      return NO;  // NO = Don't exit the program
     }
   }
 
@@ -2186,20 +2297,38 @@ int HandleKey(SDL_Keycode key, SDL_Keymod mod) {
     if (SINT(set, PE_TEXTINDEX) >= (patternSet[PE_TEXTBUFFER].size - 2)) SINT(set, PE_TEXTINDEX)--;
   }
 
-  return 0;
+  return NO;  // NO = Don't exit the program
 }
 
 // Executes a user command - toggles flags, adjusts parameters, etc.
-int HandleCommand(command_e command) {
+bool_t HandleCommand(int set, command_e command) {
   int i;
 
-  // Support for operating on selected sets.
-  int set = currentSet;
-  if (displaySet == OO_ALTERNATE) {
-    set = alternateSet;
-  }
-
   switch(command) {
+    case COM_MIRROR_H: SBOOL(set, PE_MIRROR_H) = !SBOOL(set, PE_MIRROR_H); break;
+    case COM_MIRROR_V: SBOOL(set, PE_MIRROR_V) = !SBOOL(set, PE_MIRROR_V); break;
+    case COM_FG_WHEEL_UP:
+      SENUM(set, PE_FGCYCLE) = CM_NONE;
+      SENUM(set, PE_FGE) = (SENUM(set, PE_FGE) + 1) % CE_COUNT;
+      SCOLOR(set, PE_FGC) = namedPalette[SENUM(set, PE_FGE)].color;
+      break;
+    case COM_FG_WHEEL_DOWN:
+      SENUM(set, PE_FGCYCLE) = CM_NONE;
+      SENUM(set, PE_FGE)--;
+      if (SENUM(set, PE_FGE) < CE_RED) SENUM(set, PE_FGE) = CE_COUNT - 1;
+      SCOLOR(set, PE_FGC) = namedPalette[SENUM(set, PE_FGE)].color;
+      break;
+    case COM_BG_WHEEL_UP:
+      SENUM(set, PE_BGCYCLE) = CM_NONE;
+      SENUM(set, PE_BGE) = (SENUM(set, PE_BGE) + 1) % CE_COUNT;
+      SCOLOR(set, PE_BGC) = namedPalette[SENUM(set, PE_BGE)].color;
+      break;
+    case COM_BG_WHEEL_DOWN:
+      SENUM(set, PE_BGCYCLE) = CM_NONE;
+      SENUM(set, PE_BGE)--;
+      if (SENUM(set, PE_BGE) < CE_RED) SENUM(set, PE_BGE) = CE_COUNT - 1;
+      SCOLOR(set, PE_BGC) = namedPalette[SENUM(set, PE_BGE)].color;
+      break;
     case COM_CROSSB_RST: SENUM(set, PE_CROSSBAR) = CB_NONE; break;
     case COM_CROSSB_UP: SENUM(set, PE_CROSSBAR) = (SENUM(set, PE_CROSSBAR) + 1) % CB_COUNT; break;
     case COM_CROSSB_DOWN:
@@ -2534,7 +2663,7 @@ int HandleCommand(command_e command) {
     case COM_SCROLL_DOWN: SENUM(set, PE_SCROLLDIR) = DIR_DOWN; break;
     case COM_SCROLL_LEFT: SENUM(set, PE_SCROLLDIR) = DIR_LEFT; break;
     case COM_SCROLL_RIGHT: SENUM(set, PE_SCROLLDIR) = DIR_RIGHT; break;
-    case COM_EXIT: return 1;
+    case COM_EXIT: return YES;  // YES, exit the program.
     case COM_BACKSPACE:
       SINT(set, PE_TEXTINDEX)--;
       if (SINT(set, PE_TEXTINDEX) < 0) SINT(set, PE_TEXTINDEX) = 0;
@@ -2603,35 +2732,52 @@ int HandleCommand(command_e command) {
       cycleFrameCount = SINT(set, PE_FRAMECOUNT);
       break;
   }
-  return 0;
+  return NO;  // NO, don't exit the program.
 }
 
-// Weighted Averager.
-void Diffuse(float diffusionCoeff, unsigned char *buffer) {
-  int x,y,i,j,k,l;
+// Weighted Averager.  Boolean isToroid causes the edges to wrap.
+// Average each pixel with those around it (above, below, left, right) into a
+// new buffer and then copy it back to the original.
+void Diffuse(float diffusionCoeff, bool_t isToroid, unsigned char *buffer) {
+  int x, y, i, j, xx, yy;
   color_t colorTemp, finalColor[TENSOR_WIDTH * TENSOR_HEIGHT];
   float weightSumR, weightSumG, weightSumB;
   float divisor;
 
+  // Go through each pixel
   for (x = 0; x < tensorWidth; x++) {
     for (y = 0; y < tensorHeight; y++) {
-      divisor = 0;
-      weightSumR = 0;
-      weightSumG = 0;
-      weightSumB = 0;
 
+      // Initial values
+      divisor = 0;
+      weightSumR = weightSumG = weightSumB = 0;
+
+      // Find the pixel environment
       for (i = -1; i <= 1; i++) {
         for (j = -1; j <= 1; j++) {
-          k = x + i;
-          l = y + j;
-          if ((k >= 0) && (k < tensorWidth) && (l >= 0) && (l < tensorHeight)) {
-            colorTemp = GetPixel(k, l, buffer);
+          xx = x + i;
+          yy = y + j;
+
+          if (isToroid) {
+            // Wrap around the edges.
+            if (xx < 0) xx = tensorWidth - 1;
+            if (xx >= tensorWidth) xx = 0;
+            if (yy < 0) yy = tensorHeight - 1;
+            if (yy >= tensorHeight) yy = 0;
+          }
+
+          if ((xx >= 0) && (xx < tensorWidth) && (yy >= 0) && (yy < tensorHeight)) {
+            colorTemp = GetPixel(xx, yy, buffer);
+
+            // Pixel 0 (us) counts as 1.
             if ((i == 0) && (j == 0)) {
               weightSumR += colorTemp.r;
               weightSumG += colorTemp.g;
               weightSumB += colorTemp.b;
-              divisor = divisor + 1;
-            } else {
+              divisor = divisor + 1.0;
+
+            // The others count with weight.
+            } else if ((i == 0) || (j == 0)) {
               weightSumR += (diffusionCoeff * colorTemp.r);
               weightSumG += (diffusionCoeff * colorTemp.g);
               weightSumB += (diffusionCoeff * colorTemp.b);
@@ -3211,11 +3357,13 @@ void WriteSlice(int set) {
   switch (DSENUM(PE_SCROLLDIR, dir_e)) {
     case DIR_LEFT:
       sliceColOrRow = tensorWidth - 1;
+      if (DBOOL(PE_MIRROR_V)) sliceColOrRow = (tensorWidth - 1) / 2;
       break;
 
     case DIR_UP:
       horizontal = NO;
       sliceColOrRow = tensorHeight - 1;
+      if (DBOOL(PE_MIRROR_H)) sliceColOrRow = (tensorHeight - 1) / 2;
       break;
 
     case DIR_DOWN:
@@ -3726,7 +3874,7 @@ void UpdateInfoDisplay(int set) {
 
 
   // Show the status bar
-  snprintf(text, sizeof(text), "%-50s", cText);
+  snprintf(text, sizeof(text), "%-50s", statusText);
   WriteLine(text, 53, 2, cBlack, cGray);
 
   // Show the last 100 bytes of the text buffer.
@@ -3738,7 +3886,7 @@ void UpdateInfoDisplay(int set) {
   WriteLine(text, 52, 0, DISPLAY_COLOR_TBUF, DISPLAY_COLOR_TBUFBG);
 }
 
-void WriteBool(int value, int row, int col, int width) {
+void WriteBool(bool_t value, int row, int col, int width) {
   char text[100];
   if (value) {
     snprintf(text, sizeof(text), "%*.*s", width, width, "YES");
@@ -3882,7 +4030,7 @@ void DrawSBox(SDL_Renderer *r, SDL_Rect rect, color_t color) {
 // Draw an image to the output with rotation and expansion.
 // Rotation is acheived using SDL_gfx primitive rotozoom.
 // Angle is given in degrees.  Offsets specify the center (0..1).
-void DrawImage(SDL_Surface *image, double angle, float xoffset, float yoffset, double expansion, int aliasmode, unsigned char *fb_dst) {
+void DrawImage(SDL_Surface *image, double angle, float xoffset, float yoffset, double expansion, bool_t aliasmode, unsigned char *fb_dst) {
   SDL_Surface *s1 = NULL;
   SDL_Surface *s2 = NULL;
   SDL_Rect offset;
@@ -4027,7 +4175,7 @@ void CellFun(int set) {
 
 // Saves a pattern set to a file.
 // Return value indicates if the action requires confirmation.
-void SavePatternSet(char key, int set) {
+void SavePatternSet(char key, int set, unsigned char overWrite) {
   char filename[8] = "";
   FILE *fp;
   int i,j;
@@ -4036,14 +4184,13 @@ void SavePatternSet(char key, int set) {
   snprintf(filename, sizeof(filename), "%c.now", key);
 
   // Check file existence.
-  if (!confirmed) {
+  if (!overWrite) {
     fp = fopen(filename, "r");
     if (fp) {
       fclose(fp);
-      snprintf(cText, sizeof(cText), "Overwrite \"%s\" with set %i?", filename, set);
+      snprintf(statusText, sizeof(statusText), "Overwrite \"%s\" with set %i?", filename, set);
       setSave = set;
       keySave = key;
-      confirmRequired = YES;
       SDL_Event event;
       SDL_zero(event);
       event.type = CONFIRMEventType;
@@ -4060,8 +4207,8 @@ void SavePatternSet(char key, int set) {
   // Open the file for write.
   fp = fopen(filename, "w");
   if (!fp) {
-    snprintf(cText, sizeof(cText), "Failed to open file for output: %s", filename);
-    fprintf(stderr, "%s\n", cText);
+    snprintf(statusText, sizeof(statusText), "Failed to open file for output: %s", filename);
+    fprintf(stderr, "%s\n", statusText);
     return;
   }
 
@@ -4103,7 +4250,7 @@ void SavePatternSet(char key, int set) {
     fprintf(fp, "\n");
   }
   fclose(fp);
-  snprintf(cText, sizeof(cText), "Saved set %i to filename: %s", set, filename);
+  snprintf(statusText, sizeof(statusText), "Saved set %i to filename: %s", set, filename);
 }
 
 // Loads a pattern set from a file.
@@ -4138,7 +4285,7 @@ void LoadPatternSet(char key, int set) {
   fp = fopen(filename, "r");
   if (!fp) {
     fprintf(stderr, "Failed to open file %s\n", filename);
-    snprintf(cText, sizeof(cText), "Failed to open file \"%s\"", filename);
+    snprintf(statusText, sizeof(statusText), "Failed to open file \"%s\"", filename);
     return;
   }
 
@@ -4280,6 +4427,9 @@ void LoadPatternSet(char key, int set) {
               if (z >= 0 && z <= 255 && x == 1) {
                 bufferData[y] = z;
                 y++;
+                if (y >= patternSet[parameterIndex].size) {
+                  break;
+                }
               } else {
                 w = INVALID;
                 break;
@@ -4340,7 +4490,7 @@ void LoadPatternSet(char key, int set) {
   if (!imageSeed[set]) {
     fprintf(stderr, "Unable to load image: \"%s\"\n", DSTRING(PE_IMAGENAME));
   }
-  snprintf(cText, sizeof(cText), "Loaded filename \"%s\" into set %i", filename, currentSet);
+  snprintf(statusText, sizeof(statusText), "Loaded filename \"%s\" into set %i", filename, currentSet);
 }
 
 
@@ -4351,27 +4501,35 @@ void DrawSideBar(int set) {
   switch (DSENUM(PE_SCROLLDIR, dir_e)) {
     case DIR_LEFT:
       for (i = 0; i < tensorHeight; i++) {
-              SetPixel(tensorWidth - 1, i, DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
-            }
-            break;
+        if (DBOOL(PE_MIRROR_V)) {
+          SetPixel((tensorWidth - 1) / 2, i, DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
+        } else {
+          SetPixel(tensorWidth - 1, i, DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
+        }
+      }
+      break;
 
     case DIR_RIGHT:
       for (i = 0; i < tensorHeight; i++) {
-              SetPixel(0, i, DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
-            }
-            break;
+        SetPixel(0, i, DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
+      }
+      break;
 
     case DIR_UP:
       for (i = 0; i < tensorWidth; i++) {
-              SetPixel(i, tensorHeight - 1, DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
-            }
-            break;
+        if (DBOOL(PE_MIRROR_H)) {
+          SetPixel(i, (tensorHeight - 1) / 2, DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
+        } else {
+          SetPixel(i, tensorHeight - 1, DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
+        }
+      }
+      break;
 
     case DIR_DOWN:
       for (i = 0; i < tensorWidth; i++) {
-              SetPixel(i, 0, DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
-            }
-            break;
+        SetPixel(i, 0, DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
+      }
+      break;
     default:
       break;
   }
@@ -4457,9 +4615,9 @@ void DrawConfirmationBox(SDL_Rect *yesBox, SDL_Rect *noBox, unsigned char select
   int tHeight, boxHeight, boxWidth, boxX, boxY;
 
   // Create the texts.
-  t1 = TTF_RenderText_Shaded(screenFont, cText, fg, bg);
+  t1 = TTF_RenderText_Shaded(screenFont, statusText, fg, bg);
   if (!t1) {
-    fprintf(stderr, "SDL error rendering text \"%s\": %s\n", cText, SDL_GetError());
+    fprintf(stderr, "SDL error rendering text \"%s\": %s\n", statusText, SDL_GetError());
     exit(EXIT_FAILURE);
   }
   if (selected == YES) {
