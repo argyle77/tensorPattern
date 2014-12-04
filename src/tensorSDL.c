@@ -11,6 +11,8 @@
 #include <unistd.h>
 #include <string.h>  // memcpy
 #include <time.h>
+#include <errno.h>
+#include <limits.h>
 
 #include <SDL.h>
 #include <SDL_ttf.h>
@@ -122,6 +124,7 @@ typedef union color_t {
 #define CD_DKGRAY     {.r = 63,  .g = 63,  .b = 63,  .a = 255}
 #define CD_BLACK      {.r = 0,   .g = 0,   .b = 0,   .a = 255}
 #define CD_DKYELLOW   {.r = 192, .g = 192, .b = 0,   .a = 255}
+#define CD_LTBLUE     {.r = 127,   .g = 192,   .b = 255, .a = 255}
 
 // Named color constants
 const color_t cRed = CD_RED;
@@ -141,7 +144,8 @@ const color_t cLtGray = CD_LTGRAY;
 const color_t cGray = CD_GRAY;
 const color_t cDkGray = CD_DKGRAY;
 const color_t cBlack = CD_BLACK;
-//~ const color_t cDkYellow = CD_DKYELLOW;
+const color_t cLtBlue = CD_LTBLUE;
+const color_t cDkYellow = CD_DKYELLOW;
 
 // Colors for the info display texts.
 #define DISPLAY_COLOR_PARMS cAzure
@@ -152,7 +156,7 @@ const color_t cBlack = CD_BLACK;
 #define DISPLAY_COLOR_TEXTSBG cBlack
 #define DISPLAY_COLOR_TEXTS_HL cBlack
 #define DISPLAY_COLOR_TEXTSBG_HL cWhite
-#define DISPLAY_COLOR_TBUF cRed
+#define DISPLAY_COLOR_TBUF cLtBlue
 #define DISPLAY_COLOR_TBUFBG cBlack
 #define DISPLAY_COLOR_INFO cGreen
 #define DISPLAY_COLOR_INFOBG cBlack
@@ -249,10 +253,10 @@ const char *shiftText[] = { "Hold", "Up", "Left", "Down", "Right" };
 // Text background modes
 typedef enum textMode_e {
   TS_INVALID = -1,
-  TS_8ROW = 0, TS_9ROWSTAGGER, TS_10ROWBORDER, TS_FULLBG,
+  TS_8ROW = 0, TS_9ROWSTAGGER, TS_10ROWBORDER, TS_FULLBG, TS_NOBG, TS_BLACK,
   TS_COUNT // Last.
 } textMode_e;
-const char *textModeText[] = { "8 Row", "9 Row Stag", "10 Row", "Full BG" };
+const char *textModeText[] = { "8 Row", "9 Row Stag", "10 Row", "Full BG", "No BG", "Black" };
 #define TEXTMODETEXT_SIZE (sizeof(textModeText) / sizeof(const char *))
 
 typedef enum operateOn_e {
@@ -338,13 +342,13 @@ typedef enum patternElement_e {
   PE_DIFFUSECOEF, PE_SCROLLDIR, PE_RANDOMDOTCOEF, PE_FGCYCLE, PE_BGCYCLE,
   PE_FGRAINBOW, PE_BGRAINBOW, PE_POSTEXP, PE_FLOATINC, PE_POSTRZANGLE,
   PE_POSTRZINC, PE_MULTIPLYBY, PE_DELAY, PE_CYCLESAVEFG, PE_CYCLESAVEBG, PE_FGC,
-  PE_BGC, PE_CELLFUNCOUNT, PE_BOUNCESCR, PE_TEXTBUFFER, PE_TEXTMODE,
+  PE_BGC, PE_CELLFUNCOUNT, PE_TEXTBUFFER, PE_TEXTMODE,
   PE_FONTFLIP, PE_FONTDIR, PE_TEXTOFFSET, PE_TEXTINDEX, PE_PIXELINDEX,
   PE_SCROLLDIRLAST, PE_TEXTSEED, PE_FRAMEBUFFER, PE_PRERZANGLE, PE_PRERZALIAS,
   PE_PRERZINC, PE_PRERZEXPAND, PE_FRAMECOUNT, PE_IMAGEANGLE, PE_IMAGEALIAS,
   PE_IMAGEINC, PE_IMAGEEXP, PE_IMAGEXOFFSET, PE_IMAGEYOFFSET, PE_IMAGENAME,
   PE_SNAIL, PE_SNAIL_POS, PE_FASTSNAIL, PE_FASTSNAILP, PE_CROSSBAR, PE_CBLIKELY,
-  PE_MIRROR_V, PE_MIRROR_H,
+  PE_MIRROR_V, PE_MIRROR_H, PE_SCROLLRANDEN, PE_SCROLLRANDOM,
   PE_COUNT // LAst
 } patternElement_e;
 
@@ -357,7 +361,7 @@ typedef enum elementType_e {
 
 // This holds the pattern element initializer, which is of a type determined
 // depending on the element.
-typedef union default_u {
+typedef union valueType_u {
   int i;           // Integer initializer
   int e;           // Enumerated intializer
   float f;         // Float
@@ -365,7 +369,7 @@ typedef union default_u {
   char *s;         // String pointer.
   bool_t b;        // Boolean flag.
   // No buffer initializer.
-} default_u;
+} valueType_u;
 
 // patternElement type - Includes descriptors of the element as well as a
 // pointer (to be allocated) to the element's array of data.
@@ -373,16 +377,20 @@ typedef struct patternElement_t {
   const patternElement_e index;  // Corresponds to patterElement_e
   const char *name;              // String name of the element.  Unique, no spaces!
   const elementType_e type;      // Element type.
-  const default_u initial;       // Initial value.
+  const valueType_u initial;     // Initial value.
+  const valueType_u min;         // Minimum value.
+  const valueType_u max;         // Maximum value.
   const int size;                // Size of array elements (string, buffer)
-  const enums_e etype;            // Enumeration type for ET_ENUM.
+  const enums_e etype;           // Enumeration type for ET_ENUM.
   void *data;                    // Pointer to the element's data.  Allocated later.
 } patternElement_t;
 
 // The pattern elements used by the engine.
+// ints, floats have min & maxes.  enums have etypes.  buffers and string have sizes.
 patternElement_t patternSet[] = {
+//  Access enum,    "Name",        TYPE,      initial,     min,      max,      size,     etype
   { PE_CELLFUN,     "CellFun",     ET_BOOL,   {.b = NO} },
-  { PE_BOUNCER,     "Bouncer",     ET_BOOL,   {.b = NO} },
+  { PE_BOUNCER,     "CycleScroll", ET_INT,    {.i = 0}, {.i = 0}, {.i = INT_MAX} },
   { PE_FADE,        "Fader",       ET_BOOL,   {.b = NO} },
   { PE_DIFFUSE,     "Diffuse",     ET_BOOL,   {.b = NO} },
   { PE_ROLLOVER,    "RollOver",    ET_BOOL,   {.b = NO} },
@@ -411,56 +419,57 @@ patternElement_t patternSet[] = {
   { PE_POSTIMAGE,   "PostImage",   ET_BOOL,   {.b = NO} },
   { PE_FGE,         "FGColorE",    ET_ENUM,   {.e = CE_RED}, .etype = E_COLORS },
   { PE_BGE,         "BGColorE",    ET_ENUM,   {.e = CE_BLACK}, .etype = E_COLORS },
-  { PE_FADEINC,     "FadeIncr",    ET_INT,    {.i = INITIAL_FADE_INC} },
-  { PE_DIFFUSECOEF, "DiffuseCoef", ET_FLOAT,  {.f = INITIAL_DIFF_COEF} },
+  { PE_FADEINC,     "FadeIncr",    ET_INT,    {.i = INITIAL_FADE_INC}, {.i = INT_MIN}, {.i = INT_MAX} },
+  { PE_DIFFUSECOEF, "DiffuseCoef", ET_FLOAT,  {.f = INITIAL_DIFF_COEF}, {.f = -1000}, {.f = 1000} },
   { PE_SCROLLDIR,   "ScrollDir",   ET_ENUM,   {.e = INITIAL_DIR}, .etype = E_DIRECTIONS },
-  { PE_RANDOMDOTCOEF,"DotCoef",    ET_INT,    {.i = INITIAL_RAND_MOD} },
+  { PE_RANDOMDOTCOEF,"DotCoef",    ET_INT,    {.i = INITIAL_RAND_MOD}, {.i = 1}, {.i = 20000} },
   { PE_FGCYCLE,     "FGCycleMode", ET_ENUM,   {.e = CM_NONE}, .etype = E_COLORCYCLES },
   { PE_BGCYCLE,     "BGCycleMode", ET_ENUM,   {.e = CM_NONE}, .etype = E_COLORCYCLES },
-  { PE_FGRAINBOW,   "RainbowFG",   ET_INT,    {.i = INITIAL_RAINBOW_INC} },
-  { PE_BGRAINBOW,   "RainbowBG",   ET_INT,    {.i = INITIAL_RAINBOW_INC} },
-  { PE_POSTEXP,     "Expansion",   ET_FLOAT,  {.f = INITIAL_EXPAND} },
-  { PE_FLOATINC,    "FloatInc",    ET_FLOAT,  {.f = INITIAL_FLOAT_INC} },
-  { PE_POSTRZANGLE, "PostRotAngle",ET_FLOAT,  {.f = INITIAL_POSTROT_ANGLE} },
-  { PE_POSTRZINC,   "PostRotInc",  ET_FLOAT,  {.f = INITIAL_POSTROT_INC} },
-  { PE_MULTIPLYBY,  "MultiplyBy",  ET_FLOAT,  {.f = INITIAL_MULTIPLIER} },
-  { PE_DELAY,       "Delay",       ET_INT,    {.i = INITIAL_DELAY} },
-  { PE_CYCLESAVEFG, "FGCyclePos",  ET_INT,    {.i = 0} },
-  { PE_CYCLESAVEBG, "BGCyclePos",  ET_INT,    {.i = 0} },
+  { PE_FGRAINBOW,   "RainbowFG",   ET_INT,    {.i = INITIAL_RAINBOW_INC}, {.i = INT_MIN}, {.i = INT_MAX} },
+  { PE_BGRAINBOW,   "RainbowBG",   ET_INT,    {.i = INITIAL_RAINBOW_INC}, {.i = INT_MIN}, {.i = INT_MAX} },
+  { PE_POSTEXP,     "Expansion",   ET_FLOAT,  {.f = INITIAL_EXPAND}, {.f = -20}, {.f = 20}  },
+  { PE_FLOATINC,    "FloatInc",    ET_FLOAT,  {.f = INITIAL_FLOAT_INC}, {.f = 0.00001}, {.f = 1000000000} },
+  { PE_POSTRZANGLE, "PostRotAngle",ET_FLOAT,  {.f = INITIAL_POSTROT_ANGLE}, {.f = -999999999}, {.f = 1000000000 } },
+  { PE_POSTRZINC,   "PostRotInc",  ET_FLOAT,  {.f = INITIAL_POSTROT_INC}, {.f = -999999999}, {.f = 1000000000} },
+  { PE_MULTIPLYBY,  "MultiplyBy",  ET_FLOAT,  {.f = INITIAL_MULTIPLIER}, {.f = -999999999 }, {.f = 1000000000} },
+  { PE_DELAY,       "Delay",       ET_INT,    {.i = INITIAL_DELAY}, {.i = 1}, {.i = INT_MAX}},
+  { PE_CYCLESAVEFG, "FGCyclePos",  ET_INT,    {.i = 0} }, // Not user
+  { PE_CYCLESAVEBG, "BGCyclePos",  ET_INT,    {.i = 0} }, // Not user
   { PE_FGC,         "FGColorC",    ET_COLOR,  {.c = CD_RED} },
   { PE_BGC,         "BGColorC",    ET_COLOR,  {.c = CD_BLACK} },
-  { PE_CELLFUNCOUNT,"CellFunCt",   ET_INT,    {.i = 0} },
-  { PE_BOUNCESCR,   "BounceScr",   ET_ENUM,   {.e = DIR_UP}, .etype = E_DIRECTIONS },
-  { PE_TEXTBUFFER,  "TextBuffer",  ET_STRING, {.s = INITIAL_TEXT}, TEXT_BUFFER_SIZE },
+  { PE_CELLFUNCOUNT,"CellFunCt",   ET_INT,    {.i = 0} }, // Not user
+  { PE_TEXTBUFFER,  "TextBuffer",  ET_STRING, {.s = INITIAL_TEXT}, .size = TEXT_BUFFER_SIZE },
   { PE_TEXTMODE,    "TextMode",    ET_ENUM,   {.e = TS_FULLBG}, .etype = E_TEXTMODES },
-  { PE_FONTFLIP,    "FontFlip",    ET_BOOL,   {.b = NO } },
+  { PE_FONTFLIP,    "FontFlip",    ET_BOOL,   {.b = NO} },
   { PE_FONTDIR,     "FontDir",     ET_BOOL,   {.b = FORWARDS} },
-  { PE_TEXTOFFSET,  "TextOffset",  ET_INT,    {.i = TENSOR_HEIGHT / 3 - 1} },
-  { PE_TEXTINDEX,   "TextIndex",   ET_INT,    {.i = sizeof(INITIAL_TEXT) - 1} },
-  { PE_PIXELINDEX,  "PixelIndex",  ET_INT,    {.i = INVALID} },
+  { PE_TEXTOFFSET,  "TextOffset",  ET_INT,    {.i = TENSOR_HEIGHT / 3 - 1}, {.i = 0}, {.i = TENSOR_WIDTH} },
+  { PE_TEXTINDEX,   "TextIndex",   ET_INT,    {.i = sizeof(INITIAL_TEXT) - 1} }, // Not user
+  { PE_PIXELINDEX,  "PixelIndex",  ET_INT,    {.i = INVALID} }, // Not user
   { PE_SCROLLDIRLAST,"ScrollDirLast",ET_ENUM, {.e = INITIAL_DIR}, .etype = E_DIRECTIONS },
   { PE_TEXTSEED,    "TextSeed",    ET_BOOL,   {.b = YES} },
   { PE_FRAMEBUFFER, "FrameBuffer", ET_BUFFER, .size = TENSOR_BYTES },
-  { PE_PRERZANGLE,  "PreRotAngle", ET_FLOAT,  {.f = INITIAL_PREROT_ANGLE} },
+  { PE_PRERZANGLE,  "PreRotAngle", ET_FLOAT,  {.f = INITIAL_PREROT_ANGLE}, {.f = -999999999}, {.f = 1000000000} },
   { PE_PRERZALIAS,  "PreRotAlias", ET_BOOL,   {.b = NO} },
-  { PE_PRERZINC,    "PreRotInc",   ET_FLOAT,  {.f = INITIAL_POSTROT_INC} },
-  { PE_PRERZEXPAND, "PreRotExp",   ET_FLOAT,  {.f = INITIAL_PREEXPAND} },
-  { PE_FRAMECOUNT,  "CycleFCount", ET_INT,    {.i = INITIAL_FRAMECYCLECOUNT} },
-  { PE_IMAGEANGLE,  "ImageAngle",  ET_FLOAT,  {.f = INITIAL_IMAGE_ANGLE} },
+  { PE_PRERZINC,    "PreRotInc",   ET_FLOAT,  {.f = INITIAL_POSTROT_INC}, {.f = -999999999}, {.f = 1000000000} },
+  { PE_PRERZEXPAND, "PreRotExp",   ET_FLOAT,  {.f = INITIAL_PREEXPAND}, {.f = -20}, {.f = 20} },
+  { PE_FRAMECOUNT,  "CycleFCount", ET_INT,    {.i = INITIAL_FRAMECYCLECOUNT}, {.i = 1}, {.i = INT_MAX} },
+  { PE_IMAGEANGLE,  "ImageAngle",  ET_FLOAT,  {.f = INITIAL_IMAGE_ANGLE}, {.f = -999999999}, {.f = 1000000000} },
   { PE_IMAGEALIAS,  "ImageAlias",  ET_BOOL,   {.b = NO} },
-  { PE_IMAGEINC,    "ImageInc",    ET_FLOAT,  {.f = INITIAL_IMAGE_INC} },
-  { PE_IMAGEEXP,    "ImageExp",    ET_FLOAT,  {.f = INITIAL_IMAGE_EXPAND} },
-  { PE_IMAGEXOFFSET,"ImageXOffset",ET_FLOAT,  {.f = INITIAL_IMAGE_XOFFSET} },
-  { PE_IMAGEYOFFSET,"ImageYOffset",ET_FLOAT,  {.f = INITIAL_IMAGE_YOFFSET} },
-  { PE_IMAGENAME,   "ImageName",   ET_STRING, {.s = INITIAL_IMAGE}, 1024},
+  { PE_IMAGEINC,    "ImageInc",    ET_FLOAT,  {.f = INITIAL_IMAGE_INC}, {.f = -999999999}, {.f = 1000000000} },
+  { PE_IMAGEEXP,    "ImageExp",    ET_FLOAT,  {.f = INITIAL_IMAGE_EXPAND}, {.f = -20}, {.f = 20} },
+  { PE_IMAGEXOFFSET,"ImageXOffset",ET_FLOAT,  {.f = INITIAL_IMAGE_XOFFSET}, {.f = 0}, {.f = 1} },
+  { PE_IMAGEYOFFSET,"ImageYOffset",ET_FLOAT,  {.f = INITIAL_IMAGE_YOFFSET}, {.f = 0}, {.f = 1} },
+  { PE_IMAGENAME,   "ImageName",   ET_STRING, {.s = INITIAL_IMAGE}, .size = 1024},
   { PE_SNAIL,       "SnailShot",   ET_BOOL,   {.b = NO} },
-  { PE_SNAIL_POS,   "SnailPos",    ET_INT,    {.i = 0} },
+  { PE_SNAIL_POS,   "SnailPos",    ET_INT,    {.i = 0} }, // Not user
   { PE_FASTSNAIL,   "FastSnail",   ET_BOOL,   {.b = NO} },
-  { PE_FASTSNAILP,  "FastSnailP",  ET_INT,    {.i = 0} },
+  { PE_FASTSNAILP,  "FastSnailP",  ET_INT,    {.i = 0} }, // Not user
   { PE_CROSSBAR,    "Crossbar",    ET_ENUM,   {.e = CB_NONE}, .etype = E_CROSSBAR },
-  { PE_CBLIKELY,    "CrossLikely", ET_INT,    {.i = 1002 } },
+  { PE_CBLIKELY,    "CrossLikely", ET_INT,    {.i = 1002 }, {.i = 1}, {.i = INT_MAX} },
   { PE_MIRROR_V,    "MirrorV",     ET_BOOL,   {.b = NO } },
   { PE_MIRROR_H,    "MirrorH",     ET_BOOL,   {.b = NO } },
+  { PE_SCROLLRANDEN,"ScrollRandE", ET_BOOL,   {.b = NO } },
+  { PE_SCROLLRANDOM,"ScrollRand",  ET_INT,    {.i = 50 }, {.i = 1}, {.i = INT_MAX} },
 };
 #define PSET_SIZE (sizeof(patternSet) / sizeof(patternElement_t))
 #define GLOBAL_PATTERN_ELEMENT_ARRAY patternSet
@@ -498,7 +507,7 @@ patternElement_t patternSet[] = {
 // User Commands - Order mostly unimportant.
 typedef enum command_e {
   COM_INVALID = -1, COM_NONE = 0,
-  COM_CELL = 1, COM_BOUNCE, COM_FADE, COM_DIFFUSE, COM_TEXT, COM_ROLL,
+  COM_CELL = 1, COM_BOUNCE_RST, COM_FADE, COM_DIFFUSE, COM_TEXT, COM_ROLL,
   COM_SCROLL, COM_HBAR, COM_VBAR, COM_FGALL, COM_BGALL, COM_RDOT, COM_CYCLESET,
   COM_FADEMODE, COM_TEXTRESET, COM_POSTROTATE, COM_MODEOFF, COM_PREROTATE,
   COM_AA, COM_MULTIPLY, COM_SIDEBAR, COM_NORED, COM_NOGREEN, COM_NOBLUE,
@@ -538,7 +547,8 @@ typedef enum command_e {
   COM_BLENDSWITCH, COM_SNAIL, COM_SNAILFAST, COM_CB_RST, COM_CB_UP, COM_CB_DOWN,
   COM_CROSSB_RST, COM_CROSSB_UP, COM_CROSSB_DOWN, COM_FG_WHEEL_UP,
   COM_FG_WHEEL_DOWN, COM_BG_WHEEL_UP, COM_BG_WHEEL_DOWN, COM_MIRROR_V,
-  COM_MIRROR_H,
+  COM_MIRROR_H, COM_SCROLL_RAND_RST, COM_SCROLL_RAND_UP, COM_SCROLL_RAND_DOWN,
+  COM_SCROLL_RAND_EN, COM_BOUNCE_DOWN, COM_BOUNCE_UP,
   COM_COUNT // Last
 } command_e;
 
@@ -572,40 +582,35 @@ const command_t displayCommand[] = {
   #define ROW_PA 0
   #define COL_PA 2
   {ROW_PA + 1, COL_PA, "Cycle through pattern sets",   PE_INVALID,  {{KMOD_CTRL, SDLK_g, COM_CYCLESET}}},
-  {ROW_PA + 2, COL_PA, "Frames to play this set:", PE_FRAMECOUNT, {{0, 0, COM_FCOUNT_RST}, {0, 0, COM_FCOUNT_INC}, {0, 0, COM_FCOUNT_DEC}}},
-  {ROW_PA + 8, COL_PA, "Live pattern set (left):",PE_INVALID, {{0, 0, COM_LIVE_INC}, {}, {0, 0, COM_LIVE_DEC}}},
-  {ROW_PA + 9, COL_PA, "Alternate preview set (right):",PE_INVALID, {{0, 0, COM_ALTERNATE_INC}, {}, {0, 0, COM_ALTERNATE_DEC}}},
-  {ROW_PA + 10,COL_PA, "Control operate on set:",     PE_INVALID, {{0, 0, COM_OPERATE}}},
+  {ROW_PA + 2, COL_PA, "Frames to play this set", PE_FRAMECOUNT, {{0, 0, COM_FCOUNT_RST}, {0, 0, COM_FCOUNT_INC}, {0, 0, COM_FCOUNT_DEC}}},
+  {ROW_PA + 8, COL_PA, "Live pattern set (left)",PE_INVALID, {{0, 0, COM_LIVE_INC}, {}, {0, 0, COM_LIVE_DEC}}},
+  {ROW_PA + 9, COL_PA, "Alternate preview set (right)",PE_INVALID, {{0, 0, COM_ALTERNATE_INC}, {}, {0, 0, COM_ALTERNATE_DEC}}},
+  {ROW_PA + 10,COL_PA, "Control operate on set",     PE_INVALID, {{0, 0, COM_OPERATE}}},
   {ROW_PA + 11,COL_PA, "Exchange live and alternate sets", PE_INVALID, {{0, 0, COM_EXCHANGE}}},
-  {ROW_PA + 12,COL_PA, "Alternate set blending amount:", PE_INVALID, {{0, 0, COM_BLEND_RST}, {0, 0, COM_BLEND_INC}, {0, 0, COM_BLEND_DEC}}},
+  {ROW_PA + 12,COL_PA, "Alternate set blending amount", PE_INVALID, {{0, 0, COM_BLEND_RST}, {0, 0, COM_BLEND_INC}, {0, 0, COM_BLEND_DEC}}},
   {ROW_PA + 13,COL_PA, "Auto blend & switch sets", PE_INVALID, {{0, 0, COM_BLENDSWITCH}}},
-  {ROW_PA + 14,COL_PA, "Auto blend rate:", PE_INVALID, {{0, 0, COM_BLENDINC_RST},{0, 0, COM_BLENDINC_INC}, {0, 0, COM_BLENDINC_DEC}}},
+  {ROW_PA + 14,COL_PA, "Auto blend rate", PE_INVALID, {{0, 0, COM_BLENDINC_RST},{0, 0, COM_BLENDINC_INC}, {0, 0, COM_BLENDINC_DEC}}},
 
   // Auxillary
   #define ROW_A 46
   #define COL_A 4
-  {ROW_A + 1, COL_A, "Frame delay(ms):", PE_DELAY,    {{0, 0, COM_DELAY_RST}, {0, 0, COM_DELAY_INC}, {0, 0, COM_DELAY_DEC}}},
-  {ROW_A + 2, COL_A, "Float step:", PE_FLOATINC, {{KMOD_ALT, SDLK_COMMA, COM_STEP_RST}, {KMOD_ALT, SDLK_m, COM_STEP_INC}, {KMOD_ALT, SDLK_PERIOD, COM_STEP_DEC}}},
+  {ROW_A + 1, COL_A, "Frame delay(ms)", PE_DELAY,    {{0, 0, COM_DELAY_RST}, {0, 0, COM_DELAY_INC}, {0, 0, COM_DELAY_DEC}}},
+  {ROW_A + 2, COL_A, "Float step", PE_FLOATINC, {{KMOD_ALT, SDLK_COMMA, COM_STEP_RST}, {KMOD_ALT, SDLK_m, COM_STEP_INC}, {KMOD_ALT, SDLK_PERIOD, COM_STEP_DEC}}},
   {ROW_A + 3, COL_A, "All modes off",   PE_INVALID,  {{KMOD_CTRL, SDLK_l, COM_MODEOFF}}},
 
   // Plane suppression
-  #define ROW_P 37
-  #define COL_P 0
-  {ROW_P + 1, COL_P, "Supress red:",     PE_NORED,    {{KMOD_CTRL, SDLK_m, COM_NORED}}},
-  {ROW_P + 2, COL_P, "Supress green:",   PE_NOGREEN,  {{KMOD_CTRL, SDLK_COMMA, COM_NOGREEN}}},
-  {ROW_P + 3, COL_P, "Supress blue:",    PE_NOBLUE,   {{KMOD_CTRL, SDLK_PERIOD, COM_NOBLUE}}},
+  #define ROW_P 35
+  #define COL_P 2
+  {ROW_P + 1, COL_P, "Supress red",     PE_NORED,    {{KMOD_CTRL, SDLK_m, COM_NORED}}},
+  {ROW_P + 2, COL_P, "Supress green",   PE_NOGREEN,  {{KMOD_CTRL, SDLK_COMMA, COM_NOGREEN}}},
+  {ROW_P + 3, COL_P, "Supress blue",    PE_NOBLUE,   {{KMOD_CTRL, SDLK_PERIOD, COM_NOBLUE}}},
 
   // Diffusion
-  #define ROW_D 18
+  #define ROW_D 15
   #define COL_D 2
-  {ROW_D + 1, COL_D, "Enable:",      PE_DIFFUSE,     {{KMOD_CTRL, SDLK_r, COM_DIFFUSE}}},
-  {ROW_D + 2, COL_D, "Coefficient:", PE_DIFFUSECOEF, {{KMOD_ALT, SDLK_w, COM_DIFFUSE_RST}, {KMOD_ALT, SDLK_q, COM_DIFFUSE_INC}, {KMOD_ALT, SDLK_e, COM_DIFFUSE_DEC}}},
+  {ROW_D + 1, COL_D, "Enable",      PE_DIFFUSE,     {{KMOD_CTRL, SDLK_r, COM_DIFFUSE}}},
+  {ROW_D + 2, COL_D, "Coefficient", PE_DIFFUSECOEF, {{KMOD_ALT, SDLK_w, COM_DIFFUSE_RST}, {KMOD_ALT, SDLK_q, COM_DIFFUSE_INC}, {KMOD_ALT, SDLK_e, COM_DIFFUSE_DEC}}},
 
-  // Random Dots
-  #define ROW_R 15
-  #define COL_R 2
-  {ROW_R + 1, COL_R, "Enable:",     PE_RANDOMDOT,     {{KMOD_CTRL, SDLK_s, COM_RDOT}}},
-  {ROW_R + 2, COL_R, "Randomness:", PE_RANDOMDOTCOEF, {{KMOD_ALT, SDLK_LEFTBRACKET, COM_RANDOM_RST}, {KMOD_ALT, SDLK_p, COM_RANDOM_INC}, {KMOD_ALT, SDLK_RIGHTBRACKET, COM_RANDOM_DEC}}},
 
   // One shot seeds
   #define ROW_O 23
@@ -615,99 +620,111 @@ const command_t displayCommand[] = {
   {ROW_O + 3, COL_O, "Foreground all",  PE_INVALID,  {{KMOD_CTRL, SDLK_p, COM_FGALL}}},
   {ROW_O + 4, COL_O, "Background all",  PE_INVALID,  {{KMOD_CTRL, SDLK_a, COM_BGALL}}},
   {ROW_O + 5, COL_O, "Image seed",      PE_INVALID,  {{0, 0, COM_IMAGEALL}}},
-  {ROW_O + 6, COL_O, "Snail seed",      PE_SNAIL,    {{0, 0, COM_SNAIL}}},
-  {ROW_O + 7, COL_O, "Fast snail seed", PE_FASTSNAIL,{{0, 0, COM_SNAILFAST}}},
+  {ROW_O + 6, COL_O, "Small snail seed",      PE_SNAIL,    {{0, 0, COM_SNAIL}}},
+  {ROW_O + 7, COL_O, "Large snail seed", PE_FASTSNAIL,{{0, 0, COM_SNAILFAST}}},
 
-    // Misc
+    // Persistent Seeds
   #define ROW_MI (ROW_O + 8)
   #define COL_MI COL_O
-  {ROW_MI + 1, COL_MI, "Cell pattern:",    PE_CELLFUN,  {{KMOD_CTRL, SDLK_q, COM_CELL}}},
-  {ROW_MI + 2, COL_MI, "Bouncer:",         PE_BOUNCER,  {{KMOD_CTRL, SDLK_w, COM_BOUNCE}}},
-  {ROW_MI + 3, COL_MI, "Sidebar seed:",    PE_BARSEED,  {{KMOD_CTRL, SDLK_n, COM_SIDEBAR}}},
-  {ROW_MI + 4, COL_MI, "Crossbar seeds:",  PE_CROSSBAR, {{0, 0, COM_CROSSB_RST}, {0, 0, COM_CROSSB_UP}, {0, 0, COM_CROSSB_DOWN}}},
-  {ROW_MI + 5, COL_MI, "Crossbar randomness:",  PE_CBLIKELY, {{0, 0, COM_CB_RST}, {0, 0, COM_CB_UP}, {0, 0, COM_CB_DOWN}}},
+  {ROW_MI + 1, COL_MI, "Cell pattern",    PE_CELLFUN,  {{KMOD_CTRL, SDLK_q, COM_CELL}}},
+  {ROW_MI + 2, COL_MI, "Sidebar seed",    PE_BARSEED,  {{KMOD_CTRL, SDLK_n, COM_SIDEBAR}}},
+
+  // Crossbar seeds
+  #define ROW_CB (ROW_MI + 3)
+  #define COL_CB COL_MI
+  {ROW_CB + 1, COL_CB, "Enable",  PE_CROSSBAR, {{0, 0, COM_CROSSB_RST}, {0, 0, COM_CROSSB_UP}, {0, 0, COM_CROSSB_DOWN}}},
+  {ROW_CB + 2, COL_CB, "Randomness",  PE_CBLIKELY, {{0, 0, COM_CB_RST}, {0, 0, COM_CB_UP}, {0, 0, COM_CB_DOWN}}},
+
+  // Random Dots
+  #define ROW_R (ROW_CB + 3)
+  #define COL_R COL_CB
+  {ROW_R + 1, COL_R, "Enable",     PE_RANDOMDOT,     {{KMOD_CTRL, SDLK_s, COM_RDOT}}},
+  {ROW_R + 2, COL_R, "Randomness", PE_RANDOMDOTCOEF, {{KMOD_ALT, SDLK_LEFTBRACKET, COM_RANDOM_RST}, {KMOD_ALT, SDLK_p, COM_RANDOM_INC}, {KMOD_ALT, SDLK_RIGHTBRACKET, COM_RANDOM_DEC}}},
 
   // Fader
-  #define ROW_F 21
+  #define ROW_F 18
   #define COL_F 2
-  {ROW_F + 1, COL_F, "Enable:",           PE_FADE,     {{KMOD_CTRL, SDLK_e,  COM_FADE}}},
-  {ROW_F + 2, COL_F, "Amount:",     PE_FADEINC,  {{KMOD_ALT, SDLK_x, COM_FADE_RST}, {KMOD_ALT, SDLK_z, COM_FADE_INC}, {KMOD_ALT, SDLK_c, COM_FADE_DEC}}},
-  {ROW_F + 3, COL_F, "Mode:",      PE_FADEMODE, {{KMOD_CTRL, SDLK_h, COM_FADEMODE}}},
+  {ROW_F + 1, COL_F, "Enable",           PE_FADE,     {{KMOD_CTRL, SDLK_e,  COM_FADE}}},
+  {ROW_F + 2, COL_F, "Amount",     PE_FADEINC,  {{KMOD_ALT, SDLK_x, COM_FADE_RST}, {KMOD_ALT, SDLK_z, COM_FADE_INC}, {KMOD_ALT, SDLK_c, COM_FADE_DEC}}},
+  {ROW_F + 3, COL_F, "Mode",      PE_FADEMODE, {{KMOD_CTRL, SDLK_h, COM_FADEMODE}}},
 
   // Multiplier
-  #define ROW_M 25
+  #define ROW_M 22
   #define COL_M 2
-  {ROW_M + 1, COL_M, "Enable:",      PE_MULTIPLY, {{KMOD_CTRL, SDLK_c, COM_MULTIPLY}}},
-  {ROW_M + 2, COL_M, "Multiply by:", PE_MULTIPLYBY, {{KMOD_ALT, SDLK_i, COM_MULT_RST}, {KMOD_ALT, SDLK_u, COM_MULT_INC}, {KMOD_ALT, SDLK_o, COM_MULT_DEC}}},
+  {ROW_M + 1, COL_M, "Enable",      PE_MULTIPLY, {{KMOD_CTRL, SDLK_c, COM_MULTIPLY}}},
+  {ROW_M + 2, COL_M, "Multiply by", PE_MULTIPLYBY, {{KMOD_ALT, SDLK_i, COM_MULT_RST}, {KMOD_ALT, SDLK_u, COM_MULT_INC}, {KMOD_ALT, SDLK_o, COM_MULT_DEC}}},
 
   // Mirrors
-  #define ROW_MIR 28
+  #define ROW_MIR 25
   #define COL_MIR 2
   {ROW_MIR + 1, COL_MIR, "Vertical Mirror", PE_MIRROR_V, {{0, 0, COM_MIRROR_V}}},
   {ROW_MIR + 2, COL_MIR, "Horizontal Mirror", PE_MIRROR_H, {{0, 0, COM_MIRROR_H}}},
 
   // Colors
-  #define ROW_C 33
+  #define ROW_C 28
   #define COL_C 2
-  {ROW_C + 1, COL_C, "Foreground:",    PE_FGE,       {{KMOD_ALT | KMOD_CTRL, SDLK_q, COM_FG_INC}, {}, {KMOD_ALT | KMOD_CTRL, SDLK_w, COM_FG_DEC}}},
-  {ROW_C + 2, COL_C, "Background:",    PE_BGE,       {{KMOD_ALT | KMOD_CTRL, SDLK_a, COM_BG_INC}, {}, {KMOD_ALT | KMOD_CTRL, SDLK_s, COM_BG_DEC}}},
-  {ROW_C + 3, COL_C, "FG cycle mode:", PE_FGCYCLE,   {{0, 0, COM_FGCYCLE_RST}, {KMOD_CTRL, SDLK_d, COM_FGCYCLE_UP}, {0, 0, COM_FGCYCLE_DOWN}}},
-  {ROW_C + 4, COL_C, "BG cycle mode:", PE_BGCYCLE,   {{0, 0, COM_BGCYCLE_RST}, {KMOD_CTRL, SDLK_f, COM_BGCYCLE_UP}, {0, 0, COM_BGCYCLE_DOWN}}},
-  {ROW_C + 5, COL_C, "FG Delta:",      PE_FGRAINBOW, {{KMOD_ALT, SDLK_g, COM_FGRAINBOW_RST}, {KMOD_ALT, SDLK_f, COM_FGRAINBOW_INC}, {KMOD_ALT, SDLK_h, COM_FGRAINBOW_DEC}}},
-  {ROW_C + 6, COL_C, "BG Delta:",      PE_BGRAINBOW ,{{0, 0, COM_BGRAINBOW_RST}, {0, 0, COM_BGRAINBOW_INC}, {0, 0, COM_BGRAINBOW_DEC}}},
+  {ROW_C + 1, COL_C, "Foreground",    PE_FGE,       {{KMOD_ALT | KMOD_CTRL, SDLK_q, COM_FG_INC}, {}, {KMOD_ALT | KMOD_CTRL, SDLK_w, COM_FG_DEC}}},
+  {ROW_C + 2, COL_C, "Background",    PE_BGE,       {{KMOD_ALT | KMOD_CTRL, SDLK_a, COM_BG_INC}, {}, {KMOD_ALT | KMOD_CTRL, SDLK_s, COM_BG_DEC}}},
+  {ROW_C + 3, COL_C, "FG cycle mode", PE_FGCYCLE,   {{0, 0, COM_FGCYCLE_RST}, {KMOD_CTRL, SDLK_d, COM_FGCYCLE_UP}, {0, 0, COM_FGCYCLE_DOWN}}},
+  {ROW_C + 4, COL_C, "BG cycle mode", PE_BGCYCLE,   {{0, 0, COM_BGCYCLE_RST}, {KMOD_CTRL, SDLK_f, COM_BGCYCLE_UP}, {0, 0, COM_BGCYCLE_DOWN}}},
+  {ROW_C + 5, COL_C, "FG Delta",      PE_FGRAINBOW, {{KMOD_ALT, SDLK_g, COM_FGRAINBOW_RST}, {KMOD_ALT, SDLK_f, COM_FGRAINBOW_INC}, {KMOD_ALT, SDLK_h, COM_FGRAINBOW_DEC}}},
+  {ROW_C + 6, COL_C, "BG Delta",      PE_BGRAINBOW ,{{0, 0, COM_BGRAINBOW_RST}, {0, 0, COM_BGRAINBOW_INC}, {0, 0, COM_BGRAINBOW_DEC}}},
 
   // Scrollers
-  #define ROW_S 41
+  #define ROW_S 39
   #define COL_S 2
-  {ROW_S + 1, COL_S, "Scroller:",        PE_SCROLL,       {{KMOD_CTRL, SDLK_u, COM_SCROLL}}},
-  {ROW_S + 2, COL_S, "(<a>) <arrows> - Scroll dir:", PE_SCROLLDIR, {{0, 0, COM_SCROLL_CYCLE_UP}, {}, {0, 0, COM_SCROLL_CYCLE_DOWN}}},
-  {ROW_S + 3, COL_S, "Scroll rollover:", PE_ROLLOVER, {{KMOD_CTRL, SDLK_y, COM_ROLL}}},
-  {ROW_S + 4, COL_S, "Red plane:",       PE_SHIFTRED,     {{0, 0, COM_RP_RST}, {KMOD_CTRL, SDLK_LEFTBRACKET, COM_RP_UP}, {0, 0, COM_RP_DOWN}}},
-  {ROW_S + 5, COL_S, "Green plane:",     PE_SHIFTGREEN,   {{0, 0, COM_GP_RST}, {KMOD_CTRL, SDLK_RIGHTBRACKET, COM_GP_UP}, {0, 0, COM_GP_DOWN}}},
-  {ROW_S + 6, COL_S, "Blue plane:",      PE_SHIFTBLUE,    {{0, 0, COM_BP_RST}, {KMOD_CTRL, SDLK_BACKSLASH, COM_BP_UP}, {0, 0, COM_BP_DOWN}}},
-  {ROW_S + 7, COL_S, "Cyan plane:",      PE_SHIFTCYAN,    {{0, 0, COM_CP_RST}, {KMOD_CTRL | KMOD_ALT, SDLK_LEFTBRACKET, COM_CP_UP}, {0, 0, COM_CP_DOWN}}},
-  {ROW_S + 8, COL_S, "Yellow plane:",    PE_SHIFTYELLOW,  {{0, 0, COM_YP_RST}, {KMOD_CTRL | KMOD_ALT, SDLK_RIGHTBRACKET, COM_YP_UP}, {0, 0, COM_YP_DOWN}}},
-  {ROW_S + 9, COL_S, "Magenta plane:",   PE_SHIFTMAGENTA, {{0, 0, COM_MP_RST}, {KMOD_CTRL | KMOD_ALT, SDLK_BACKSLASH, COM_MP_UP}, {0, 0, COM_MP_DOWN}}},
+  {ROW_S + 1, COL_S, "Scroller",             PE_SCROLL,       {{KMOD_CTRL, SDLK_u, COM_SCROLL}}},
+  {ROW_S + 2, COL_S, "Scroll Direction: (<a>) <arrows>", PE_SCROLLDIR, {{0, 0, COM_SCROLL_CYCLE_UP}, {}, {0, 0, COM_SCROLL_CYCLE_DOWN}}},
+  {ROW_S + 3, COL_S, "Direction randomizer", PE_SCROLLRANDEN,  {{0, 0, COM_SCROLL_RAND_EN}}},
+  {ROW_S + 4, COL_S, "Direction randomness", PE_SCROLLRANDOM, {{0, 0, COM_SCROLL_RAND_RST}, {0, 0, COM_SCROLL_RAND_UP}, {0, 0, COM_SCROLL_RAND_DOWN}}},
+  {ROW_S + 5, COL_S, "Cycle Scroller (0 = Off)",     PE_BOUNCER,  {{0, 0, COM_BOUNCE_RST}, {0, 0, COM_BOUNCE_UP}, {0, 0, COM_BOUNCE_DOWN}}},
+  {ROW_S + 6, COL_S, "Red plane",            PE_SHIFTRED,     {{0, 0, COM_RP_RST}, {KMOD_CTRL, SDLK_LEFTBRACKET, COM_RP_UP}, {0, 0, COM_RP_DOWN}}},
+  {ROW_S + 7, COL_S, "Green plane",          PE_SHIFTGREEN,   {{0, 0, COM_GP_RST}, {KMOD_CTRL, SDLK_RIGHTBRACKET, COM_GP_UP}, {0, 0, COM_GP_DOWN}}},
+  {ROW_S + 8, COL_S, "Blue plane",           PE_SHIFTBLUE,    {{0, 0, COM_BP_RST}, {KMOD_CTRL, SDLK_BACKSLASH, COM_BP_UP}, {0, 0, COM_BP_DOWN}}},
+  {ROW_S + 9, COL_S, "Cyan plane",          PE_SHIFTCYAN,    {{0, 0, COM_CP_RST}, {KMOD_CTRL | KMOD_ALT, SDLK_LEFTBRACKET, COM_CP_UP}, {0, 0, COM_CP_DOWN}}},
+  {ROW_S + 10, COL_S, "Yellow plane",        PE_SHIFTYELLOW,  {{0, 0, COM_YP_RST}, {KMOD_CTRL | KMOD_ALT, SDLK_RIGHTBRACKET, COM_YP_UP}, {0, 0, COM_YP_DOWN}}},
+  {ROW_S + 11, COL_S, "Magenta plane",       PE_SHIFTMAGENTA, {{0, 0, COM_MP_RST}, {KMOD_CTRL | KMOD_ALT, SDLK_BACKSLASH, COM_MP_UP}, {0, 0, COM_MP_DOWN}}},
+  {ROW_S + 12, COL_S, "Toroidal",             PE_ROLLOVER, {{KMOD_CTRL, SDLK_y, COM_ROLL}}},
 
   // Post rotozoom
   #define ROW_PR (23)
   #define COL_PR (4)
-  {ROW_PR + 1, COL_PR, "Enable:",     PE_POSTRZ,      {{KMOD_CTRL, SDLK_k, COM_POSTROTATE}}},
-  {ROW_PR + 2, COL_PR, "Angle:",      PE_POSTRZANGLE, {{KMOD_ALT, SDLK_b, COM_POSTROT_RST}, {KMOD_ALT, SDLK_v, COM_POSTROT_INC}, {KMOD_ALT, SDLK_n, COM_POSTROT_DEC}}},
-  {ROW_PR + 3, COL_PR, "Angle Inc:",  PE_POSTRZINC,   {{KMOD_ALT, SDLK_k, COM_POSTSPEED_RST}, {KMOD_ALT, SDLK_j, COM_POSTSPEED_INC}, {KMOD_ALT, SDLK_l, COM_POSTSPEED_DEC}}},
-  {ROW_PR + 4, COL_PR, "Expansion:",  PE_POSTEXP,      {{KMOD_ALT, SDLK_s, COM_EXPAND_RST}, {KMOD_ALT, SDLK_a, COM_EXPAND_INC}, {KMOD_ALT, SDLK_d, COM_EXPAND_DEC}}},
-  {ROW_PR + 5, COL_PR, "Anti-alias:", PE_ALIAS,       {{KMOD_CTRL, SDLK_x, COM_AA}}},
+  {ROW_PR + 1, COL_PR, "Enable",     PE_POSTRZ,      {{KMOD_CTRL, SDLK_k, COM_POSTROTATE}}},
+  {ROW_PR + 2, COL_PR, "Angle",      PE_POSTRZANGLE, {{KMOD_ALT, SDLK_b, COM_POSTROT_RST}, {KMOD_ALT, SDLK_v, COM_POSTROT_INC}, {KMOD_ALT, SDLK_n, COM_POSTROT_DEC}}},
+  {ROW_PR + 3, COL_PR, "Angle Inc",  PE_POSTRZINC,   {{KMOD_ALT, SDLK_k, COM_POSTSPEED_RST}, {KMOD_ALT, SDLK_j, COM_POSTSPEED_INC}, {KMOD_ALT, SDLK_l, COM_POSTSPEED_DEC}}},
+  {ROW_PR + 4, COL_PR, "Expansion",  PE_POSTEXP,      {{KMOD_ALT, SDLK_s, COM_EXPAND_RST}, {KMOD_ALT, SDLK_a, COM_EXPAND_INC}, {KMOD_ALT, SDLK_d, COM_EXPAND_DEC}}},
+  {ROW_PR + 5, COL_PR, "Anti-alias", PE_ALIAS,       {{KMOD_CTRL, SDLK_x, COM_AA}}},
 
   // Pre rotozoom
   #define ROW_PE (ROW_PR + 7)
   #define COL_PE (COL_PR)
-  {ROW_PE + 1, COL_PE, "Enable:",    PE_PRERZ,      {{KMOD_CTRL, SDLK_z, COM_PREROTATE}}},
-  {ROW_PE + 2, COL_PE, "Angle:",     PE_PRERZANGLE, {{KMOD_ALT, SDLK_t, COM_PREROT_RST}, {KMOD_ALT, SDLK_r, COM_PREROT_INC}, {KMOD_ALT, SDLK_y, COM_PREROT_DEC}}},
-  {ROW_PE + 3, COL_PE, "Angle Inc:", PE_PRERZINC,   {{0, 0, COM_PREROTINC_RST}, {0, 0, COM_PREROTINC_INC}, {0, 0, COM_PREROTINC_DEC}}},
-  {ROW_PE + 4, COL_PE, "Expansion:", PE_PRERZEXPAND,{{0, 0, COM_PREEXP_RST}, {0, 0, COM_PREEXP_INC}, {0, 0, COM_PREEXP_DEC}}},
-  {ROW_PE + 5, COL_PE, "Anti-alias:",PE_PRERZALIAS, {{0, 0, COM_PREALIAS}}},
+  {ROW_PE + 1, COL_PE, "Enable",    PE_PRERZ,      {{KMOD_CTRL, SDLK_z, COM_PREROTATE}}},
+  {ROW_PE + 2, COL_PE, "Angle",     PE_PRERZANGLE, {{KMOD_ALT, SDLK_t, COM_PREROT_RST}, {KMOD_ALT, SDLK_r, COM_PREROT_INC}, {KMOD_ALT, SDLK_y, COM_PREROT_DEC}}},
+  {ROW_PE + 3, COL_PE, "Angle Inc", PE_PRERZINC,   {{0, 0, COM_PREROTINC_RST}, {0, 0, COM_PREROTINC_INC}, {0, 0, COM_PREROTINC_DEC}}},
+  {ROW_PE + 4, COL_PE, "Expansion", PE_PRERZEXPAND,{{0, 0, COM_PREEXP_RST}, {0, 0, COM_PREEXP_INC}, {0, 0, COM_PREEXP_DEC}}},
+  {ROW_PE + 5, COL_PE, "Anti-alias",PE_PRERZALIAS, {{0, 0, COM_PREALIAS}}},
 
   // Image stuff
   #define ROW_I (ROW_PE + 7)
   #define COL_I COL_PE
-  {ROW_I + 1, COL_I, "Image overlay:", PE_POSTIMAGE,  {{KMOD_CTRL | KMOD_ALT, SDLK_p, COM_IMAGE}}},
-  {ROW_I + 2, COL_I, "Angle:",         PE_IMAGEANGLE, {{0, 0, COM_IMANGLE_RST}, {0, 0, COM_IMANGLE_INC}, {0, 0, COM_IMANGLE_DEC}}},
-  {ROW_I + 3, COL_I, "Angle Inc:",     PE_IMAGEINC,   {{0, 0, COM_IMINC_RST},   {0, 0, COM_IMINC_INC},   {0, 0, COM_IMINC_DEC}}},
-  {ROW_I + 4, COL_I, "Expansion:",     PE_IMAGEEXP,   {{0, 0, COM_IMEXP_RST},   {0, 0, COM_IMEXP_INC},   {0, 0, COM_IMEXP_DEC}}},
-  {ROW_I + 5, COL_I, "Center x:",      PE_IMAGEXOFFSET, {{0, 0, COM_IMXOFFSET_RST}, {0, 0, COM_IMXOFFSET_INC}, {0, 0, COM_IMXOFFSET_DEC}}},
-  {ROW_I + 6, COL_I, "Center y:",      PE_IMAGEYOFFSET, {{0, 0, COM_IMYOFFSET_RST}, {0, 0, COM_IMYOFFSET_INC}, {0, 0, COM_IMYOFFSET_DEC}}},
-  {ROW_I + 7, COL_I, "Anti-alias:",    PE_IMAGEALIAS, {{0, 0, COM_IMALIAS}}},
+  {ROW_I + 1, COL_I, "Enable",        PE_POSTIMAGE,  {{KMOD_CTRL | KMOD_ALT, SDLK_p, COM_IMAGE}}},
+  {ROW_I + 2, COL_I, "Angle",         PE_IMAGEANGLE, {{0, 0, COM_IMANGLE_RST}, {0, 0, COM_IMANGLE_INC}, {0, 0, COM_IMANGLE_DEC}}},
+  {ROW_I + 3, COL_I, "Angle Inc",     PE_IMAGEINC,   {{0, 0, COM_IMINC_RST},   {0, 0, COM_IMINC_INC},   {0, 0, COM_IMINC_DEC}}},
+  {ROW_I + 4, COL_I, "Expansion",     PE_IMAGEEXP,   {{0, 0, COM_IMEXP_RST},   {0, 0, COM_IMEXP_INC},   {0, 0, COM_IMEXP_DEC}}},
+  {ROW_I + 5, COL_I, "Center x",      PE_IMAGEXOFFSET, {{0, 0, COM_IMXOFFSET_RST}, {0, 0, COM_IMXOFFSET_INC}, {0, 0, COM_IMXOFFSET_DEC}}},
+  {ROW_I + 6, COL_I, "Center y",      PE_IMAGEYOFFSET, {{0, 0, COM_IMYOFFSET_RST}, {0, 0, COM_IMYOFFSET_INC}, {0, 0, COM_IMYOFFSET_DEC}}},
+  {ROW_I + 7, COL_I, "Anti-alias",    PE_IMAGEALIAS, {{0, 0, COM_IMALIAS}}},
 
   // Text
   #define ROW_T (41)
   #define COL_T (0)
-  {ROW_T + 1, COL_T, "Text seed:",         PE_TEXTSEED,   {{KMOD_CTRL, SDLK_t, COM_TEXT}}},
+  {ROW_T + 1, COL_T, "Text seed",         PE_TEXTSEED,   {{KMOD_CTRL, SDLK_t, COM_TEXT}}},
   {ROW_T + 3, COL_T, "Delete last letter", PE_INVALID,    {{KMOD_NONE, SDLK_BACKSPACE, COM_BACKSPACE}}},
   {ROW_T + 4, COL_T, "Erase all text",     PE_INVALID,    {{KMOD_NONE, SDLK_DELETE, COM_DELETE}}},
-  {ROW_T + 5, COL_T, "Reverse text:",      PE_FONTDIR,    {{KMOD_CTRL, SDLK_QUOTE, COM_TEXT_REVERSE}}},
+  {ROW_T + 5, COL_T, "Reverse text",      PE_FONTDIR,    {{KMOD_CTRL, SDLK_QUOTE, COM_TEXT_REVERSE}}},
   {ROW_T + 6, COL_T, "Flip text.",         PE_FONTFLIP,   {{KMOD_CTRL, SDLK_SEMICOLON, COM_TEXT_FLIP}}},
-  {ROW_T + 7, COL_T, "Text mode:",         PE_TEXTMODE,   {{KMOD_CTRL, SDLK_b, COM_TEXT_MODE_UP}, {}, {0, 0, COM_TEXT_MODE_DOWN}}},
-  {ROW_T + 8, COL_T, "Edge Offset:",       PE_TEXTOFFSET, {{KMOD_ALT | KMOD_CTRL, SDLK_z, COM_TEXTO_INC}, {}, {KMOD_ALT | KMOD_CTRL, SDLK_x, COM_TEXTO_DEC}}},
+  {ROW_T + 7, COL_T, "Text background",   PE_TEXTMODE,   {{KMOD_CTRL, SDLK_b, COM_TEXT_MODE_UP}, {}, {0, 0, COM_TEXT_MODE_DOWN}}},
+  {ROW_T + 8, COL_T, "Edge Offset",       PE_TEXTOFFSET, {{KMOD_ALT | KMOD_CTRL, SDLK_z, COM_TEXTO_INC}, {}, {KMOD_ALT | KMOD_CTRL, SDLK_x, COM_TEXTO_DEC}}},
   {ROW_T + 9, COL_T, "Restart text",       PE_INVALID,    {{KMOD_CTRL, SDLK_j, COM_TEXTRESET}}},
 
   // Quit
@@ -786,15 +803,16 @@ displayText_t labelText[] = {
 displayText_t headerText[] = {
   {51, 0,          "Text buffer:"},
   {ROW_PA, COL_PA, "Pattern sets:"},
-  {ROW_P, COL_P,   "Plane suppression:"},
+  {ROW_P, COL_P,   "Color suppression:"},
   {ROW_A, COL_A,   "Auxiliary:"},
-  {ROW_MI, COL_MI, "Misc:"},
-  {ROW_I, COL_I,   "Image:"},
+  {ROW_MI, COL_MI, "Misc seeds:"},
+  {ROW_CB, COL_CB, "Crossbar seeds:"},
+  {ROW_I, COL_I,   "Image overlay:"},
   {ROW_R, COL_R,   "Random dots:"},
   {ROW_C, COL_C,   "Colors:"},
-  {ROW_D, COL_D,   "Diffusion:"},
+  {ROW_D, COL_D,   "Averager:"},
   {ROW_O, COL_O,   "One-shot seeds:"},
-  {ROW_F, COL_F,   "Fader (adder):"},
+  {ROW_F, COL_F,   "Adder (fader):"},
   {ROW_M, COL_M,   "Multiplier:"},
   {ROW_T, COL_T,   "Text entry:"},
   {ROW_S, COL_S,   "Scrollers:"},
@@ -803,6 +821,20 @@ displayText_t headerText[] = {
   {ROW_MIR, COL_MIR, "Mirrors:"},
 };
 #define HEADERTEXT_SIZE (sizeof(headerText) / sizeof(displayText_t))
+
+// Gui input modes
+typedef enum inputMode_e {
+  IM_INVALID = -1,
+  IM_NORMAL = 0, IM_CONFIRM, IM_INT, IM_FLOAT,
+  IM_COUNT // Last
+} inputMode_e;
+
+// Text entry results
+typedef enum textEntry_e {
+  TE_INVALID = -1,
+  TE_NOTHING = 0, TE_ACCEPTED, TE_REJECTED,
+  TE_COUNT // Last
+} textEntry_e;
 
 // Globals - We do love our globals.  My guess is their proliferation is the
 // sign of a badly structured program.
@@ -820,7 +852,7 @@ operateOn_e displaySet = OO_CURRENT;
 float global_intensity_limit = 1.0;
 int previewFrameCountA = 0, previewFPSA = 0;
 int previewFrameCountB = 0, previewFPSB = 0;
-int guiFrameCount = 0, guiFPS = 0;
+int infoFrameCount = 0, infoFPS = 0;
 float alternateBlend = 0, alternateBlendRate = 0.01;
 bool_t autoBlend = NO;
 #define CHAR_W (8)
@@ -862,7 +894,7 @@ void DrawSideBar(int set);
 void Diffuse(float diffusionCoeff, bool_t isToroid, unsigned char *buffer);
 void HorizontalBars(color_t color, unsigned char *buffer);
 void VerticalBars(color_t color, unsigned char *buffer);
-void SavePatternSet(char key, int set, bool_t overWrite);
+void SavePatternSet(char key, int set, bool_t overWrite, bool_t backup);
 void LoadPatternSet(char key, int set);
 void RandomDots(color_t color, unsigned int rFreq, unsigned char *buffer);
 color_t ColorCycle(int set, colorCycleModes_e cycleMode, int *cycleSaver, int cycleInc);
@@ -919,29 +951,43 @@ void GenerateDefaultPixelMap(void);
 
 void VerticalMirror(unsigned char * buffer);
 void HorizontalMirror(unsigned char * buffer);
+void ScrollCycle(int set);
+inputMode_e EditValue(int set, int commandToEdit);
+void DrawTextEntryBox(int item, char * text);
+textEntry_e HandleTextEntry(SDL_Keycode key, SDL_Keymod mod, char * textEntry, int maxTextSize);
+bool_t SetValueInt(int set, patternElement_e element, int value);
+void SetValueFloat(int set, patternElement_e element, float value);
+
+// Handle entry for text boxes, numbers, etc.
 
 // Main
 int main(int argc, char *argv[]) {
 
   // Variable declarations
   int i;
-  char caption_temp[100];
+  char textEntry[100];
   SDL_Event event;
   int thisHover = INVALID;
   int lastHover = INVALID;
   SDL_Rect box = {0, 0, 0, 0}, boxOld = {0, 0, 0, 0};
+  SDL_Rect drawBox;
   SDL_Rect boxYes, boxNo;
   point_t mouse, tpixel;
   int leftMouseDownOn = INVALID;
   bool_t leftMouseDown = NO;
-  //~ int rightMouseDownOn = INVALID;
+  int rightMouseDownOn = INVALID;
   bool_t rightMouseDown = NO;
-  bool_t confirmRequired = NO;
-  bool_t refresh = NO;
+  bool_t refreshAll = NO;
+  bool_t refreshGui = NO;
   bool_t confirmed = NO;
   bool_t drawNewFrameA = NO;
   bool_t drawNewFrameB = NO;
   bool_t exitProgram = NO;
+  inputMode_e inputMode = IM_NORMAL;
+  inputMode_e oldInputMode = IM_INVALID;
+  int value;
+  float valuef;
+  char *testptr;
 
   // Unbuffer the console...
   setvbuf(stdout, (char *)NULL, _IONBF, 0);
@@ -986,8 +1032,8 @@ int main(int argc, char *argv[]) {
   SDL_RenderSetLogicalSize(mwRenderer, WINDOW_WIDTH, WINDOW_HEIGHT);
 
   // Set the window title
-  snprintf(caption_temp, sizeof(caption_temp), "Tensor Control - Output: %i%%", (int) (global_intensity_limit * 100));
-  SDL_SetWindowTitle(mainWindow, caption_temp);
+  snprintf(textEntry, sizeof(textEntry), "Tensor Control - Output: %i%%", (int) (global_intensity_limit * 100));
+  SDL_SetWindowTitle(mainWindow, textEntry);
 
   // Load the font.  Should be a fixed width font.
   if(TTF_Init() < 0) {
@@ -1086,225 +1132,44 @@ int main(int argc, char *argv[]) {
 
     // Act on queued events.
     while (SDL_PollEvent(&event)) {
+
+      // Carry out actions common to all input modes  COMMON ACTIONS
       switch(event.type) {
-
-        // Evaluate keypresses.
-        case SDL_KEYDOWN:
-          // Confirmation boxes must be dealt with before other key presses.
-          if (confirmRequired) {
-            if (!HandleConfirmation(event.key.keysym.sym, &confirmed)) {
-              // The box was dealt with, so we'll turn it off.
-              confirmRequired = NO;
-              refresh = YES;
-            }
-          } else {
-            exitProgram = HandleKey(displaySet ? alternateSet : currentSet,
-              event.key.keysym.sym, event.key.keysym.mod);
-          }
+        case SDL_MOUSEBUTTONUP:
+          // Button up.  Mark the buttons as being up.
+          if (event.button.button == SDL_BUTTON_LEFT) leftMouseDown = NO;
+          else if (event.button.button == SDL_BUTTON_RIGHT) rightMouseDown = NO;
           break;
-
-        // The mouse moved.
         case SDL_MOUSEMOTION:
-          // See where it is.
+          // Mouse moved. See where it is.
           mouse.x = event.motion.x;
           mouse.y = event.motion.y;
-
-          // Confirmation dialog?
-          if (confirmRequired) {
-            // Check for intersection with confirmation boxes.
-            thisHover = INVALID;
-            if (Intersects(mouse, boxYes)) {
-              thisHover = YES;
-              confirmed = YES;
-              box = boxYes;
-            } else if (Intersects(mouse, boxNo)) {
-              thisHover = NO;
-              confirmed = NO;
-              box = boxNo;
-            }
-            if (thisHover != INVALID) {
-              // Is it hovering over a command is wasn't hovering over before?
-              if ((!SameRectangle(box, boxOld)) || (lastHover == INVALID)) {
-                boxOld = box;
-                lastHover = thisHover;
-              }
-            }
-            // Not over a new command? May have to clear the old highlight anyway.
-            if ((thisHover == INVALID) && (lastHover != INVALID)) {
-              lastHover = INVALID;
-              confirmed = NO;
-            }
-
-          // No confirmation dialog.
-          } else {
-            // Check if its hovering over a command.
-            thisHover = INVALID;
-            for (i = 0; i < DISPLAYCOMMAND_SIZE; i++) {
-              // box is the rectangle encompassing the command text.  We could
-              // precompute these if timing were important.
-              box.x = colToPixel[displayCommand[i].col];
-              box.y = displayCommand[i].line * DISPLAY_TEXT_HEIGHT;
-              box.w = colToPixel[displayCommand[i].col + 2] - box.x;
-              box.h = (displayCommand[i].line + 1) * DISPLAY_TEXT_HEIGHT - box.y + 1;
-
-              // Is it in the rectangle of command i?
-              if (Intersects(mouse, box)) {
-
-                // Yep.
-                thisHover = i;
-
-                // Is it hovering over a command is wasn't hovering over before?
-                if ((!SameRectangle(box, boxOld)) || (lastHover == INVALID)) {
-
-                  // Yeah, so draw the new highlight.
-                  DrawSBox(mwRenderer, box, DISPLAY_COLOR_TEXTSBG_HL);
-                  WriteCommand(i, displayCommand, DISPLAY_COLOR_TEXTS_HL, DISPLAY_COLOR_TEXTSBG_HL);
-
-                  // And if it came off a different command, remove that highlight.
-                  if (lastHover != INVALID) {
-                    DrawSBox(mwRenderer, boxOld, DISPLAY_COLOR_TEXTSBG);
-                    WriteCommand(lastHover, displayCommand, DISPLAY_COLOR_TEXTS, DISPLAY_COLOR_TEXTSBG);
-                  }
-
-                  // Keep track for next time.
-                  boxOld = box;
-                  lastHover = thisHover;
-
-                  // Break the loop.  Can't be hovering over multiple commands.
-                  break;
-                }
-              }
-            }
-
-            // Not over a new command? May have to clear the old highlight anyway.
-            if ((thisHover == INVALID) && (lastHover != INVALID)) {
-              DrawSBox(mwRenderer, boxOld, DISPLAY_COLOR_TEXTSBG);
-              WriteCommand(lastHover, displayCommand, DISPLAY_COLOR_TEXTS, DISPLAY_COLOR_TEXTSBG);
-              lastHover = INVALID;
-            }
-          }
           break;
-
-        case SDL_MOUSEWHEEL:
-          if (confirmRequired) break;  // Not if the confirmation box is up.
-          // The mouse wheel moved.  See if we should act on that.  We don't
-          // check HandleCommand return codes because there are no mouse wheel
-          // commands that exit the program.
-          if (thisHover != INVALID) {
-
-            // Wheel down.
-            if (event.wheel.y < 0) {
-              // If there are no mouse wheel commands for this item, consider it a click.
-              if (displayCommand[thisHover].commands[MOUSE_WHEEL_DOWN].command == COM_NONE) {
-                HandleCommand(displaySet ? alternateSet : currentSet,
-                  displayCommand[thisHover].commands[MOUSE_CLICK].command);
-              } else {
-                HandleCommand(displaySet ? alternateSet : currentSet,
-                  displayCommand[thisHover].commands[MOUSE_WHEEL_DOWN].command);
-              }
-
-            // Wheel up.
-            } else {
-              // If there are no mouse wheel commands for this item, consider it a click.
-              if (displayCommand[thisHover].commands[MOUSE_WHEEL_UP].command == COM_NONE) {
-                HandleCommand(displaySet ? alternateSet : currentSet,
-                  displayCommand[thisHover].commands[MOUSE_CLICK].command);
-              } else {
-                HandleCommand(displaySet ? alternateSet : currentSet,
-                  displayCommand[thisHover].commands[MOUSE_WHEEL_UP].command);
-              }
-            }
-
-          // Mouse wheel action over the live preview lets us change colors
-          // without having to go to the command.
-          } else if (Intersects(mouse, liveBox)) {
-            if (!rightMouseDown) {
-              if (event.wheel.y < 0) { // Wheel down
-                HandleCommand(currentSet, COM_FG_WHEEL_DOWN);
-              } else { // Wheel up
-                HandleCommand(currentSet, COM_FG_WHEEL_UP);
-              }
-            } else {
-              // Holding down the right mouse button while wheeling changes the
-              // background color instead.
-              if (event.wheel.y < 0) { // Wheel down
-                HandleCommand(currentSet, COM_BG_WHEEL_DOWN);
-              } else { // Wheel up
-                HandleCommand(currentSet, COM_BG_WHEEL_UP);
-              }
-            }
-          } else if (Intersects(mouse, altBox)) {
-            if (!rightMouseDown) {
-              if (event.wheel.y < 0) { // Wheel down
-                HandleCommand(alternateSet, COM_FG_WHEEL_DOWN);
-              } else { // Wheel up
-                HandleCommand(alternateSet, COM_FG_WHEEL_UP);
-              }
-            } else {
-              if (event.wheel.y < 0) { // Wheel down
-                HandleCommand(alternateSet, COM_BG_WHEEL_DOWN);
-              } else { // Wheel up
-                HandleCommand(alternateSet, COM_BG_WHEEL_UP);
-              }
-            }
-          }
-          break;
-
-        case SDL_MOUSEBUTTONUP:
-          // Mouse button unpushed.  Consider this a click.  If we're over
-          // the same item we down clicked on, execute a command.
-          if (event.button.button == SDL_BUTTON_LEFT) {
-            leftMouseDown = NO;
-            if ((thisHover != INVALID) && (thisHover == leftMouseDownOn)) {
-              if (confirmRequired) {
-                if (thisHover == YES) {
-                  SavePatternSet(keySave, setSave, YES);
-                } else {
-                  snprintf(statusText, sizeof(statusText), "Save action cancelled.");
-                }
-                confirmRequired = NO;
-                refresh = YES;
-              } else {
-                exitProgram = HandleCommand(displaySet ? alternateSet : currentSet,
-                  displayCommand[thisHover].commands[MOUSE_CLICK].command);
-              }
-            }
-          } else if (event.button.button == SDL_BUTTON_RIGHT) {
-            rightMouseDown = NO;
-          }
-          break;
-
         case SDL_MOUSEBUTTONDOWN:
           // Mouse button pushed.  Make a note of the item it was pushed over.
           if (event.button.button == SDL_BUTTON_LEFT) {
             leftMouseDownOn = thisHover;
             leftMouseDown = YES;
           } else if (event.button.button == SDL_BUTTON_RIGHT) {
-            //~ rightMouseDownOn = thisHover;
+            rightMouseDownOn = thisHover;
             rightMouseDown = YES;
           }
           break;
-
         case SDL_QUIT:
           // Window closed or <ctrl> c pushed in terminal.  Exit program.
           exitProgram = YES;
           break;
-
         case SDL_WINDOWEVENT:
           // We care about the window events that destroy our display.  Those
           // are probably resize and expose events.  We'll redraw the whole
           // display if they occur.
-          switch (event.window.event) {
-            case SDL_WINDOWEVENT_RESIZED:
-            case SDL_WINDOWEVENT_EXPOSED:
-              refresh = YES;
-              break;
-            default:
-              //~ fprintf(stderr, "Unhandled SDL window event: %i\n", event.window.event);
-              break;
+          if ((event.window.event == SDL_WINDOWEVENT_EXPOSED) ||
+              (event.window.event == SDL_WINDOWEVENT_RESIZED)) {
+            refreshAll = YES;
+          } else {
+            //~ fprintf(stderr, "Unhandled SDL window event: %i\n", event.window.event);
           }
           break;
-
         default:
           // There are five registered user events to check for here. They can't
           // be tested in the case statement because they are not compile-time
@@ -1321,30 +1186,320 @@ int main(int argc, char *argv[]) {
             // The fps timer expired.  Set fps and reset the frame count.
             previewFPSA = previewFrameCountA;
             previewFPSB = previewFrameCountB;
-            guiFPS = guiFrameCount;
-            guiFrameCount = 0;
+            infoFPS = infoFrameCount;
+            infoFrameCount = 0;
             previewFrameCountA = 0;
             previewFrameCountB = 0;
 
           } else if (event.type == GUIEventType) {
             // Update the informational display.
             UpdateInfoDisplay(displaySet ? alternateSet : currentSet);
-            if (confirmRequired) DrawConfirmationBox(&boxYes, &boxNo, confirmed);
-            UpdateGUI();
-            guiFrameCount++;
+            infoFrameCount++;
+            refreshGui = YES;
 
           } else if (event.type == CONFIRMEventType) {
-            // Prep the confirmation box.
-            lastHover = NO;
-            confirmed = NO;
-            boxOld = boxNo;
-            confirmRequired = YES;
+
+            inputMode = IM_CONFIRM;
           } else {
             //~ fprintf(stderr, "Unhandled SDL event: %i\n", event.type);
           }
           break;
-      }  // End event switch
-    }  // End event polling loop.
+      } // End common actions event processing switch.
+
+      // Carry out actions specific to the input mode
+      switch(inputMode) {
+        // Confirmation box events
+        case IM_CONFIRM:
+
+          // Process the event.
+          switch(event.type) {
+            case SDL_KEYDOWN:
+              if (HandleConfirmation(event.key.keysym.sym, &confirmed)) inputMode = IM_NORMAL;
+              break;
+
+            case SDL_MOUSEMOTION:
+              // Check for intersection with confirmation boxes.
+              thisHover = INVALID;
+              if (Intersects(mouse, boxYes)) {
+                thisHover = YES;
+                confirmed = YES;
+                box = boxYes;
+              } else if (Intersects(mouse, boxNo)) {
+                thisHover = NO;
+                confirmed = NO;
+                box = boxNo;
+              }
+              if (thisHover != INVALID) {
+                // Is it hovering over a command is wasn't hovering over before?
+                if ((!SameRectangle(box, boxOld)) || (lastHover == INVALID)) {
+                  boxOld = box;
+                  lastHover = thisHover;
+                }
+              }
+              // Not over a new command? May have to clear the old highlight anyway.
+              if ((thisHover == INVALID) && (lastHover != INVALID)) {
+                lastHover = INVALID;
+                confirmed = NO;
+              }
+              break;
+
+            case SDL_MOUSEBUTTONUP:
+              // Mouse button unpushed.  Consider this a click.  If we're over
+              // the same item we down clicked on, execute a command.
+              if (event.button.button == SDL_BUTTON_LEFT) {
+                if ((thisHover != INVALID) && (thisHover == leftMouseDownOn)) {
+                  if (thisHover == YES) {
+                    SavePatternSet(keySave, setSave, YES, NO);
+                  } else {
+                    snprintf(statusText, sizeof(statusText), "Save action cancelled.");
+                  }
+                  inputMode = IM_NORMAL;
+                }
+              }
+              break;
+
+            default:
+              if (event.type == GUIEventType) {
+                DrawConfirmationBox(&boxYes, &boxNo, confirmed);
+              }
+              break;
+          }  // End event processing switch
+          break;
+
+        // Normal mode events
+        case IM_NORMAL:
+          switch(event.type) {
+            case SDL_KEYDOWN:
+              exitProgram = HandleKey(displaySet ? alternateSet : currentSet, event.key.keysym.sym, event.key.keysym.mod);
+              break;
+            case SDL_MOUSEMOTION:
+              // Check if its hovering over a command.
+              thisHover = INVALID;
+              for (i = 0; i < DISPLAYCOMMAND_SIZE; i++) {
+                // box is the rectangle encompassing the command text.  We could
+                // precompute these if timing were important.
+                box.x = colToPixel[displayCommand[i].col];
+                box.y = displayCommand[i].line * DISPLAY_TEXT_HEIGHT;
+                box.w = colToPixel[displayCommand[i].col + 2] - box.x;
+                box.h = (displayCommand[i].line + 1) * DISPLAY_TEXT_HEIGHT - box.y + 1;
+
+                // Is it in the rectangle of command i?
+                if (Intersects(mouse, box)) {
+
+                  // Yep.
+                  thisHover = i;
+
+                  // Is it hovering over a command is wasn't hovering over before?
+                  if ((!SameRectangle(box, boxOld)) || (lastHover == INVALID)) {
+
+                    // Yeah, so draw the new highlight.
+                    drawBox = box;
+                    drawBox.w = colToPixel[displayCommand[thisHover].col + 1] - drawBox.x;
+                    DrawSBox(mwRenderer, drawBox, DISPLAY_COLOR_TEXTSBG_HL);
+                    WriteCommand(i, displayCommand, DISPLAY_COLOR_TEXTS_HL, DISPLAY_COLOR_TEXTSBG_HL);
+
+                    // And if it came off a different command, remove that highlight.
+                    if (lastHover != INVALID) {
+                      drawBox = boxOld;
+                      drawBox.w = colToPixel[displayCommand[lastHover].col + 1] - drawBox.x;
+                      DrawSBox(mwRenderer, drawBox, DISPLAY_COLOR_TEXTSBG);
+                      WriteCommand(lastHover, displayCommand, DISPLAY_COLOR_TEXTS, DISPLAY_COLOR_TEXTSBG);
+                    }
+
+                    // Keep track for next time.
+                    boxOld = box;
+                    lastHover = thisHover;
+
+                    // Break the loop.  Can't be hovering over multiple commands.
+                    break;
+                  }  // End new hover if
+                }  // End intersected if
+              } // End for for hover check.
+
+              // Not over a new command? May have to clear the old highlight anyway.
+              if ((thisHover == INVALID) && (lastHover != INVALID)) {
+                drawBox = boxOld;
+                drawBox.w = colToPixel[displayCommand[lastHover].col + 1] - drawBox.x;
+                DrawSBox(mwRenderer, drawBox, DISPLAY_COLOR_TEXTSBG);
+                WriteCommand(lastHover, displayCommand, DISPLAY_COLOR_TEXTS, DISPLAY_COLOR_TEXTSBG);
+                lastHover = INVALID;
+              }
+              break;  // End case SDL_MOUSEMOTION.
+
+            case SDL_MOUSEWHEEL:
+              // The mouse wheel moved.  See if we should act on that.  We don't
+              // check HandleCommand return codes because there are no mouse wheel
+              // commands that exit the program.
+              if (thisHover != INVALID) {
+
+                // Wheel down.
+                if (event.wheel.y < 0) {
+                  // If there are no mouse wheel commands for this item, consider it a click.
+                  if (displayCommand[thisHover].commands[MOUSE_WHEEL_DOWN].command == COM_NONE)
+                    HandleCommand(displaySet ? alternateSet : currentSet, displayCommand[thisHover].commands[MOUSE_CLICK].command);
+                  else HandleCommand(displaySet ? alternateSet : currentSet, displayCommand[thisHover].commands[MOUSE_WHEEL_DOWN].command);
+
+                // Wheel up.
+                } else {
+                  // If there are no mouse wheel commands for this item, consider it a click.
+                  if (displayCommand[thisHover].commands[MOUSE_WHEEL_UP].command == COM_NONE)
+                    HandleCommand(displaySet ? alternateSet : currentSet, displayCommand[thisHover].commands[MOUSE_CLICK].command);
+                  else HandleCommand(displaySet ? alternateSet : currentSet, displayCommand[thisHover].commands[MOUSE_WHEEL_UP].command);
+                }
+
+              // Mouse wheel action over the live preview lets us change colors
+              // without having to go to the command.
+              } else if (Intersects(mouse, liveBox)) {
+                if (!rightMouseDown) {
+                  if (event.wheel.y < 0) { // Wheel down
+                    HandleCommand(currentSet, COM_FG_WHEEL_DOWN);
+                  } else { // Wheel up
+                    HandleCommand(currentSet, COM_FG_WHEEL_UP);
+                  }
+                } else {
+                  // Holding down the right mouse button while wheeling changes the
+                  // background color instead.
+                  if (event.wheel.y < 0) { // Wheel down
+                    HandleCommand(currentSet, COM_BG_WHEEL_DOWN);
+                  } else { // Wheel up
+                    HandleCommand(currentSet, COM_BG_WHEEL_UP);
+                  }
+                }
+              } else if (Intersects(mouse, altBox)) {
+                if (!rightMouseDown) {
+                  if (event.wheel.y < 0) { // Wheel down
+                    HandleCommand(alternateSet, COM_FG_WHEEL_DOWN);
+                  } else { // Wheel up
+                    HandleCommand(alternateSet, COM_FG_WHEEL_UP);
+                  }
+                } else {
+                  if (event.wheel.y < 0) { // Wheel down
+                    HandleCommand(alternateSet, COM_BG_WHEEL_DOWN);
+                  } else { // Wheel up
+                    HandleCommand(alternateSet, COM_BG_WHEEL_UP);
+                  }
+                }
+              }
+              break; // End SDL_MOUSEWHEEL case
+
+            case SDL_MOUSEBUTTONUP:
+              // Mouse button unpushed.  Consider this a click.  If we're over
+              // the same item we down clicked on, execute the command.
+              if (event.button.button == SDL_BUTTON_LEFT) {
+                if ((thisHover != INVALID) && (thisHover == leftMouseDownOn)) {
+                  exitProgram = HandleCommand(displaySet ? alternateSet : currentSet, displayCommand[thisHover].commands[MOUSE_CLICK].command);
+                }
+              } else if (event.button.button == SDL_BUTTON_RIGHT) {
+                if ((thisHover != INVALID) && (thisHover == rightMouseDownOn)) {
+                  inputMode = EditValue(currentSet, thisHover);
+                  if ((inputMode == IM_INT) || (inputMode == IM_FLOAT)) {
+                    // Initial value to edit.
+                    //~ snprintf(textEntry, sizeof(textEntry), "%i", DINT(displayCommand[thisHover].dat));
+                    textEntry[0] = '\0';
+                  }
+                }
+              }
+              break;  // End SDL_MOUSEBUTTONUP case.
+
+            default:
+              break;
+          } // End normal mode events processing switch
+          break;  // End IM_NORMAL case.
+
+
+        // User input an integer value.
+        case IM_INT:
+          switch(event.type) {
+            case SDL_KEYDOWN:
+              switch(HandleTextEntry(event.key.keysym.sym, event.key.keysym.mod, textEntry, sizeof(textEntry))) {
+                case TE_ACCEPTED:
+                  if (strlen(textEntry) != 0) {
+                    errno = 0;
+                    value = strtol(textEntry, &testptr, 0);
+                    if ((errno == 0) && (testptr - strlen(textEntry) == textEntry)) {
+                      if (SetValueInt(displaySet ? alternateSet : currentSet, displayCommand[thisHover].dat, value)) {
+                        snprintf(statusText, sizeof(statusText), "New value accepted.");
+                      } else {
+                        snprintf(statusText, sizeof(statusText), "New value rejected.");
+                      }
+                    } else {
+                      snprintf(statusText, sizeof(statusText), "New value rejected.");
+                    }
+                  } else {
+                    snprintf(statusText, sizeof(statusText), "No value entered.");
+                  }
+                  inputMode = IM_NORMAL;
+                  break;
+                case TE_REJECTED:
+                  inputMode = IM_NORMAL;
+                  snprintf(statusText, sizeof(statusText), "Edit cancelled.");
+                  break;
+                case TE_NOTHING:
+                default:
+                  break;
+              }
+              break;
+            case SDL_MOUSEBUTTONUP:
+              snprintf(statusText, sizeof(statusText), "Edit cancelled.");
+              inputMode = IM_NORMAL;
+              break;
+            default:
+              if (event.type == GUIEventType) {
+                DrawTextEntryBox(thisHover, textEntry);
+              }
+              break;
+          }
+          break;
+
+          // User input an integer value.
+        case IM_FLOAT:
+          switch(event.type) {
+            case SDL_KEYDOWN:
+              switch(HandleTextEntry(event.key.keysym.sym, event.key.keysym.mod, textEntry, sizeof(textEntry))) {
+                case TE_ACCEPTED:
+                  if (strlen(textEntry) != 0) {
+                    errno = 0;
+                    valuef = strtod(textEntry, &testptr);
+                    if ((errno == 0) && (testptr - strlen(textEntry) == textEntry)) {
+                      if (valuef != valuef) {
+                        snprintf(statusText, sizeof(statusText), "That's not a number.");
+                      } else {
+                        SetValueFloat(displaySet ? alternateSet : currentSet, displayCommand[thisHover].dat, valuef);
+                      }
+                    } else {
+                      snprintf(statusText, sizeof(statusText), "New value rejected.");
+                    }
+                  } else {
+                    snprintf(statusText, sizeof(statusText), "No value entered.");
+                  }
+                  inputMode = IM_NORMAL;
+                  break;
+                case TE_REJECTED:
+                  inputMode = IM_NORMAL;
+                  snprintf(statusText, sizeof(statusText), "Edit cancelled.");
+                  break;
+                case TE_NOTHING:
+                default:
+                  break;
+              }
+              break;
+            case SDL_MOUSEBUTTONUP:
+              snprintf(statusText, sizeof(statusText), "Edit cancelled.");
+              inputMode = IM_NORMAL;
+              break;
+            default:
+              if (event.type == GUIEventType) {
+                DrawTextEntryBox(thisHover, textEntry);
+              }
+              break;
+          }
+          break;
+
+        default:
+          inputMode = IM_NORMAL;  // Correct for unhandled modes
+          break;
+      } // End input mode specific switch
+    } // End event polling while loop.
 
     // Draw a new frame if the timer expired for the live set.
     if (drawNewFrameA) {
@@ -1420,18 +1575,38 @@ int main(int argc, char *argv[]) {
       }
     }
 
-    // Check for gui refresh.
-    if (refresh) {
-      refresh = NO;
+    // If the input mode changed, we need to refresh the display
+    if (inputMode != oldInputMode) {
+      oldInputMode = inputMode;
+      lastHover = INVALID;
+      //thisHover = INVALID;
+      confirmed = NO;
+      refreshAll = YES;
+    }
+
+    // Check for whole gui refresh.
+    if (refreshAll) {
+      refreshAll = NO;
       ClearWindow();
       InitDisplayTexts();
       DrawPreviewBorder(PREVIEW_A_POSITION_X, PREVIEW_A_POSITION_Y, displaySet == OO_CURRENT);
       DrawPreviewBorder(PREVIEW_B_POSITION_X, PREVIEW_B_POSITION_Y, displaySet == OO_ALTERNATE);
     }
 
+    // Check for info display refresh.
+    if (refreshGui) {
+      refreshGui = NO;
+      UpdateGUI();
+    }
+
     if (exitProgram) break;
 
   } // End FOREVER program loop
+
+  // Backup the pattern sets in case we didnt mean to do this.
+  for (i = 0; i < PATTERN_SET_COUNT; i++) {
+    SavePatternSet('0' + i, i, YES, YES);
+  }
 
   // Clean up a bit and exit.
   TTF_CloseFont(screenFont);
@@ -1739,6 +1914,13 @@ void DrawNewFrame(int set, unsigned char primary) {
 void ProcessModes(int set) {
   int currentSet = set; // Overrides global used in D* macros.
 
+  // Scroll direction randomizer
+  if (DBOOL(PE_SCROLLRANDEN)) {
+    if (!(rand() % DINT(PE_SCROLLRANDOM))) {
+      DENUM(PE_SCROLLDIR) = rand() % DIR_COUNT;
+    }
+  }
+
   // Foreground color cycle.
   if (DENUM(PE_FGCYCLE)) {
     DCOLOR(PE_FGC) = ColorCycle(currentSet, DENUM(PE_FGCYCLE), &DINT(PE_CYCLESAVEFG), DINT(PE_FGRAINBOW));
@@ -1822,9 +2004,8 @@ void ProcessModes(int set) {
   }
 
   // Bouncy bouncy (ick).
-  if (DBOOL(PE_BOUNCER)) {
-    DENUM(PE_BOUNCESCR) = (DENUM(PE_BOUNCESCR) + 1) % DIR_COUNT;
-    Scroll(DENUM(PE_BOUNCESCR), DBOOL(PE_ROLLOVER), DBUFFER(PE_FRAMEBUFFER), PLANE_ALL);
+  if (DINT(PE_BOUNCER) != 0) {
+    ScrollCycle(currentSet);
   }
 
   // Bam!  Draw some horizontal bars.
@@ -1907,7 +2088,6 @@ void ProcessModes(int set) {
   if (DBOOL(PE_MIRROR_V)) {
     VerticalMirror(DBUFFER(PE_FRAMEBUFFER));
   }
-
   if (DBOOL(PE_MIRROR_H)) {
     HorizontalMirror(DBUFFER(PE_FRAMEBUFFER));
   }
@@ -1916,6 +2096,21 @@ void ProcessModes(int set) {
   if (DBOOL(PE_POSTRZ)) {
     DFLOAT(PE_POSTRZANGLE) += DFLOAT(PE_POSTRZINC);
   }
+}
+
+void ScrollCycle(int set) {
+  int currentSet = set; // Global override
+  static int count = 0;
+  static dir_e direction = DIR_UP;
+
+  if (count > DINT(PE_BOUNCER)) count = DINT(PE_BOUNCER);
+  count--;
+  if (count <= 0) {
+    direction = (direction + 1) % DIR_COUNT;
+    count = DINT(PE_BOUNCER);
+  }
+
+  Scroll(direction, DBOOL(PE_ROLLOVER), DBUFFER(PE_FRAMEBUFFER), PLANE_ALL);
 }
 
 void VerticalMirror(unsigned char * buffer) {
@@ -2169,11 +2364,11 @@ void CrossBars(int set) {
 
 // Key press processing for confirmation boxes.
 bool_t HandleConfirmation(SDL_Keycode key, unsigned char *selected) {
-  unsigned char confirmationStillRequired = NO;
+  bool_t confirmationHandled = YES;
 
   switch (key) {
     case SDLK_y:
-      SavePatternSet(keySave, setSave, YES);
+      SavePatternSet(keySave, setSave, YES, NO);
       break;
 
     case SDLK_n:
@@ -2184,7 +2379,7 @@ bool_t HandleConfirmation(SDL_Keycode key, unsigned char *selected) {
     case SDLK_RETURN:
     case SDLK_SPACE:
       if (*selected == YES) {
-        SavePatternSet(keySave, setSave, YES);
+        SavePatternSet(keySave, setSave, YES, NO);
       } else {
         snprintf(statusText, sizeof(statusText), "Save action cancelled.");
       }
@@ -2192,14 +2387,14 @@ bool_t HandleConfirmation(SDL_Keycode key, unsigned char *selected) {
 
     case SDLK_LEFT: case SDLK_RIGHT: case SDLK_UP: case SDLK_DOWN:
       *selected = !(*selected);
-      confirmationStillRequired = YES;
+      confirmationHandled = NO;
       break;
 
     default:
-      confirmationStillRequired = YES;
+      confirmationHandled = NO;
       break;
   }
-  return confirmationStillRequired;
+  return confirmationHandled;
 }
 
 
@@ -2238,7 +2433,7 @@ bool_t HandleKey(int set, SDL_Keycode key, SDL_Keymod mod) {
   // Save the current pattern set as <key>.now (for 0-9, a-z, only)
   if (mod == (KMOD_ALT | KMOD_SHIFT)) {
     if ((key >= 'a' && key <= 'z') || (key >= '0' && key <= '9')) {
-      SavePatternSet(key, set, NO);
+      SavePatternSet(key, set, NO, NO);
       return NO;  // NO = Don't exit the program
     }
   }
@@ -2305,6 +2500,13 @@ bool_t HandleCommand(int set, command_e command) {
   int i;
 
   switch(command) {
+    case COM_SCROLL_RAND_EN: SBOOL(set, PE_SCROLLRANDEN) = !SBOOL(set, PE_SCROLLRANDEN); break;
+    case COM_SCROLL_RAND_RST: SINT(set, PE_SCROLLRANDOM) = patternSet[PE_SCROLLRANDOM].initial.i; break;
+    case COM_SCROLL_RAND_UP: SINT(set, PE_SCROLLRANDOM)++; break;
+    case COM_SCROLL_RAND_DOWN:
+      SINT(set, PE_SCROLLRANDOM)--;
+      if (SINT(set, PE_SCROLLRANDOM) < 1) SINT(set, PE_SCROLLRANDOM) = 1;
+      break;
     case COM_MIRROR_H: SBOOL(set, PE_MIRROR_H) = !SBOOL(set, PE_MIRROR_H); break;
     case COM_MIRROR_V: SBOOL(set, PE_MIRROR_V) = !SBOOL(set, PE_MIRROR_V); break;
     case COM_FG_WHEEL_UP:
@@ -2376,7 +2578,9 @@ bool_t HandleCommand(int set, command_e command) {
     case COM_TEXT_FLIP: SBOOL(set, PE_FONTFLIP) = !SBOOL(set, PE_FONTFLIP); break;
     case COM_TEXT_REVERSE: SBOOL(set, PE_FONTDIR) = !SBOOL(set, PE_FONTDIR); break;
     case COM_TEXT: SBOOL(set, PE_TEXTSEED) = !SBOOL(set, PE_TEXTSEED); break;
-    case COM_BOUNCE: SBOOL(set, PE_BOUNCER) = !SBOOL(set, PE_BOUNCER); break;
+    case COM_BOUNCE_RST: SINT(set, PE_BOUNCER) = patternSet[PE_BOUNCER].initial.i; break;
+    case COM_BOUNCE_UP: SINT(set, PE_BOUNCER)++; break;
+    case COM_BOUNCE_DOWN: if (--SINT(set, PE_BOUNCER) < 0) SINT(set, PE_BOUNCER) = 0; break;
     case COM_FADE: SBOOL(set, PE_FADE) = !SBOOL(set, PE_FADE); break;
     case COM_DIFFUSE: SBOOL(set, PE_DIFFUSE) = !SBOOL(set, PE_DIFFUSE); break;
     case COM_ROLL: SBOOL(set, PE_ROLLOVER) = !SBOOL(set, PE_ROLLOVER); break;
@@ -3342,6 +3546,7 @@ void WriteSlice(int set) {
   unsigned char pixelOn;
   unsigned char textDirection;
   static unsigned char textStaggerFlag[TEXT_BUFFER_SIZE] = "a";
+  color_t bgColor;
 
   // Initialize textStaggerFlag, if necessary.  This is used for 9 row stagger,
   // which is meant for an 8 pixel font height on a 9 pixel high display.
@@ -3525,8 +3730,14 @@ void WriteSlice(int set) {
     default:
       // textStagger == TS_8ROW, which means no border, no stagger, no extra
       // background to draw, so do nothing.
+      // textStagger == TS_NOBG, also no extra background to draw.
       break;
   }
+
+  // Will the text itself have a background?  If not, set the bg alpha channel.
+  bgColor = DCOLOR(PE_BGC);
+  if (DENUM(PE_TEXTMODE) == TS_NOBG) bgColor.a = 0;
+  if (DENUM(PE_TEXTMODE) == TS_BLACK) bgColor = cBlack;
 
   // Now go through each pixel value to find out what to write.
   for (i = 0; i < FONT_HEIGHT; i++) {
@@ -3540,10 +3751,10 @@ void WriteSlice(int set) {
     pixelOn = myfont[fontPixelIndex] & charColMasks[charCol];
     if (horizontal) {
       sliceIndex = sliceIndex % tensorHeight;
-      SetPixelA(sliceColOrRow, sliceIndex, pixelOn ? DCOLOR(PE_FGC) : DCOLOR(PE_BGC), DBUFFER(PE_FRAMEBUFFER));
+      SetPixelA(sliceColOrRow, sliceIndex, pixelOn ? DCOLOR(PE_FGC) : bgColor, DBUFFER(PE_FRAMEBUFFER));
     } else {
       sliceIndex = sliceIndex % tensorWidth;
-      SetPixelA(sliceIndex, sliceColOrRow, pixelOn ? DCOLOR(PE_FGC) : DCOLOR(PE_BGC), DBUFFER(PE_FRAMEBUFFER));
+      SetPixelA(sliceIndex, sliceColOrRow, pixelOn ? DCOLOR(PE_FGC) : bgColor, DBUFFER(PE_FRAMEBUFFER));
     }
   }
 
@@ -3859,7 +4070,7 @@ void UpdateInfoDisplay(int set) {
   // The ones that aren't automatic:
   WriteInt(previewFPSA, 21, 1, 10);
   WriteInt(previewFPSB, 21, 5, 10);
-  WriteInt(guiFPS, 53, 5, 10);
+  WriteInt(infoFPS, 53, 5, 10);
   if (cyclePatternSets) {
     WriteInt(cycleFrameCount, ROW_PA + 1, COL_PA + 1, 10);
   } else {
@@ -3874,8 +4085,8 @@ void UpdateInfoDisplay(int set) {
 
 
   // Show the status bar
-  snprintf(text, sizeof(text), "%-50s", statusText);
-  WriteLine(text, 53, 2, cBlack, cGray);
+  snprintf(text, sizeof(text), "%-75.75s", statusText);
+  WriteLine(text, 53, 1, cBlack, cRed);
 
   // Show the last 100 bytes of the text buffer.
   length = strlen(SSTRING(set, PE_TEXTBUFFER));
@@ -3926,6 +4137,8 @@ void WriteLine(char * thisText, int line, int col, color_t color, color_t bgColo
   SDL_Surface *textSurface;
   SDL_Texture *textTexture;
   SDL_Rect rect;
+
+  if (strlen(thisText) == 0) return;
 
   // Set the position of the output text.
   rect.x = colToPixel[col];
@@ -4175,13 +4388,18 @@ void CellFun(int set) {
 
 // Saves a pattern set to a file.
 // Return value indicates if the action requires confirmation.
-void SavePatternSet(char key, int set, unsigned char overWrite) {
-  char filename[8] = "";
+void SavePatternSet(char key, int set, bool_t overWrite, bool_t backup) {
+  char filename[20] = "";
   FILE *fp;
   int i,j;
 
   // Filename
-  snprintf(filename, sizeof(filename), "%c.now", key);
+  if (backup) {
+    snprintf(filename, sizeof(filename), "%c.now.bak", key);
+    overWrite = YES;
+  } else {
+    snprintf(filename, sizeof(filename), "%c.now", key);
+  }
 
   // Check file existence.
   if (!overWrite) {
@@ -4604,7 +4822,7 @@ void CopyPatternSet(int dst, int src) {
 
 #define CONFBOX_BORDER_WIDTH 10
 // Confirmation box for dangerous actions.
-void DrawConfirmationBox(SDL_Rect *yesBox, SDL_Rect *noBox, unsigned char selected) {
+void DrawConfirmationBox(SDL_Rect *yesBox, SDL_Rect *noBox, bool_t selected) {
   SDL_Surface *t1 = NULL, *t2 = NULL, *t3 = NULL;
   SDL_Texture *texture = NULL;
   SDL_Color fg = {DISPLAY_COLOR_TEXTS.r, DISPLAY_COLOR_TEXTS.g, DISPLAY_COLOR_TEXTS.b};
@@ -5148,4 +5366,199 @@ void LoadIPMap(void) {
   ipmap1 = tempMap1;
   ipmap2 = tempMap2;
   ipmap3 = tempMap3;
+}
+
+// Edit a value on the display by type.
+inputMode_e EditValue(int set, int commandToEdit) {
+  //~ int currentSet = set; // Global override.
+
+  //~ printf("Edit value\n");
+  if (displayCommand[commandToEdit].dat == PE_INVALID) return IM_NORMAL;
+  switch(patternSet[displayCommand[commandToEdit].dat].type) {
+    case ET_INT:
+      snprintf(statusText, sizeof(statusText), "Editing \"%s\". ESC to cancel.", displayCommand[commandToEdit].text);
+      return IM_INT;
+      break;
+    case ET_FLOAT:
+      snprintf(statusText, sizeof(statusText), "Editing \"%s\". ESC to cancel.", displayCommand[commandToEdit].text);
+      return IM_FLOAT;
+      break;
+    default:
+      return IM_NORMAL;
+  }
+}
+
+
+void DrawTextEntryBox(int item, char * text) {
+  //~ printf("Item: %s, Text: %s\n", displayCommand[item].text, text);
+  SDL_Rect box;
+  SDL_Color fontColor = {DISPLAY_COLOR_PARMS.r, DISPLAY_COLOR_PARMS.g, DISPLAY_COLOR_PARMS.b};
+  SDL_Color fontBGColor = {DISPLAY_COLOR_PARMSBG.r, DISPLAY_COLOR_PARMSBG.g, DISPLAY_COLOR_PARMSBG.b};
+  SDL_Surface *textS = NULL;
+  SDL_Texture *texture = NULL;
+
+  // Get the dimensions.
+  box.x = colToPixel[displayCommand[item].col + 1] - 1;
+  box.y = displayCommand[item].line * DISPLAY_TEXT_HEIGHT - 1;
+  box.w = (colToPixel[displayCommand[item].col + 2] - box.x) + 2;
+  box.h = ((displayCommand[item].line + 1) * DISPLAY_TEXT_HEIGHT - box.y + 1) + 2;
+
+  // Draw the outline box.
+  DrawSRectangle(mwRenderer, box, DISPLAY_COLOR_PARMS);
+  DrawBox(mwRenderer, box.x + 1, box.y + 1, box.w - 2, box.h - 2, cBlack);
+
+  if (strlen(text) == 0) return;
+  textS = TTF_RenderText_Shaded(screenFont, text, fontColor, fontBGColor);
+  if (!textS) {
+    fprintf(stderr, "SDL error rendering text \"%s\": %s\n", text, SDL_GetError());
+    return;
+  }
+
+  texture = SDL_CreateTextureFromSurface(mwRenderer, textS);
+  if (!texture) {
+    fprintf(stderr, "Unable to create text render texture: %s\n", SDL_GetError());
+    SDL_FreeSurface(textS);
+    return;
+  }
+
+  box.h -=3;
+  box.w -=3;
+  box.x = (box.x + box.w) - min (textS->w, box.w - 1);
+  box.y +=1;
+  box.w = min(box.w, textS->w);
+  SDL_FreeSurface(textS);
+  SDL_RenderCopy(mwRenderer, texture, NULL, &box);
+  SDL_DestroyTexture(texture);
+
+  //~ printf("Text: %s\n", text);
+}
+
+
+// Handle entry for text boxes, numbers, etc.
+textEntry_e HandleTextEntry(SDL_Keycode key, SDL_Keymod mod, char * textEntry, int maxTextSize) {
+  int length = strlen(textEntry);
+
+  if (key == SDLK_UNKNOWN) return TE_NOTHING;  // Not printable.
+
+  // Homogenize the right / left control keys.
+  if (mod & KMOD_CTRL) mod |= KMOD_CTRL;
+  if (mod & KMOD_ALT) mod |= KMOD_ALT;
+  if (mod & KMOD_SHIFT) mod |= KMOD_SHIFT;
+
+  if ((mod & KMOD_ALT) || (mod & KMOD_CTRL)) return TE_NOTHING;  // Not printable.
+  if (key == SDLK_ESCAPE) return TE_REJECTED;  // Escape pressed, reject entry.
+  if (key == SDLK_RETURN) return TE_ACCEPTED;  // Enter pressed, accept entry.
+
+  // Backspace pressed, shorten entry.
+  if (key == SDLK_BACKSPACE) {
+    length--;
+    if (length < 0) {
+      length = 0;
+    }
+    textEntry[length] = '\0';
+    return TE_NOTHING;
+  }
+
+  // Delete pressed, clear entry.
+  if (key == SDLK_DELETE) {
+    length = 0;
+    textEntry[0] = '\0';
+    return TE_NOTHING;
+  }
+
+  // Numeric keypad
+  if (key == SDLK_KP_ENTER) return TE_ACCEPTED;  // Enter pressed, accept entry.
+  switch(key) {
+    case SDLK_KP_0: key = '0'; break;
+    case SDLK_KP_1: key = '1'; break;
+    case SDLK_KP_2: key = '2'; break;
+    case SDLK_KP_3: key = '3'; break;
+    case SDLK_KP_4: key = '4'; break;
+    case SDLK_KP_5: key = '5'; break;
+    case SDLK_KP_6: key = '6'; break;
+    case SDLK_KP_7: key = '7'; break;
+    case SDLK_KP_8: key = '8'; break;
+    case SDLK_KP_9: key = '9'; break;
+    case SDLK_KP_PLUS: key = '+'; break;
+    case SDLK_KP_MINUS: key = '-'; break;
+    case SDLK_KP_PERIOD: key = '.'; break;
+    case SDLK_KP_MULTIPLY: key = '*'; break;
+    case SDLK_KP_DIVIDE: key = '/'; break;
+  }
+
+  if ((key > '~' || key < ' ')) return TE_NOTHING;  // Not a printable character.
+
+  // Shifted keys
+  if ((mod & KMOD_SHIFT) == KMOD_SHIFT) {
+    if (key <= SDLK_z && key>= SDLK_a) {
+      // Capital letters
+      key = key - ('a' - 'A');
+    } else {
+      // Symbols
+      switch(key) {
+        case SDLK_1: key = '!'; break;
+        case SDLK_2: key = '@'; break;
+        case SDLK_3: key = '#'; break;
+        case SDLK_4: key = '$'; break;
+        case SDLK_5: key = '%'; break;
+        case SDLK_6: key = '^'; break;
+        case SDLK_7: key = '&'; break;
+        case SDLK_8: key = '*'; break;
+        case SDLK_9: key = '('; break;
+        case SDLK_0: key = ')'; break;
+        case SDLK_BACKSLASH: key = '|'; break;
+        case SDLK_BACKQUOTE: key = '~'; break;
+        case SDLK_MINUS: key = '_'; break;
+        case SDLK_EQUALS: key = '+'; break;
+        case SDLK_LEFTBRACKET: key = '{'; break;
+        case SDLK_RIGHTBRACKET: key = '}'; break;
+        case SDLK_SEMICOLON: key = ':'; break;
+        case SDLK_COMMA: key = '<'; break;
+        case SDLK_PERIOD: key = '>'; break;
+        case SDLK_SLASH: key = '?'; break;
+        case SDLK_QUOTE: key = '"'; break;
+        default: break;
+      }
+    }
+  }
+
+  // Sanity
+  if (key < 32 || key > 126) return TE_NOTHING;
+
+  // And we got a character, so add it.
+  textEntry[length] = key;
+  textEntry[length + 1] = '\0'; // Terminate it.
+
+  // Too long?
+  length++;
+  if (length >= (maxTextSize - 1)) {
+    textEntry[length - 1] = '\0';  // Reterminate.
+  }
+
+  return TE_NOTHING;
+}
+
+
+bool_t SetValueInt(int set, patternElement_e element, int value) {
+  // Validate the input value
+  if ((value >= patternSet[element].min.i) &&
+      (value <= patternSet[element].max.i)) {
+    SINT(set, element) = value;
+    return YES;
+  }
+  return NO;
+}
+
+void SetValueFloat(int set, patternElement_e element, float value) {
+  // Validate the input value
+  if (value < patternSet[element].min.f) {
+    SFLOAT(set, element) = patternSet[element].min.f;
+    snprintf(statusText, sizeof(statusText), "Input value %f too low.  Using min instead.", value);
+  } else if (value > patternSet[element].max.f) {
+    SFLOAT(set, element) = patternSet[element].max.f;
+    snprintf(statusText, sizeof(statusText), "Input value %f too high.  Using max instead.", value);
+  } else {
+    SFLOAT(set, element) = value;
+    snprintf(statusText, sizeof(statusText), "Value set to %f.", value);
+  }
 }
