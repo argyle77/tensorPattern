@@ -8,6 +8,9 @@
 
 #define TENSOR_BYTES (TENSOR_WIDTH*TENSOR_HEIGHT*3)
 
+#define TENSOR_ADDR_PER_PANEL 6
+#define TENSOR_PANEL_COUNT 3
+
 int tensor_init(const char **Tensor_Section1, const char **Tensor_Section2, const char **Tensor_Section3);
 void tensor_send(unsigned char *fb);
 
