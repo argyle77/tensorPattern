@@ -75,3 +75,7 @@ Version 7.0:
   Added draw on previews with mouse.  Added pixel map and
   ip address map files for remapping without recompiling.
 
+Version 7.1:
+  Added mirroring, sidepulse seed, per pattern set intensity
+  limit, re-organized code, added right click to edit parameters
+  with the keyboard.
