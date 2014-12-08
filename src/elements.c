@@ -58,13 +58,42 @@ const colorName_t namedColors[] = {
   { CE_GRAY,       CD_GRAY},
   { CE_DKGRAY,     CD_DKGRAY},
   { CE_BLACK,      CD_BLACK},
+  { CE_HALF_RED,        CD_HALF_RED},
+  { CE_HALF_ORANGE,     CD_HALF_ORANGE},
+  { CE_HALF_YELLOW,     CD_HALF_YELLOW},
+  { CE_HALF_CHARTREUSE, CD_HALF_CHARTREUSE},
+  { CE_HALF_GREEN,      CD_HALF_GREEN},
+  { CE_HALF_AQUA,       CD_HALF_AQUA},
+  { CE_HALF_CYAN,       CD_HALF_CYAN},
+  { CE_HALF_AZURE,      CD_HALF_AZURE},
+  { CE_HALF_BLUE,       CD_HALF_BLUE},
+  { CE_HALF_VIOLET,     CD_HALF_VIOLET},
+  { CE_HALF_MAGENTA,    CD_HALF_MAGENTA},
+  { CE_HALF_ROSE,       CD_HALF_ROSE},
+  { CE_LTRED,        CD_LTRED},
+  { CE_LTORANGE,     CD_LTORANGE},
+  { CE_LTYELLOW,     CD_LTYELLOW},
+  { CE_LTCHARTREUSE, CD_LTCHARTREUSE},
+  { CE_LTGREEN,      CD_LTGREEN},
+  { CE_LTAQUA,       CD_LTAQUA},
+  { CE_LTCYAN,       CD_LTCYAN},
+  { CE_LTAZURE,      CD_LTAZURE},
+  { CE_LTBLUE,       CD_LTBLUE},
+  { CE_LTVIOLET,     CD_LTVIOLET},
+  { CE_LTMAGENTA,    CD_LTMAGENTA},
+  { CE_LTROSE,       CD_LTROSE},
 };
-const int namedPaletteCount = sizeof(namedColors) / sizeof(colorName_t);
+const int namedColorsCount = sizeof(namedColors) / sizeof(colorName_t);
 
 // This is separated from the namedColors because of the enumerations array.
 const char *colorsText[] = { "red", "orange", "yellow", "chartreuse", "green",
   "aqua", "cyan", "azure", "blue", "violet", "magenta", "rose", "white",
-  "lt gray", "gray", "dk gray", "black" };
+  "lt gray", "gray", "dk gray", "black", "1/2 red", "1/2 orange", "1/2 yellow",
+  "1/2 chartreuse", "1/2 green", "1/2 aqua", "1/2 cyan", "1/2 azure",
+  "1/2 blue", "1/2 violet", "1/2 magenta", "1/2 rose", "lt red", "lt orange",
+  "lt yellow", "lt chartreuse", "lt green", "lt aqua", "lt cyan", "lt azure",
+  "lt blue", "lt violet", "lt magenta", "lt rose",
+};
 const int colorsTextSize = sizeof(colorsText) / sizeof(const char *);
 
 // Enumeration array provides the connection between the enumeration type, its
@@ -178,9 +207,9 @@ const command_t displayCommand[] = {
   // Pattern sets
   {ROW_PA + 1, COL_PA, "Cycle through pattern sets",   PE_INVALID,  {{KMOD_CTRL, SDLK_g, COM_CYCLESET}}},
   {ROW_PA + 2, COL_PA, "Frames to play this set", PE_FRAMECOUNT, {{0, 0, COM_FCOUNT_RST}, {0, 0, COM_FCOUNT_INC}, {0, 0, COM_FCOUNT_DEC}}},
-  {ROW_PA + 8, COL_PA, "Live pattern set (left)",PE_INVALID, {{0, 0, COM_LIVE_INC}, {}, {0, 0, COM_LIVE_DEC}}},
+  {ROW_PA + 8, COL_PA, "Live preview set (left)",PE_INVALID, {{0, 0, COM_LIVE_INC}, {}, {0, 0, COM_LIVE_DEC}}},
   {ROW_PA + 9, COL_PA, "Alternate preview set (right)",PE_INVALID, {{0, 0, COM_ALTERNATE_INC}, {}, {0, 0, COM_ALTERNATE_DEC}}},
-  {ROW_PA + 10,COL_PA, "Control operate on set",     PE_INVALID, {{0, 0, COM_OPERATE}}},
+  {ROW_PA + 10,COL_PA, "Controls operate on set",     PE_INVALID, {{0, 0, COM_OPERATE}}},
   {ROW_PA + 11,COL_PA, "Exchange live and alternate sets", PE_INVALID, {{0, 0, COM_EXCHANGE}}},
   {ROW_PA + 12,COL_PA, "Alternate set blending amount", PE_INVALID, {{0, 0, COM_BLEND_RST}, {0, 0, COM_BLEND_INC}, {0, 0, COM_BLEND_DEC}}},
   {ROW_PA + 13,COL_PA, "Auto blend & switch sets", PE_INVALID, {{0, 0, COM_BLENDSWITCH}}},
@@ -310,14 +339,14 @@ const int displayTextCount = sizeof(displayText) / sizeof(displayText_t);
 // Some labels on the gui.
 const displayText_t labelText[] = {
   {21, 0,          "Live Preview          FPS:"},
-  {21, 4,          "Alternate Preview     FPS:"},
-  {53, 4,          "                  GUI FPS:"},
+  {21, 4,          "Alternate Preview    FPS:"},
+  {53, 4,          "                 GUI FPS:"},
+  {51, 0,          " Text buffer:"},
 };
 const int labelCount = sizeof(labelText) / sizeof(displayText_t);
 
 // Headers with highlighted backgrounds on the gui.
 const displayText_t headerText[] = {
-  {51, 0,          "Text buffer:"},
   {ROW_PA, COL_PA, "Pattern sets:"},
   {ROW_P, COL_P,   "Color suppression:"},
   {ROW_A, COL_A,   "Auxiliary:"},
@@ -408,15 +437,15 @@ bool_t VerifyStructuralIntegrity(void) {
   }
 
   // color_e and namedColors array.
-  for (i = 0; i < namedPaletteCount; i++) {
+  for (i = 0; i < namedColorsCount; i++) {
     if (i != namedColors[i].index) {
       fprintf(stderr, "Programmer error: color_e does not match namedColors array!\n");
       fprintf(stderr, "Element %i, has incorrect enumeration value %i!\n", i, namedColors[i].index);
       rc = NO;
     }
   }
-  if (CE_COUNT != namedPaletteCount) {
-    fprintf(stderr, "Programmer error: Mismatched namedColors(%i) != color_e(%i)!\n", namedPaletteCount, CE_COUNT);
+  if (CE_COUNT != namedColorsCount) {
+    fprintf(stderr, "Programmer error: Mismatched namedColors(%i) != color_e(%i)!\n", namedColorsCount, CE_COUNT);
     rc = NO;
   }
   if (CE_COUNT != colorsTextSize) {

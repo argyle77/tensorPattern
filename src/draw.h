@@ -55,6 +55,8 @@
   #define ROW_T 41
   #define COL_T 0
 
+  #define PARAMETER_WIDTH 10
+
   // 32 bit per pixel color type - Named or array access through union.
   typedef union color_t {
     struct {
@@ -77,13 +79,37 @@
   #define CD_VIOLET     {.r = 127, .g = 0,   .b = 255, .a = 255}
   #define CD_MAGENTA    {.r = 255, .g = 0,   .b = 255, .a = 255}
   #define CD_ROSE       {.r = 255, .g = 0,   .b = 127, .a = 255}
+  #define CD_HALF_RED        {.r = 127, .g = 0,   .b = 0,   .a = 255}
+  #define CD_HALF_ORANGE     {.r = 127, .g = 63,  .b = 0,   .a = 255}
+  #define CD_HALF_YELLOW     {.r = 127, .g = 127, .b = 0,   .a = 255}
+  #define CD_HALF_CHARTREUSE {.r = 63,  .g = 127, .b = 0,   .a = 255}
+  #define CD_HALF_GREEN      {.r = 0,   .g = 127, .b = 0,   .a = 255}
+  #define CD_HALF_AQUA       {.r = 0,   .g = 127, .b = 63,  .a = 255}
+  #define CD_HALF_CYAN       {.r = 0,   .g = 127, .b = 127, .a = 255}
+  #define CD_HALF_AZURE      {.r = 0  , .g = 63,  .b = 127, .a = 255}
+  #define CD_HALF_BLUE       {.r = 0,   .g = 0,   .b = 127, .a = 255}
+  #define CD_HALF_VIOLET     {.r = 63,  .g = 0,   .b = 127, .a = 255}
+  #define CD_HALF_MAGENTA    {.r = 127, .g = 0,   .b = 127, .a = 255}
+  #define CD_HALF_ROSE       {.r = 127, .g = 0,   .b = 63,  .a = 255}
+  #define CD_LTRED        {.r = 255, .g = 127,   .b = 127,   .a = 255}
+  #define CD_LTORANGE     {.r = 255, .g = 191, .b = 127,   .a = 255}
+  #define CD_LTYELLOW     {.r = 255, .g = 255, .b = 127,   .a = 255}
+  #define CD_LTCHARTREUSE {.r = 191, .g = 255, .b = 127,   .a = 255}
+  #define CD_LTGREEN      {.r = 127,   .g = 255, .b = 127,   .a = 255}
+  #define CD_LTAQUA       {.r = 127,   .g = 255, .b = 191, .a = 255}
+  #define CD_LTCYAN       {.r = 127,   .g = 255, .b = 255, .a = 255}
+  #define CD_LTAZURE      {.r = 127  , .g = 191, .b = 255, .a = 255}
+  #define CD_LTBLUE       {.r = 127,   .g = 127,   .b = 255, .a = 255}
+  #define CD_LTVIOLET     {.r = 191, .g = 127,   .b = 255, .a = 255}
+  #define CD_LTMAGENTA    {.r = 255, .g = 127,   .b = 255, .a = 255}
+  #define CD_LTROSE       {.r = 255, .g = 127,   .b = 191, .a = 255}
   #define CD_WHITE      {.r = 255, .g = 255, .b = 255, .a = 255}
   #define CD_LTGRAY     {.r = 191, .g = 191, .b = 191, .a = 255}
   #define CD_GRAY       {.r = 127, .g = 127, .b = 127, .a = 255}
   #define CD_DKGRAY     {.r = 63,  .g = 63,  .b = 63,  .a = 255}
   #define CD_BLACK      {.r = 0,   .g = 0,   .b = 0,   .a = 255}
   #define CD_DKYELLOW   {.r = 192, .g = 192, .b = 0,   .a = 255}
-  #define CD_LTBLUE     {.r = 127,   .g = 192,   .b = 255, .a = 255}
+  //~ #define CD_LTBLUE     {.r = 127,   .g = 192,   .b = 255, .a = 255}
 
   extern const color_t cRed, cOrange, cYellow, cChartreuse, cGreen, cAqua, cCyan,
     cAzure, cBlue, cViolet, cMagenta, cRose, cWhite, cLtGray, cGray, cDkGray,
@@ -111,7 +137,11 @@
     CE_INVALID = -1,
     CE_RED = 0, CE_ORANGE, CE_YELLOW, CE_CHARTREUSE, CE_GREEN, CE_AQUA, CE_CYAN,
     CE_AZURE, CE_BLUE, CE_VIOLET, CE_MAGENTA, CE_ROSE, CE_WHITE, CE_LTGRAY,
-    CE_GRAY, CE_DKGRAY, CE_BLACK,
+    CE_GRAY, CE_DKGRAY, CE_BLACK, CE_HALF_RED, CE_HALF_ORANGE, CE_HALF_YELLOW,
+    CE_HALF_CHARTREUSE, CE_HALF_GREEN, CE_HALF_AQUA, CE_HALF_CYAN,
+    CE_HALF_AZURE, CE_HALF_BLUE, CE_HALF_VIOLET, CE_HALF_MAGENTA, CE_HALF_ROSE,
+    CE_LTRED, CE_LTORANGE, CE_LTYELLOW, CE_LTCHARTREUSE, CE_LTGREEN, CE_LTAQUA,
+    CE_LTCYAN, CE_LTAZURE, CE_LTBLUE, CE_LTVIOLET, CE_LTMAGENTA, CE_LTROSE,
     CE_COUNT // Last.
   } color_e;
 
@@ -155,6 +185,7 @@
   void DrawSRectangle(box_t rect, color_t color);
   void DrawBox(int x, int y, int w, int h, color_t color);
   void DrawSBox(box_t rect, color_t color);
+  void DrawOutlineBox(box_t rect, color_t fg, color_t bg);
   void WriteLine(char * thisText, int line, int col, color_t fg, color_t bg);
   void ClearWindow(void);
   void UpdateGUI(void);
@@ -162,7 +193,7 @@
   box_t GetCommandBox(int command);
   void DrawConfirmationBox(box_t *yesBox, box_t *noBox, bool_t selected, char *label);
   void UpdateInfoDisplay(int set);
-  void InitDisplayTexts(void);
+  void DrawDisplayTexts(void);
   void WriteLine(char * thisText, int line, int col, color_t color, color_t bgColor);
   void WriteBool(bool_t value, int row, int col, int width);
   void WriteInt(int value, int row, int col, int width);
@@ -172,9 +203,10 @@
   void DrawTextEntryBox(int item, char * text);
   void DrawEnumSelectBox(int item, int selected, box_t ** targets);
   void DrawPreviewBorder(int x, int y, int tw, int th, bool_t active);
-  void InitDisplayTexts(void);
+  void DrawDisplayTexts(void);
   void WriteCommand(int index, color_t fg, color_t bg);
   bool_t IsSameBox(box_t a, box_t b);
   bool_t IsInsideBox(point_t point, box_t box);
+  void CenterSurface(box_t box, SDL_Surface *s);
 
 #endif /* ifndef DRAW_H_ */

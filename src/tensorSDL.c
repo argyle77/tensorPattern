@@ -136,8 +136,10 @@ textEntry_e HandleTextEntry(SDL_Keycode key, SDL_Keymod mod, char * textEntry, i
 bool_t SetValueInt(int set, patternElement_e element, int value);
 void SetValueFloat(int set, patternElement_e element, float value);
 int OverCommand(point_t mouse, int *lastHover);
+int OverBox(point_t mouse, int item, box_t ** targets, int *lastHover);
 box_t GetCommandBox(int command);
 void DrawSidePulse(int set);
+bool_t HandleEnumSelect(SDL_Keycode key, int set, int item, int *selected);
 
 
 // Main
@@ -251,7 +253,7 @@ int main(int argc, char *argv[]) {
   UpdateDisplays(currentSet, alternateSet, global_intensity_limit);
 
   // Add the text to the window
-  InitDisplayTexts();
+  DrawDisplayTexts();
 
   // Initialize the user events
   FPSEventType = SDL_RegisterEvents(1);
@@ -508,9 +510,7 @@ int main(int argc, char *argv[]) {
                     //~ snprintf(textEntry, sizeof(textEntry), "%i", DINT(displayCommand[thisHover].dataSource));
                     textEntry[0] = '\0';
                   } else if (inputMode == IM_ENUM) {
-                    printf("Got one...\n");
                     if (targets) {
-                      printf("Freeing old memory...\n");
                       free(targets);
                       targets = NULL;
                     }
@@ -616,9 +616,43 @@ int main(int argc, char *argv[]) {
         case IM_ENUM:
           switch(event.type) {
             case SDL_KEYDOWN:
-              inputMode = IM_NORMAL;
-              printf("Normal mode.\n");
+              // Put some stuff here.
+              if (HandleEnumSelect(event.key.keysym.sym,
+                displaySet ? alternateSet : currentSet, thisHover, &enumHover))
+                inputMode = IM_NORMAL;
               break;
+            case SDL_MOUSEMOTION:
+              // Check if its hovering over a command.
+              enumHover = OverBox(mouse, thisHover, &targets, &lastHover);
+              break;  // End case SDL_MOUSEMOTION.
+            case SDL_MOUSEBUTTONDOWN:
+              // Correct the error made by the common code.
+              if (event.button.button == SDL_BUTTON_LEFT) leftMouseDownOn = enumHover;
+              break;
+            case SDL_MOUSEBUTTONUP:
+             // Mouse button unpushed.  Consider this a click.  If we're over
+              // the same item we down clicked on, the user has chosen.
+              if (event.button.button == SDL_BUTTON_LEFT) {
+                if ((enumHover != INVALID) && (enumHover == leftMouseDownOn)) {
+                  SENUM(displaySet ? alternateSet : currentSet, displayCommand[thisHover].dataSource) = enumHover;
+                  snprintf(statusText, sizeof(statusText), "Item %s set to %s",
+                    displayCommand[thisHover].text,
+                    enumerations[patternElements[displayCommand[thisHover].dataSource].etype].texts[enumHover]);
+                  // Special handling for the foreground and background
+                  // color selectors:
+                  if (displayCommand[thisHover].dataSource == PE_FGE)
+                    SCOLOR(displaySet ? alternateSet : currentSet, PE_FGC) =
+                      namedColors[SENUM(displaySet ? alternateSet : currentSet, PE_FGE)].color;
+                  else if (displayCommand[thisHover].dataSource == PE_BGE)
+                    SCOLOR(displaySet ? alternateSet : currentSet, PE_BGC) =
+                      namedColors[SENUM(displaySet ? alternateSet : currentSet, PE_BGE)].color;
+                  inputMode = IM_NORMAL;
+                }
+              } else if (event.button.button == SDL_BUTTON_RIGHT) {
+                snprintf(statusText, sizeof(statusText), "Item selection cancelled.");
+                inputMode = IM_NORMAL;
+              }
+              break;  // End SDL_MOUSEBUTTONUP case.
             default:
               if (event.type == GUIEventType) {
                 // Handle drawing the input selection boxes.
@@ -722,7 +756,7 @@ int main(int argc, char *argv[]) {
     if (refreshAll) {
       refreshAll = NO;
       ClearWindow();
-      InitDisplayTexts();
+      DrawDisplayTexts();
       DrawPreviewBorder(PREVIEW_LIVE_POS_X, PREVIEW_LIVE_POS_Y, tensorWidth, tensorHeight, displaySet == OO_CURRENT);
       DrawPreviewBorder(PREVIEW_ALT_POS_X, PREVIEW_ALT_POS_Y, tensorWidth, tensorHeight, displaySet == OO_ALTERNATE);
     }
@@ -1304,6 +1338,65 @@ bool_t HandleConfirmation(SDL_Keycode key, unsigned char *selected) {
   return confirmationHandled;
 }
 
+// Key press processing for enumeration selection boxes.
+bool_t HandleEnumSelect(SDL_Keycode key, int set, int item, int *selected) {
+  bool_t selectionDismissed = YES;
+  int source = displayCommand[item].dataSource;
+  int boxCount = enumerations[patternElements[source].etype].size;
+
+  switch (key) {
+    case SDLK_ESCAPE:
+      snprintf(statusText, sizeof(statusText), "Selection cancelled.");
+      break;
+
+    case SDLK_RETURN:
+    case SDLK_SPACE:
+      SENUM(set, source) = *selected;
+      snprintf(statusText, sizeof(statusText), "Item %s set to %s",
+        displayCommand[item].text,
+        enumerations[patternElements[source].etype].texts[*selected]);
+      break;
+
+    // They're laid out in a 2 by x grid.
+    case SDLK_LEFT:
+      (*selected)--;
+      if (*selected >= boxCount) *selected = 0;
+      if (*selected < 0) {
+        (*selected)++;
+      }
+      selectionDismissed = NO;
+      break;
+    case SDLK_UP:
+      *selected -= 2;
+      if (*selected >= boxCount) *selected = 0;
+      if (*selected < 0) {
+        *selected += 2;
+      }
+      selectionDismissed = NO;
+      break;
+    case SDLK_DOWN:
+      *selected += 2;
+      if (*selected >= boxCount) {
+        *selected -= 2;
+        if (*selected >= boxCount) *selected = 0;
+      }
+      selectionDismissed = NO;
+      break;
+    case SDLK_RIGHT:
+      *selected += 1;
+      if (*selected >= boxCount) {
+        *selected -= 1;
+        if (*selected >= boxCount) *selected = 0;
+      }
+      selectionDismissed = NO;
+      break;
+
+    default:
+      selectionDismissed = NO;
+      break;
+  }
+  return selectionDismissed;
+}
 
 // Key press processing.
 bool_t HandleKey(int set, SDL_Keycode key, SDL_Keymod mod) {
@@ -2178,7 +2271,6 @@ void BlendAlternate(unsigned char *fba, unsigned char *fbb) {
 }
 
 // Rotate
-//
 void Rotate(double angle, double expansion, int aliasmode, unsigned char *fb_dst, unsigned char *fb_src, unsigned char exclude) {
   SDL_Surface *rotatedSurface = NULL;
   SDL_Surface *s1 = NULL;
@@ -4139,9 +4231,67 @@ int OverCommand(point_t mouse, int *lastHover) {
   return INVALID;
 }
 
+int OverBox(point_t mouse, int item, box_t ** targets, int *lastHover) {
+  int i;
+  box_t box, boxOld;
+  const box_t invalidBox = {0, 0, 0, 0};
+  int boxCount = enumerations[patternElements[displayCommand[item].dataSource].etype].size;
+  const color_t fg = DISPLAY_COLOR_PARMS;
+  const color_t bg = DISPLAY_COLOR_PARMSBG;
+  const color_t fgh = DISPLAY_COLOR_TEXTS_HL;
+  const color_t bgh = DISPLAY_COLOR_TEXTSBG_HL;
+  char text[PARAMETER_WIDTH];
+
+  if (*lastHover != INVALID) boxOld = (*targets)[*lastHover];
+  else boxOld = invalidBox;
+
+  for (i = 0; i < boxCount; i++) {
+    // box is the rectangle encompassing the command text.  We could
+    // precompute these if timing were important.
+    box = (*targets)[i];
+
+    // Is it in the rectangle of command i?
+    if (IsInsideBox(mouse, box)) {
+
+      // Is it hovering over a command is wasn't hovering over before?
+      if ((!IsSameBox(box, boxOld)) || (*lastHover == INVALID)) {
+
+        // Yeah, so draw the new highlight.
+        DrawOutlineBox(box, fgh, bgh);
+        snprintf(text, sizeof(text), "%s", enumerations[patternElements[displayCommand[item].dataSource].etype].texts[i]);
+        CenterText(box, text, fgh, bgh);
+
+        // And if it came off a different command, remove that highlight.
+        if (*lastHover != INVALID) {
+          DrawOutlineBox(boxOld, fg, bg);
+          snprintf(text, sizeof(text), "%s", enumerations[patternElements[displayCommand[item].dataSource].etype].texts[*lastHover]);
+          CenterText(boxOld, text, fg, bg);
+        }
+
+        // New lastHover.
+        *lastHover = i;
+      }  // End new hover if
+
+      // This was our intersection.  Break the loop.  Can't be hovering over
+      // multiple commands.
+      return i;
+    }  // End intersected if
+  } // End for for hover check.
+
+  // Not over a new command? May have to clear the old highlight anyway.
+  if (*lastHover != INVALID) {
+    DrawOutlineBox(boxOld, fg, bg);
+    snprintf(text, sizeof(text), "%s", enumerations[patternElements[displayCommand[item].dataSource].etype].texts[*lastHover]);
+    CenterText(boxOld, text, fg, bg);
+    *lastHover = INVALID;
+  }
+
+  return INVALID;
+}
+
 // Update the values of the text on the display window.
 void UpdateInfoDisplay(int set) {
-  char text[102], mybuff[102];
+  char text[110], mybuff[110];
   int length;
   int i;
 
@@ -4149,20 +4299,20 @@ void UpdateInfoDisplay(int set) {
     if (displayCommand[i].dataSource != PE_INVALID) {
       switch(patternElements[displayCommand[i].dataSource].type) {
         case ET_BOOL:
-          WriteBool(SBOOL(set, displayCommand[i].dataSource), displayCommand[i].line, displayCommand[i].col + 1, 10);
+          WriteBool(SBOOL(set, displayCommand[i].dataSource), displayCommand[i].line, displayCommand[i].col + 1, PARAMETER_WIDTH);
           break;
 
         case ET_FLOAT:
-          WriteFloat(SFLOAT(set, displayCommand[i].dataSource), displayCommand[i].line, displayCommand[i].col + 1, 10, 5);
+          WriteFloat(SFLOAT(set, displayCommand[i].dataSource), displayCommand[i].line, displayCommand[i].col + 1, PARAMETER_WIDTH, PARAMETER_WIDTH/2);
           break;
 
         case ET_INT:
-          WriteInt(SINT(set, displayCommand[i].dataSource), displayCommand[i].line, displayCommand[i].col + 1, 10);
+          WriteInt(SINT(set, displayCommand[i].dataSource), displayCommand[i].line, displayCommand[i].col + 1, PARAMETER_WIDTH);
           break;
 
         case ET_ENUM:
           WriteString(enumerations[patternElements[displayCommand[i].dataSource].etype].texts[SENUM(set, displayCommand[i].dataSource)],
-            displayCommand[i].line, displayCommand[i].col + 1, 10);
+            displayCommand[i].line, displayCommand[i].col + 1, PARAMETER_WIDTH);
           break;
 
         default:
@@ -4173,20 +4323,20 @@ void UpdateInfoDisplay(int set) {
   }
 
   // The ones that aren't automatic:
-  WriteInt(previewFPSA, 21, 1, 10);
-  WriteInt(previewFPSB, 21, 5, 10);
-  WriteInt(infoFPS, 53, 5, 10);
+  WriteInt(previewFPSA, 21, 1, PARAMETER_WIDTH);
+  WriteInt(previewFPSB, 21, 5, PARAMETER_WIDTH);
+  WriteInt(infoFPS, 53, 5, PARAMETER_WIDTH);
   if (cyclePatternSets) {
-    WriteInt(cycleFrameCount, ROW_PA + 1, COL_PA + 1, 10);
+    WriteInt(cycleFrameCount, ROW_PA + 1, COL_PA + 1, PARAMETER_WIDTH);
   } else {
-    WriteBool(cyclePatternSets, ROW_PA + 1, COL_PA + 1, 10);
+    WriteBool(cyclePatternSets, ROW_PA + 1, COL_PA + 1, PARAMETER_WIDTH);
   }
-  WriteInt(alternateSet, ROW_PA + 9, COL_PA + 1, 10);
-  WriteInt(currentSet, ROW_PA + 8, COL_PA + 1, 10);
-  WriteString(operateText[displaySet], ROW_PA + 10, COL_PA + 1, 10);
-  WriteFloat(alternateBlend, ROW_PA + 12, COL_PA + 1, 10, 5);
-  WriteBool(autoBlend, ROW_PA + 13, COL_PA + 1, 10);
-  WriteFloat(alternateBlendRate, ROW_PA + 14, COL_PA + 1, 10, 5);
+  WriteInt(alternateSet, ROW_PA + 9, COL_PA + 1, PARAMETER_WIDTH);
+  WriteInt(currentSet, ROW_PA + 8, COL_PA + 1, PARAMETER_WIDTH);
+  WriteString(operateText[displaySet], ROW_PA + 10, COL_PA + 1, PARAMETER_WIDTH);
+  WriteFloat(alternateBlend, ROW_PA + 12, COL_PA + 1, PARAMETER_WIDTH, PARAMETER_WIDTH/2);
+  WriteBool(autoBlend, ROW_PA + 13, COL_PA + 1, PARAMETER_WIDTH);
+  WriteFloat(alternateBlendRate, ROW_PA + 14, COL_PA + 1, PARAMETER_WIDTH, PARAMETER_WIDTH/2);
 
 
   // Show the status bar
@@ -4195,10 +4345,10 @@ void UpdateInfoDisplay(int set) {
 
   // Show the last 100 bytes of the text buffer.
   length = strlen(SSTRING(set, PE_TEXTBUFFER));
-  WriteInt(length, 51, 1, 10);
+  WriteInt(length, 51, 1, PARAMETER_WIDTH);
   strncpy(mybuff, SSTRING(set, PE_TEXTBUFFER) + (length > 100 ? length - 100 : 0), 101);
   // The extra snprintf takes care of overwriting longer lines.
-  snprintf(text, sizeof(text), "%-100s", mybuff );
+  snprintf(text, sizeof(text), "  %-105s", mybuff );
   WriteLine(text, 52, 0, DISPLAY_COLOR_TBUF, DISPLAY_COLOR_TBUFBG);
 }
 

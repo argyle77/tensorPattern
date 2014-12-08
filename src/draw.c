@@ -25,6 +25,7 @@
 #define DCOL (CCOL + 39 * CHAR_W)
 #define ECOL (DCOL + 13 * CHAR_W)
 #define FCOL (ECOL + 26 * CHAR_W)
+#define ENUM_BORDER 4
 
 // Named color constants
 const color_t cRed = CD_RED;
@@ -137,6 +138,11 @@ void DrawSBox(box_t rect, color_t color) {
   DrawBox(rect.x, rect.y, rect.w, rect.h, color);
 }
 
+void DrawOutlineBox(box_t rect, color_t fg, color_t bg) {
+  DrawSRectangle(rect, fg);
+  DrawBox(rect.x + 1, rect.y + 1, rect.w - 2, rect.h - 2, bg);
+}
+
 // Writes a line of text to the selected line and column of the
 // output window with the selected color.
 void WriteLine(char * thisText, int line, int col, color_t fg, color_t bg) {
@@ -195,7 +201,7 @@ void ClearWindow(void) {
 
 int GetPixelofColumn(int col) {
   if (col >= MAX_COL) {
-    fprintf(stderr, "Selected column %i exceeds maximum %li!\n", col, MAX_COL - 1);
+    fprintf(stderr, "Selected column %i exceeds maximum %i!\n", col, (int) MAX_COL - 1);
     return colToPixel[MAX_COL - 1];
   } else if (col < 0) {
     fprintf(stderr, "Selected column %i less than 0?\n", col);
@@ -217,17 +223,9 @@ box_t GetCommandBox(int command) {
   box.x = GetPixelofColumn(displayCommand[command].col);
   box.y = displayCommand[command].line * DISPLAY_TEXT_HEIGHT;
   box.w = GetPixelofColumn(displayCommand[command].col + 2) - box.x;
-  box.h = (displayCommand[command].line + 1) * DISPLAY_TEXT_HEIGHT - box.y + 1;
+  box.h = (displayCommand[command].line + 1) * DISPLAY_TEXT_HEIGHT - box.y;
   return box;
 }
-
-
-
-
-
-
-
-
 
 void WriteBool(bool_t value, int row, int col, int width) {
   char text[100];
@@ -237,12 +235,14 @@ void WriteBool(bool_t value, int row, int col, int width) {
     snprintf(text, sizeof(text), "%*.*s", width, width, "NO");
   }
   WriteLine(text, row, col, DISPLAY_COLOR_PARMS, DISPLAY_COLOR_PARMSBG);
+  //~ WriteLine(text, row, col, DISPLAY_COLOR_PARMS, cOrange);
 }
 
 void WriteInt(int value, int row, int col, int width) {
   char text[100];
   snprintf(text, sizeof(text), "%*i", width, value);
   WriteLine(text, row, col, DISPLAY_COLOR_PARMS, DISPLAY_COLOR_PARMSBG);
+  //~ WriteLine(text, row, col, DISPLAY_COLOR_PARMS, cYellow);
 }
 
 void WriteFloat(float value, int row, int col, int width, int precision) {
@@ -251,14 +251,15 @@ void WriteFloat(float value, int row, int col, int width, int precision) {
   snprintf(text, sizeof(text), "%*.*f", width, precision, value);
   snprintf(text2, sizeof(text2), "%.*s", width, text); // Hard limit the width
   WriteLine(text2, row, col, DISPLAY_COLOR_PARMS, DISPLAY_COLOR_PARMSBG);
+  //~ WriteLine(text2, row, col, DISPLAY_COLOR_PARMS, cAqua);
 }
 
 void WriteString(const char *text, int line, int col, int width) {
   char temp[200];
   snprintf(temp, sizeof(temp), "%*.*s", width, width, text);
   WriteLine(temp, line, col, DISPLAY_COLOR_PARMS, DISPLAY_COLOR_PARMSBG);
+  //~ WriteLine(temp, line, col, DISPLAY_COLOR_PARMS, cRose);
 }
-
 
 #define CONFBOX_BORDER_WIDTH 10
 // Confirmation box for dangerous actions.
@@ -368,7 +369,6 @@ void DrawConfirmationBox(box_t *yesBox, box_t *noBox, bool_t selected, char *lab
   SDL_DestroyTexture(texture);
 }
 
-
 // Centers some text inside a box.
 void CenterText(box_t box, char * text, color_t fg, color_t bg) {
   SDL_Surface *textS = NULL;
@@ -398,6 +398,25 @@ void CenterText(box_t box, char * text, color_t fg, color_t bg) {
   SDL_DestroyTexture(texture);
 }
 
+// Centers a surface inside a box.
+void CenterSurface(box_t box, SDL_Surface *s) {
+  SDL_Texture *texture = NULL;
+  SDL_Rect rect;
+
+  if (!s) return;
+
+  texture = SDL_CreateTextureFromSurface(mwRenderer, s);
+  if (!texture) {
+    fprintf(stderr, "Unable to create render texture: %s\n", SDL_GetError());
+    return;
+  }
+  rect.w = s->w;
+  rect.h = s->h;
+  rect.x = box.x + (box.w / 2) - (rect.w / 2);
+  rect.y = box.y + (box.h / 2) - (rect.h / 2);
+  SDL_RenderCopy(mwRenderer, texture, NULL, &rect);
+  SDL_DestroyTexture(texture);
+}
 
 // Display box for entering keyboard text into a parameter.
 void DrawTextEntryBox(int item, char * text) {
@@ -411,10 +430,11 @@ void DrawTextEntryBox(int item, char * text) {
   SDL_Texture *texture = NULL;
 
   // Get the dimensions.
-  box.x = GetPixelofColumn(displayCommand[item].col + 1) - 1;
-  box.y = displayCommand[item].line * DISPLAY_TEXT_HEIGHT - 1;
-  box.w = (GetPixelofColumn(displayCommand[item].col + 2) - box.x) + 2;
-  box.h = ((displayCommand[item].line + 1) * DISPLAY_TEXT_HEIGHT - box.y + 1) + 2;
+  box.x = GetPixelofColumn(displayCommand[item].col + 1);
+  box.y = displayCommand[item].line * DISPLAY_TEXT_HEIGHT;
+  //~ box.w = (GetPixelofColumn(displayCommand[item].col + 2) - box.x);
+  box.w = (PARAMETER_WIDTH * CHAR_W);
+  box.h = ((displayCommand[item].line + 1) * DISPLAY_TEXT_HEIGHT - box.y + 1);
 
   // Draw the outline box.
   DrawSRectangle(box, DISPLAY_COLOR_PARMS);
@@ -454,120 +474,83 @@ void DrawTextEntryBox(int item, char * text) {
 }
 
 
-#define THBRD 2
+// Enumeration Selection Boxes
 void DrawEnumSelectBox(int item, int selected, box_t ** targets) {
 
-  box_t box;
-  //~ SDL_Color fontColor = {DISPLAY_COLOR_PARMS.r, DISPLAY_COLOR_PARMS.g, DISPLAY_COLOR_PARMS.b};
-  //~ SDL_Color fontBGColor = {DISPLAY_COLOR_PARMSBG.r, DISPLAY_COLOR_PARMSBG.g, DISPLAY_COLOR_PARMSBG.b};
-  //~ SDL_Surface *textS = NULL;
-  //~ SDL_Texture *texture = NULL;
+  // Vars
+  color_t fg = DISPLAY_COLOR_PARMS;
+  color_t bg = DISPLAY_COLOR_PARMSBG;
+  color_t fgh = DISPLAY_COLOR_TEXTS_HL;
+  color_t bgh = DISPLAY_COLOR_TEXTSBG_HL;
   point_t boxOrigin;  // All boxes are relative to this.
-  int i;
-  int boxCount;
-  int h, w;
+  int i, h, boxCount;
   int boxH, boxW;
-  char *label = displayCommand[item].text;
+  box_t wholeBox, labelBox;
+  char text[11];
 
-  // Yeah, check out the next line.
+  // Get the number of choices in the selector.
   boxCount = enumerations[patternElements[displayCommand[item].dataSource].etype].size;
 
-
-  // Calculate where to put each target box.
-  h = CHAR_H + (THBRD * 2);
-  w = CHAR_W * 10 + (THBRD * 2);
-  boxW = CHAR_W * 20 + (THBRD * 4);
-  boxH = (CHAR_H + 2 * THBRD) * (boxCount / 2 + boxCount % 2 + 1);
-
+  // Calculate the entire box width and position.
+  h = CHAR_H + (ENUM_BORDER * 2);
+  boxW = max(strlen(displayCommand[item].text) * CHAR_W + (ENUM_BORDER * 2), 2 * (CHAR_W * PARAMETER_WIDTH + (ENUM_BORDER * 2)));
+  boxH = h * ((boxCount / 2) + (boxCount % 2) + 1);
   boxOrigin.x = (WINDOW_WIDTH / 2) - boxW / 2;
   boxOrigin.y = (WINDOW_HEIGHT / 2) - boxH / 2;
+  wholeBox.x = boxOrigin.x;
+  wholeBox.y = boxOrigin.y;
+  wholeBox.w = boxW;
+  wholeBox.h = boxH;
 
-  // Draw the containing box
-  DrawBox(boxOrigin.x, boxOrigin.y, boxW, boxH, cAzure);
-  DrawBox(boxOrigin.x + 1, boxOrigin.y + 1, boxW - 2, boxH - 2, cBlack);
+  // Draw the outline of the whole box.
+  DrawOutlineBox(wholeBox, DISPLAY_COLOR_PARMS, DISPLAY_COLOR_PARMSBG);
 
-  // Draw the label box.
-  box.x = boxOrigin.x;
-  box.y = boxOrigin.y;
-  box.h = (CHAR_H + 2 * THBRD);
-  box.w = boxW;
-
-  //~ DrawSBox(mwRenderer, box, cAzure);
-  DrawBox(box.x , box.y , box.w , box.h, cAzure);
-  DrawBox(box.x + 1, box.y + 1, box.w - 2, box.h - 2, cGreen);
-  CenterText(box, label, cAzure, cBlack);
+  // Draw the label.
+  labelBox.x = boxOrigin.x;
+  labelBox.y = boxOrigin.y;
+  labelBox.w = boxW;
+  labelBox.h = h;
+  DrawSRectangle(labelBox, DISPLAY_COLOR_PARMS);
+  CenterText(labelBox, displayCommand[item].text, fg, bg);
 
   // Initialize the boxes if we haven't.
   if (! *targets) {
 
     // Allocate the space for the target boxes.
-    *targets = malloc(sizeof(box_t) * boxCount);
-    if (! *targets) {
+    (*targets) = malloc(sizeof(**targets) * boxCount);
+    if (! (*targets)) {
       fprintf(stderr, "Couldn't allocate some important memory.  Fuck it.\n");
       exit(EXIT_FAILURE);
     }
 
-    printf("Selection box for \"%s\" has %i items. Selected item is %i\n",
-      label, boxCount, selected);
-
-
-
-    // Draw the label.
+    // Calculate the box positions.
     for (i = 0; i < boxCount; i++) {
-      (*targets)[i].x = i;
-      (*targets)[i].y = i;
-      (*targets)[i].w = w;
-      (*targets)[i].h = h;
+      (*targets)[i].x = boxOrigin.x + (wholeBox.w / 2) * (i % 2);
+      (*targets)[i].y = boxOrigin.y + (h - 1) + (h * (i / 2));
+      (*targets)[i].w = wholeBox.w / 2 + ((i+1) % 2);
+      (*targets)[i].h = h + 1;
     }
-
-    for (i = 0; i < boxCount; i++) {
-      printf("Box %i: (%i, %i) %i x %i\n", i, (*targets)[i].x, (*targets)[i].y,
-        (*targets)[i].w, (*targets)[i].h);
-    }
-
   }
 
-
-  // Get the dimensions.
-  //~ box.x = colToPixel[displayCommand[item].col + 1] - 1;
-  //~ box.y = displayCommand[item].line * DISPLAY_TEXT_HEIGHT - 1;
-  //~ box.w = (colToPixel[displayCommand[item].col + 2] - box.x) + 2;
-  //~ box.h = ((displayCommand[item].liene + 1) * DISPLAY_TEXT_HEIGHT - box.y + 1) + 2;
-
-  // Draw the outline box.
-  //~ DrawSRectangle(mwRenderer, box, DISPLAY_COLOR_PARMS);
-  //~ DrawBox(mwRenderer, box.x + 1, box.y + 1, box.w - 2, box.h - 2, cBlack);
-
-  //~ if (strlen(text) == 0) return;
-  //~ textS = TTF_RenderText_Shaded(screenFont, text, fontColor, fontBGColor);
-  //~ if (!textS) {
-    //~ fprintf(stderr, "SDL error rendering text \"%s\": %s\n", text, SDL_GetError());
-    //~ return;
-  //~ }
-
-  //~ texture = SDL_CreateTextureFromSurface(mwRenderer, textS);
-  //~ if (!texture) {
-    //~ fprintf(stderr, "Unable to create text render texture: %s\n", SDL_GetError());
-    //~ SDL_FreeSurface(textS);
-    //~ return;
-  //~ }
-
-  //~ box.h -=3;
-  //~ box.w -=3;
-  //~ box.x = (box.x + box.w) - min (textS->w, box.w - 1);
-  //~ box.y +=1;
-  //~ box.w = min(box.w, textS->w);
-  //~ SDL_FreeSurface(textS);
-  //~ SDL_RenderCopy(mwRenderer, texture, NULL, &box);
-  //~ SDL_DestroyTexture(texture);
-
-  //~ printf("Text: %s\n", text);
+  // Draw the boxes.
+  for (i = 0; i < boxCount; i++) {
+    DrawSRectangle((*targets)[i], DISPLAY_COLOR_PARMS);
+    snprintf(text, sizeof(text), "%s", enumerations[patternElements[displayCommand[item].dataSource].etype].texts[i]);
+    if (i == selected) {
+      DrawOutlineBox((*targets)[i], fg, bgh);
+      CenterText((*targets)[i], text, fgh, bgh);
+    } else {
+      CenterText((*targets)[i], text, fg, bg);
+    }
+  }
 }
 
+
 // Write the static menu information to the display.
-void InitDisplayTexts(void) {
+void DrawDisplayTexts(void) {
   int i;
   box_t box;
+  char temp[100];
 
   // DrawBox(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT, cDkGray);
   for (i = 0; i < displayCommandCount; i++) {
@@ -578,22 +561,27 @@ void InitDisplayTexts(void) {
   for (i = 0; i < headerTextCount; i++) {
     box.x = GetPixelofColumn(headerText[i].col);
     box.y = headerText[i].line * DISPLAY_TEXT_HEIGHT;
-    box.w = GetPixelofColumn(headerText[i].col + 1) - box.x;
-    box.h = (headerText[i].line + 1) * DISPLAY_TEXT_HEIGHT - box.y + 1;
+    box.w = GetPixelofColumn(headerText[i].col + 1) - box.x + (CHAR_W * PARAMETER_WIDTH);
+    box.h = (headerText[i].line + 1) * DISPLAY_TEXT_HEIGHT - box.y;
 
     // Yeah, so draw the highlight.
     DrawBox(box.x, box.y, box.w, box.h, DISPLAY_COLOR_TITLESBG);
-    WriteLine(headerText[i].text, headerText[i].line, headerText[i].col, DISPLAY_COLOR_TITLES, DISPLAY_COLOR_TITLESBG);
+
+    // Place the text.
+    snprintf(temp, sizeof(temp), " %s", headerText[i].text);
+    WriteLine(temp, headerText[i].line, headerText[i].col, DISPLAY_COLOR_TITLES, DISPLAY_COLOR_TITLESBG);
   }
 
   // Draw the labels.
   for (i = 0; i < labelCount; i++) {
-    WriteLine(labelText[i].text, labelText[i].line, labelText[i].col, DISPLAY_COLOR_LABEL, DISPLAY_COLOR_LABELBG);
+    snprintf(temp, sizeof(temp), " %s", labelText[i].text);
+    WriteLine(temp, labelText[i].line, labelText[i].col, DISPLAY_COLOR_LABEL, DISPLAY_COLOR_LABELBG);
   }
 
   // Draw the texts.
   for (i = 0; i < displayTextCount; i++) {
-    WriteLine(displayText[i].text, displayText[i].line, displayText[i].col, DISPLAY_COLOR_INFO, DISPLAY_COLOR_INFOBG);
+    snprintf(temp, sizeof(temp), " %s", displayText[i].text);
+    WriteLine(temp, displayText[i].line, displayText[i].col, DISPLAY_COLOR_INFO, DISPLAY_COLOR_INFOBG);
   }
 }
 
@@ -611,7 +599,7 @@ void WriteCommand(int index, color_t fg, color_t bg) {
   if (displayCommand[index].line == INVALID) return;
 
   // Add the text from the displayCommand structure.
-  ind += snprintf(ind, end - ind, " %s", displayCommand[index].text);
+  ind += snprintf(ind, end - ind, "  %s", displayCommand[index].text);
 
   // Handle the modifier keys - worked well when we had only one modifier key
   // possible for each command, but now... Strategy: Show the modifiers from

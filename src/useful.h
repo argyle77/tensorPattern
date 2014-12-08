@@ -12,9 +12,9 @@
   #define ON 1
   #define FALSE 0
   #define TRUE 1
-  #define BACKWARDS 0
-  #define FORWARDS 1
   #define INVALID (-1)
+  #define BACKWARDS 1
+  #define FORWARDS 0
   #define FOREVER for(;;)
   typedef unsigned char bool_t;
 
