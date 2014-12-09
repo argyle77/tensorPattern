@@ -243,23 +243,29 @@
   } command_t;
 
   // Display titles
-  typedef struct displayText_t {
+  typedef struct guiText_t {
     int line;
     int col;
     char *text;
-  } displayText_t;
+  } guiText_t;
+
+  // Cache for textures representing information printed to the display.
+  typedef struct infoCache_t {
+    displayText_t infoText;
+    valueType_u cacheValue;
+  } infoCache_t;
 
   // Global constants
   extern const patternElement_t patternElements[];
   extern const int patternElementCount;
 
-  extern const displayText_t displayText[];
+  extern const guiText_t displayText[];
   extern const int displayTextCount;
   extern const command_t otherCommands[];
   extern const int otherCommandsCount;
-  extern const displayText_t labelText[];
+  extern const guiText_t labelText[];
   extern const int labelCount;
-  extern const displayText_t headerText[];
+  extern const guiText_t headerText[];
   extern const int headerTextCount;
   extern const command_t displayCommand[];
   extern const int displayCommandCount;

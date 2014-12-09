@@ -176,37 +176,57 @@
     int w, h;
   } box_t;
 
+  //
+  typedef struct displayText_t {
+    SDL_Texture * texture;
+    box_t targetBox;
+  } displayText_t;
+
   // Function prototypes
   bool_t InitGui(void);
   void QuitGui(void);
-
   void WindowTitle(const char * text);
+
+  // Simple drawing functions.
+  void ClearWindow(void);
   void DrawRectangle(int x, int y, int w, int h, color_t color);
   void DrawSRectangle(box_t rect, color_t color);
   void DrawBox(int x, int y, int w, int h, color_t color);
   void DrawSBox(box_t rect, color_t color);
   void DrawOutlineBox(box_t rect, color_t fg, color_t bg);
-  void WriteLine(char * thisText, int line, int col, color_t fg, color_t bg);
-  void ClearWindow(void);
-  void UpdateGUI(void);
-  int GetPixelofColumn(int col);
-  box_t GetCommandBox(int command);
-  void DrawConfirmationBox(box_t *yesBox, box_t *noBox, bool_t selected, char *label);
-  void UpdateInfoDisplay(int set);
-  void DrawDisplayTexts(void);
-  void WriteLine(char * thisText, int line, int col, color_t color, color_t bgColor);
-  void WriteBool(bool_t value, int row, int col, int width);
-  void WriteInt(int value, int row, int col, int width);
-  void WriteFloat(float value, int row, int col, int width, int precision);
-  void WriteString(const char *text, int line, int col, int width);
+  void DrawDisplayTexture(displayText_t dTexture);
   void CenterText(box_t box, char * text, color_t fg, color_t bg);
-  void DrawTextEntryBox(int item, char * text);
-  void DrawEnumSelectBox(int item, int selected, box_t ** targets);
-  void DrawPreviewBorder(int x, int y, int tw, int th, bool_t active);
+  void CenterSurface(box_t box, SDL_Surface *s);
+  void UpdateGUI(void);
+
+  // Tests
   void DrawDisplayTexts(void);
-  void WriteCommand(int index, color_t fg, color_t bg);
+  void DrawPreviewBorder(int x, int y, int tw, int th, bool_t active);
   bool_t IsSameBox(box_t a, box_t b);
   bool_t IsInsideBox(point_t point, box_t box);
-  void CenterSurface(box_t box, SDL_Surface *s);
+
+  // Line, text and data display
+  SDL_Texture * CreateText(char * thisText, color_t fg, color_t bg);
+  void WriteCommand(int index, color_t fg, color_t bg);
+  void WriteCommandToTexture(displayText_t *target, int index, color_t fg, color_t bg);
+  void WriteBool(bool_t value, int row, int col, int width);
+  void WriteBoolToTexture(displayText_t *target, bool_t value, int row, int col, int width);
+  void WriteInt(int value, int row, int col, int width);
+  void WriteIntToTexture(displayText_t * target, int value, int row, int col, int width);
+  void WriteFloat(float value, int row, int col, int width, int precision);
+  void WriteFloatToTexture(displayText_t *target, float value, int row, int col, int width, int precision);
+  void WriteString(const char *text, int line, int col, int width);
+  void WriteStringToTexture(displayText_t *target, const char *text, int line, int col, int width);
+  void WriteLine(char * thisText, int line, int col, color_t fg, color_t bg);
+  void WriteLineToTexture(displayText_t *target, char * thisText, int line, int col, color_t fg, color_t bg);
+
+
+  int GetPixelofColumn(int col);
+  box_t GetCommandBox(int command);
+
+  // Widgety things
+  void DrawConfirmationBox(box_t *yesBox, box_t *noBox, bool_t selected, char *label);
+  void DrawTextEntryBox(int item, char * text);
+  void DrawEnumSelectBox(int item, int selected, box_t ** targets);
 
 #endif /* ifndef DRAW_H_ */

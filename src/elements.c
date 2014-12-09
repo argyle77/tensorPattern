@@ -326,7 +326,7 @@ const command_t displayCommand[] = {
 const int displayCommandCount = sizeof(displayCommand) / sizeof(command_t);
 
 // Non clickable text displayed in the gui.
-const displayText_t displayText[] = {
+const guiText_t displayText[] = {
   {ROW_T + 2, COL_T, " Add text - <Unmodified keys>"},
   {ROW_PA + 3, COL_PA, " Change to set # - <c> 0-9"},
   {ROW_PA + 4, COL_PA, " Copy set to # - <c> <a> 0-9"},
@@ -334,19 +334,19 @@ const displayText_t displayText[] = {
   {ROW_PA + 6, COL_PA, " Save to disk - <a> <s> 0-9, a-z"},
   {ROW_PA + 7, COL_PA, " Load saved set - <c> <s> 0-9, a-z"},
 };
-const int displayTextCount = sizeof(displayText) / sizeof(displayText_t);
+const int displayTextCount = sizeof(displayText) / sizeof(guiText_t);
 
 // Some labels on the gui.
-const displayText_t labelText[] = {
+const guiText_t labelText[] = {
   {21, 0,          "Live Preview          FPS:"},
   {21, 4,          "Alternate Preview    FPS:"},
   {53, 4,          "                 GUI FPS:"},
   {51, 0,          " Text buffer:"},
 };
-const int labelCount = sizeof(labelText) / sizeof(displayText_t);
+const int labelCount = sizeof(labelText) / sizeof(guiText_t);
 
 // Headers with highlighted backgrounds on the gui.
-const displayText_t headerText[] = {
+const guiText_t headerText[] = {
   {ROW_PA, COL_PA, "Pattern sets:"},
   {ROW_P, COL_P,   "Color suppression:"},
   {ROW_A, COL_A,   "Auxiliary:"},
@@ -365,7 +365,7 @@ const displayText_t headerText[] = {
   {ROW_PE, COL_PE, "Pre rotation:"},
   {ROW_MIR, COL_MIR, "Mirrors:"},
 };
-const int headerTextCount = sizeof(headerText) / sizeof(displayText_t);
+const int headerTextCount = sizeof(headerText) / sizeof(guiText_t);
 
 // These commands correspond to key presses, but aren't displayed as mouse-over items.
 const command_t otherCommands[] = {

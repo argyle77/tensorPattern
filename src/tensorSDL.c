@@ -103,7 +103,7 @@ void RandomDots(color_t color, unsigned int rFreq, unsigned char *buffer);
 color_t ColorCycle(int set, colorCycleModes_e cycleMode, int *cycleSaver, int cycleInc);
 void ColorAll(color_t color, unsigned char *fb);
 void SetDims(void);
-void UpdateDisplays(int set, bool_t sendToTensor, float intensity_limit);
+void UpdateDisplays(int set, bool_t isPrimary, bool_t sendToTensor, float intensity_limit);
 void UpdateTensor(unsigned char *buffer);
 void UpdatePreview(int xOffset, int yOffset, unsigned char *buffer);
 SDL_Surface * FBToSurface(SDL_Surface *surface, unsigned char *FB);
@@ -140,7 +140,7 @@ int OverBox(point_t mouse, int item, box_t ** targets, int *lastHover);
 box_t GetCommandBox(int command);
 void DrawSidePulse(int set);
 bool_t HandleEnumSelect(SDL_Keycode key, int set, int item, int *selected);
-
+void UpdateInfoDisplay(int set);
 
 // Main
 int main(int argc, char *argv[]) {
@@ -151,10 +151,7 @@ int main(int argc, char *argv[]) {
   SDL_Event event;
   int thisHover = INVALID;
   int lastHover = INVALID;
-  //~ box_t box = {0, 0, 0, 0}, boxOld = {0, 0, 0, 0};
  box_t box2 = {0, 0, 0, 0}, boxOld2 = {0, 0, 0, 0};
-
-
   box_t boxYes, boxNo;
   point_t mouse, tpixel;
   int leftMouseDownOn = INVALID;
@@ -174,6 +171,7 @@ int main(int argc, char *argv[]) {
   char *testptr;
   int enumHover = INVALID;
   box_t *targets = NULL;  // I've read that this is rare form.  targets is a pointer to an array of box_t.
+  operateOn_e displaySetOld = OO_INVALID;
 
   // Unbuffer the console...
   setvbuf(stdout, (char *)NULL, _IONBF, 0);
@@ -250,7 +248,7 @@ int main(int argc, char *argv[]) {
   cycleFrameCount = DINT(PE_FRAMECOUNT);
 
   // Bam - Show the (blank) preview.
-  UpdateDisplays(currentSet, alternateSet, global_intensity_limit);
+  UpdateDisplays(currentSet, YES, YES, global_intensity_limit);
 
   // Add the text to the window
   DrawDisplayTexts();
@@ -358,6 +356,10 @@ int main(int argc, char *argv[]) {
             UpdateInfoDisplay(displaySet ? alternateSet : currentSet);
             infoFrameCount++;
             refreshGui = YES;
+            if (displaySetOld != displaySet) {
+              displaySetOld = displaySet;
+              refreshAll = YES;
+            }
 
           } else if (event.type == CONFIRMEventType) {
 
@@ -747,7 +749,6 @@ int main(int argc, char *argv[]) {
     if (inputMode != oldInputMode) {
       oldInputMode = inputMode;
       lastHover = INVALID;
-      //thisHover = INVALID;
       confirmed = NO;
       refreshAll = YES;
     }
@@ -759,6 +760,10 @@ int main(int argc, char *argv[]) {
       DrawDisplayTexts();
       DrawPreviewBorder(PREVIEW_LIVE_POS_X, PREVIEW_LIVE_POS_Y, tensorWidth, tensorHeight, displaySet == OO_CURRENT);
       DrawPreviewBorder(PREVIEW_ALT_POS_X, PREVIEW_ALT_POS_Y, tensorWidth, tensorHeight, displaySet == OO_ALTERNATE);
+      UpdateInfoDisplay(displaySet ? alternateSet : currentSet);
+      UpdateDisplays(currentSet, YES, NO, global_intensity_limit);
+      UpdateDisplays(alternateSet, NO, NO, global_intensity_limit);
+      refreshGui = YES;
     }
 
     // Check for info display refresh.
@@ -847,19 +852,19 @@ Uint32 TriggerGUIUpdate(Uint32 interval, void *param) {
 
 
 // The thing that happens at every frame.
-void DrawNewFrame(int set, unsigned char primary) {
+void DrawNewFrame(int set, bool_t isPrimary) {
 
   // Cycles through the pattern sets.  Allows you to set up a bunch of pattern
   // sets and switch between them one at a time at some interval.
-  if (primary) {
+  if (isPrimary) {
     ProcessModes(set);
 
-    UpdateDisplays(set, primary, global_intensity_limit);
+    UpdateDisplays(set, YES, YES, global_intensity_limit);
   } else {
     if (currentSet != alternateSet) {
       ProcessModes(set);
     }
-    UpdateDisplays(set, primary, global_intensity_limit);
+    UpdateDisplays(set, NO, NO, global_intensity_limit);
   }
 
 }
@@ -1578,11 +1583,7 @@ bool_t HandleCommand(int set, command_e command) {
       break;
     case COM_BLENDSWITCH: autoBlend = !autoBlend; break;
     case COM_EXCHANGE: i = currentSet; currentSet = alternateSet; alternateSet = i; break;
-    case COM_OPERATE:
-      displaySet = (displaySet + 1) % OO_COUNT;
-      DrawPreviewBorder(PREVIEW_LIVE_POS_X, PREVIEW_LIVE_POS_Y, tensorWidth, tensorHeight, displaySet == OO_CURRENT);
-      DrawPreviewBorder(PREVIEW_ALT_POS_X, PREVIEW_ALT_POS_Y, tensorWidth, tensorHeight, displaySet == OO_ALTERNATE);
-      break;
+    case COM_OPERATE: displaySet = (displaySet + 1) % OO_COUNT; break;
     case COM_ALTERNATE_INC: alternateSet = (alternateSet + 1) % PATTERN_SET_COUNT; break;
     case COM_ALTERNATE_DEC: alternateSet--; if (alternateSet < 0) alternateSet = PATTERN_SET_COUNT - 1; break;
     case COM_LIVE_INC: currentSet = (currentSet + 1) % PATTERN_SET_COUNT; break;
@@ -2188,7 +2189,7 @@ color_t GetPixel(int x, int y, unsigned char *buffer) {
 // Send out the frame buffer to tensor and/or the display window.
 // 11/22/2009 - You know what was uncanny?  Walter looked a lot like FB the
 // other night at the decom, and spent most of his time there running Tensor...
-void UpdateDisplays(int set, unsigned char sendToTensor, float intensity_limit) {
+void UpdateDisplays(int set, bool_t isPrimary, bool_t sendToTensor, float intensity_limit) {
   unsigned char fba[TENSOR_BYTES];
   static unsigned char fbb[TENSOR_BYTES];
   unsigned char *buffer;
@@ -2221,7 +2222,7 @@ void UpdateDisplays(int set, unsigned char sendToTensor, float intensity_limit) 
   }
 
   // Send to the preview and to the wall
-  if (sendToTensor) {
+  if (isPrimary) {
 
     // Alternate blending
     BlendAlternate(fba, fbb);
@@ -2232,7 +2233,7 @@ void UpdateDisplays(int set, unsigned char sendToTensor, float intensity_limit) 
     for (i = 0 ; i < TENSOR_BYTES; i++) {
       fba[i] = (unsigned char)((float) fba[i] * intensity_limit);
     }
-    if (enableTensor) {
+    if (enableTensor && sendToTensor) {
       UpdateTensor(fba);
     }
 
@@ -4290,29 +4291,134 @@ int OverBox(point_t mouse, int item, box_t ** targets, int *lastHover) {
 }
 
 // Update the values of the text on the display window.
+// TODO: Shorten this function.  Lots of repetition.
+#define STATUS_BAR_LENGTH 75
+#define BUFFER_BAR_LENGTH 100
 void UpdateInfoDisplay(int set) {
-  char text[110], mybuff[110];
   int length;
   int i;
+  static infoCache_t *infoCache = NULL;
+  static int infoCount = 0;
+  int thisInfo = 0;
+  displayText_t tempTarget;
+  bool_t initial = NO;
+  static char oldStatus[sizeof(statusText)] = { '\0' };
+  char statusTemp[STATUS_BAR_LENGTH + 10];
+  char bufferTemp1[BUFFER_BAR_LENGTH + 10];
+  char bufferTemp2[BUFFER_BAR_LENGTH + 10];
+  static char *oldBuffer = NULL;
+  static int oldBufferSize = 0;
 
+  // Initialize the texture cache.  All this crap actually lowers my CPU usage
+  // from 25% to 12%.  Half of CPU time was dedicated to generating text.
+  if (!infoCount) {
+    for (i = 0; i < displayCommandCount; i++) {
+      if (displayCommand[i].dataSource != PE_INVALID) {
+        switch(patternElements[displayCommand[i].dataSource].type) {
+          case ET_BOOL:
+            WriteBoolToTexture(&tempTarget, SBOOL(set, displayCommand[i].dataSource),
+              displayCommand[i].line, displayCommand[i].col + 1, PARAMETER_WIDTH);
+            if (tempTarget.texture != NULL) {
+              infoCount++;
+              infoCache = realloc(infoCache, infoCount * sizeof(infoCache_t));
+              infoCache[infoCount - 1].cacheValue.b = SBOOL(set, displayCommand[i].dataSource);
+              infoCache[infoCount - 1].infoText = tempTarget;
+            }
+            break;
+
+          case ET_FLOAT:
+            WriteFloatToTexture(&tempTarget, SFLOAT(set, displayCommand[i].dataSource),
+              displayCommand[i].line, displayCommand[i].col + 1, PARAMETER_WIDTH, PARAMETER_WIDTH / 2);
+            if (tempTarget.texture != NULL) {
+              infoCount++;
+              infoCache = realloc(infoCache, infoCount * sizeof(infoCache_t));
+              infoCache[infoCount - 1].cacheValue.f = SFLOAT(set, displayCommand[i].dataSource);
+              infoCache[infoCount - 1].infoText = tempTarget;
+            }
+            break;
+
+          case ET_INT:
+            WriteIntToTexture(&tempTarget, SINT(set, displayCommand[i].dataSource),
+              displayCommand[i].line, displayCommand[i].col + 1, PARAMETER_WIDTH);
+            if (tempTarget.texture != NULL) {
+              infoCount++;
+              infoCache = realloc(infoCache, infoCount * sizeof(infoCache_t));
+              infoCache[infoCount - 1].cacheValue.i = SINT(set, displayCommand[i].dataSource);
+              infoCache[infoCount - 1].infoText = tempTarget;
+            }
+            break;
+
+          case ET_ENUM:
+            WriteStringToTexture(&tempTarget,
+              enumerations[patternElements[displayCommand[i].dataSource].etype].texts[SENUM(set, displayCommand[i].dataSource)],
+              displayCommand[i].line, displayCommand[i].col + 1, PARAMETER_WIDTH);
+            if (tempTarget.texture != NULL) {
+              infoCount++;
+              infoCache = realloc(infoCache, infoCount * sizeof(infoCache_t));
+              infoCache[infoCount - 1].cacheValue.e = SENUM(set, displayCommand[i].dataSource);
+              infoCache[infoCount - 1].infoText = tempTarget;
+            }
+            break;
+
+          default:
+            // Lazy
+            fprintf(stderr, "No data display driver for this type of information (%i).\n", patternElements[displayCommand[i].dataSource].type);
+        }
+      }
+    }
+  }
+
+  // Draw the textures representing the values, or get new textures if the
+  // values have changed.
   for (i = 0; i < displayCommandCount; i++) {
     if (displayCommand[i].dataSource != PE_INVALID) {
       switch(patternElements[displayCommand[i].dataSource].type) {
         case ET_BOOL:
-          WriteBool(SBOOL(set, displayCommand[i].dataSource), displayCommand[i].line, displayCommand[i].col + 1, PARAMETER_WIDTH);
+          if (infoCache[thisInfo].cacheValue.b != SBOOL(set, displayCommand[i].dataSource)) {
+            infoCache[thisInfo].cacheValue.b = SBOOL(set, displayCommand[i].dataSource);
+            SDL_DestroyTexture(infoCache[thisInfo].infoText.texture);
+            WriteBoolToTexture(&(infoCache[thisInfo].infoText),
+              infoCache[thisInfo].cacheValue.b, displayCommand[i].line,
+              displayCommand[i].col + 1, PARAMETER_WIDTH);
+          }
+          DrawDisplayTexture(infoCache[thisInfo].infoText);
+          thisInfo++;
           break;
 
         case ET_FLOAT:
-          WriteFloat(SFLOAT(set, displayCommand[i].dataSource), displayCommand[i].line, displayCommand[i].col + 1, PARAMETER_WIDTH, PARAMETER_WIDTH/2);
+          if (infoCache[thisInfo].cacheValue.f != SFLOAT(set, displayCommand[i].dataSource)) {
+            infoCache[thisInfo].cacheValue.f = SFLOAT(set, displayCommand[i].dataSource);
+            SDL_DestroyTexture(infoCache[thisInfo].infoText.texture);
+            WriteFloatToTexture(&(infoCache[thisInfo].infoText),
+              infoCache[thisInfo].cacheValue.f, displayCommand[i].line,
+              displayCommand[i].col + 1, PARAMETER_WIDTH, PARAMETER_WIDTH / 2);
+          }
+          DrawDisplayTexture(infoCache[thisInfo].infoText);
+          thisInfo++;
           break;
 
         case ET_INT:
-          WriteInt(SINT(set, displayCommand[i].dataSource), displayCommand[i].line, displayCommand[i].col + 1, PARAMETER_WIDTH);
+          if (infoCache[thisInfo].cacheValue.i != SINT(set, displayCommand[i].dataSource)) {
+            infoCache[thisInfo].cacheValue.i = SINT(set, displayCommand[i].dataSource);
+            SDL_DestroyTexture(infoCache[thisInfo].infoText.texture);
+            WriteIntToTexture(&(infoCache[thisInfo].infoText),
+              infoCache[thisInfo].cacheValue.i, displayCommand[i].line,
+              displayCommand[i].col + 1, PARAMETER_WIDTH);
+          }
+          DrawDisplayTexture(infoCache[thisInfo].infoText);
+          thisInfo++;
           break;
 
         case ET_ENUM:
-          WriteString(enumerations[patternElements[displayCommand[i].dataSource].etype].texts[SENUM(set, displayCommand[i].dataSource)],
-            displayCommand[i].line, displayCommand[i].col + 1, PARAMETER_WIDTH);
+          if (infoCache[thisInfo].cacheValue.e != SENUM(set, displayCommand[i].dataSource)) {
+            infoCache[thisInfo].cacheValue.e = SENUM(set, displayCommand[i].dataSource);
+            SDL_DestroyTexture(infoCache[thisInfo].infoText.texture);
+            WriteStringToTexture(&(infoCache[thisInfo].infoText),
+              enumerations[patternElements[displayCommand[i].dataSource].etype].texts[SENUM(set, displayCommand[i].dataSource)],
+              displayCommand[i].line, displayCommand[i].col + 1, PARAMETER_WIDTH);
+          }
+          DrawDisplayTexture(infoCache[thisInfo].infoText);
+          thisInfo++;
           break;
 
         default:
@@ -4323,33 +4429,215 @@ void UpdateInfoDisplay(int set) {
   }
 
   // The ones that aren't automatic:
-  WriteInt(previewFPSA, 21, 1, PARAMETER_WIDTH);
-  WriteInt(previewFPSB, 21, 5, PARAMETER_WIDTH);
-  WriteInt(infoFPS, 53, 5, PARAMETER_WIDTH);
-  if (cyclePatternSets) {
-    WriteInt(cycleFrameCount, ROW_PA + 1, COL_PA + 1, PARAMETER_WIDTH);
-  } else {
-    WriteBool(cyclePatternSets, ROW_PA + 1, COL_PA + 1, PARAMETER_WIDTH);
-  }
-  WriteInt(alternateSet, ROW_PA + 9, COL_PA + 1, PARAMETER_WIDTH);
-  WriteInt(currentSet, ROW_PA + 8, COL_PA + 1, PARAMETER_WIDTH);
-  WriteString(operateText[displaySet], ROW_PA + 10, COL_PA + 1, PARAMETER_WIDTH);
-  WriteFloat(alternateBlend, ROW_PA + 12, COL_PA + 1, PARAMETER_WIDTH, PARAMETER_WIDTH/2);
-  WriteBool(autoBlend, ROW_PA + 13, COL_PA + 1, PARAMETER_WIDTH);
-  WriteFloat(alternateBlendRate, ROW_PA + 14, COL_PA + 1, PARAMETER_WIDTH, PARAMETER_WIDTH/2);
 
+  // If we got here and thisInfo is equal to infoCount, we haven't initialized
+  // the non-automatic values yet.
+  if (thisInfo == infoCount) {
+    initial = YES;
+  }
+
+  // Live Preview FPS
+  if (initial || infoCache[thisInfo].cacheValue.i != previewFPSA) {
+    if (initial) {
+      infoCount++;
+      infoCache = realloc(infoCache, infoCount * sizeof(infoCache_t));
+    } else {
+      SDL_DestroyTexture(infoCache[thisInfo].infoText.texture);
+    }
+    infoCache[thisInfo].cacheValue.i = previewFPSA;
+    WriteIntToTexture(&(infoCache[thisInfo].infoText), previewFPSA, 21, 1, PARAMETER_WIDTH);
+  }
+  DrawDisplayTexture(infoCache[thisInfo].infoText);
+  thisInfo++;
+
+  // Alternate Preview FPS
+  if (initial || infoCache[thisInfo].cacheValue.i != previewFPSB) {
+    if (initial) {
+      infoCount++;
+      infoCache = realloc(infoCache, infoCount * sizeof(infoCache_t));
+    } else {
+      SDL_DestroyTexture(infoCache[thisInfo].infoText.texture);
+    }
+    infoCache[thisInfo].cacheValue.i = previewFPSB;
+    WriteIntToTexture(&(infoCache[thisInfo].infoText), previewFPSB, 21, 5, PARAMETER_WIDTH);
+  }
+  DrawDisplayTexture(infoCache[thisInfo].infoText);
+  thisInfo++;
+
+  // Gui FPS
+  if (initial || infoCache[thisInfo].cacheValue.i != infoFPS) {
+    if (initial) {
+      infoCount++;
+      infoCache = realloc(infoCache, infoCount * sizeof(infoCache_t));
+    } else {
+      SDL_DestroyTexture(infoCache[thisInfo].infoText.texture);
+    }
+    infoCache[thisInfo].cacheValue.i = infoFPS;
+    WriteIntToTexture(&(infoCache[thisInfo].infoText), infoFPS, 53, 5, PARAMETER_WIDTH);
+  }
+  DrawDisplayTexture(infoCache[thisInfo].infoText);
+  thisInfo++;
+
+  // Pattern set cycling
+  if (cyclePatternSets) {
+    if (initial || infoCache[thisInfo].cacheValue.i != cycleFrameCount) {
+      if (initial) {
+        infoCount++;
+        infoCache = realloc(infoCache, infoCount * sizeof(infoCache_t));
+      } else {
+        SDL_DestroyTexture(infoCache[thisInfo].infoText.texture);
+      }
+      infoCache[thisInfo].cacheValue.i = cycleFrameCount;
+      WriteIntToTexture(&(infoCache[thisInfo].infoText), cycleFrameCount, ROW_PA + 1, COL_PA + 1,  PARAMETER_WIDTH);
+    }
+  } else {
+    if (initial || infoCache[thisInfo].cacheValue.b != cyclePatternSets) {
+      if (initial) {
+        infoCount++;
+        infoCache = realloc(infoCache, infoCount * sizeof(infoCache_t));
+      } else {
+        SDL_DestroyTexture(infoCache[thisInfo].infoText.texture);
+      }
+      infoCache[thisInfo].cacheValue.b = cyclePatternSets;
+      WriteBoolToTexture(&(infoCache[thisInfo].infoText), cyclePatternSets, ROW_PA + 1, COL_PA + 1,  PARAMETER_WIDTH);
+    }
+  }
+  DrawDisplayTexture(infoCache[thisInfo].infoText);
+  thisInfo++;
+
+  // Alternate Set
+  if (initial || infoCache[thisInfo].cacheValue.i != alternateSet) {
+    if (initial) {
+      infoCount++;
+      infoCache = realloc(infoCache, infoCount * sizeof(infoCache_t));
+    } else {
+      SDL_DestroyTexture(infoCache[thisInfo].infoText.texture);
+    }
+    infoCache[thisInfo].cacheValue.i = alternateSet;
+    WriteIntToTexture(&(infoCache[thisInfo].infoText), alternateSet, ROW_PA + 9, COL_PA + 1, PARAMETER_WIDTH);
+  }
+  DrawDisplayTexture(infoCache[thisInfo].infoText);
+  thisInfo++;
+
+  // Current Set
+  if (initial || infoCache[thisInfo].cacheValue.i != currentSet) {
+    if (initial) {
+      infoCount++;
+      infoCache = realloc(infoCache, infoCount * sizeof(infoCache_t));
+    } else {
+      SDL_DestroyTexture(infoCache[thisInfo].infoText.texture);
+    }
+    infoCache[thisInfo].cacheValue.i = currentSet;
+    WriteIntToTexture(&(infoCache[thisInfo].infoText), currentSet, ROW_PA + 8, COL_PA + 1, PARAMETER_WIDTH);
+  }
+  DrawDisplayTexture(infoCache[thisInfo].infoText);
+  thisInfo++;
+
+
+  // Display set
+  if (initial || infoCache[thisInfo].cacheValue.i != displaySet) {
+    if (initial) {
+      infoCount++;
+      infoCache = realloc(infoCache, infoCount * sizeof(infoCache_t));
+    } else {
+      SDL_DestroyTexture(infoCache[thisInfo].infoText.texture);
+    }
+    infoCache[thisInfo].cacheValue.i = displaySet;
+    WriteStringToTexture(&(infoCache[thisInfo].infoText), operateText[displaySet],  ROW_PA + 10, COL_PA + 1, PARAMETER_WIDTH);
+  }
+  DrawDisplayTexture(infoCache[thisInfo].infoText);
+  thisInfo++;
+
+  // Alternate blend amount
+  if (initial || infoCache[thisInfo].cacheValue.f != alternateBlend) {
+    if (initial) {
+      infoCount++;
+      infoCache = realloc(infoCache, infoCount * sizeof(infoCache_t));
+    } else {
+      SDL_DestroyTexture(infoCache[thisInfo].infoText.texture);
+    }
+    infoCache[thisInfo].cacheValue.f = alternateBlend;
+    WriteFloatToTexture(&(infoCache[thisInfo].infoText), alternateBlend, ROW_PA + 12, COL_PA + 1, PARAMETER_WIDTH, PARAMETER_WIDTH / 2);
+  }
+  DrawDisplayTexture(infoCache[thisInfo].infoText);
+  thisInfo++;
+
+  // Autoblend
+  if (initial || infoCache[thisInfo].cacheValue.b != autoBlend) {
+    if (initial) {
+      infoCount++;
+      infoCache = realloc(infoCache, infoCount * sizeof(infoCache_t));
+    } else {
+      SDL_DestroyTexture(infoCache[thisInfo].infoText.texture);
+    }
+    infoCache[thisInfo].cacheValue.b = autoBlend;
+    WriteBoolToTexture(&(infoCache[thisInfo].infoText), autoBlend, ROW_PA + 13, COL_PA + 1, PARAMETER_WIDTH);
+  }
+  DrawDisplayTexture(infoCache[thisInfo].infoText);
+  thisInfo++;
+
+  // Alternate blend rate
+  if (initial || infoCache[thisInfo].cacheValue.f != alternateBlendRate) {
+    if (initial) {
+      infoCount++;
+      infoCache = realloc(infoCache, infoCount * sizeof(infoCache_t));
+    } else {
+      SDL_DestroyTexture(infoCache[thisInfo].infoText.texture);
+    }
+    infoCache[thisInfo].cacheValue.f = alternateBlendRate;
+    WriteFloatToTexture(&(infoCache[thisInfo].infoText), alternateBlendRate, ROW_PA + 14, COL_PA + 1, PARAMETER_WIDTH, PARAMETER_WIDTH / 2);
+  }
+  DrawDisplayTexture(infoCache[thisInfo].infoText);
+  thisInfo++;
 
   // Show the status bar
-  snprintf(text, sizeof(text), "%-75.75s", statusText);
-  WriteLine(text, 53, 1, cBlack, cRed);
+  if (initial || (strcmp(oldStatus, statusText) != 0)) {
+    if (initial) {
+      infoCount++;
+      infoCache = realloc(infoCache, infoCount * sizeof(infoCache_t));
+    } else {
+      SDL_DestroyTexture(infoCache[thisInfo].infoText.texture);
+    }
+    strncpy(oldStatus, statusText, sizeof(statusText));
+    snprintf(statusTemp, sizeof(statusTemp) - 1, "%-*.*s", STATUS_BAR_LENGTH, STATUS_BAR_LENGTH, statusText);
+    WriteLineToTexture(&(infoCache[thisInfo].infoText), statusTemp, 53, 1, cBlack, cRed);
+  }
+  DrawDisplayTexture(infoCache[thisInfo].infoText);
+  thisInfo++;
+
+  // Show the buffer character count.
+  length = strlen(SSTRING(set, PE_TEXTBUFFER));
+  if (initial || infoCache[thisInfo].cacheValue.i != length) {
+    if (initial) {
+      infoCount++;
+      infoCache = realloc(infoCache, infoCount * sizeof(infoCache_t));
+    } else {
+      SDL_DestroyTexture(infoCache[thisInfo].infoText.texture);
+    }
+    infoCache[thisInfo].cacheValue.i = length;
+    WriteIntToTexture(&(infoCache[thisInfo].infoText), length, 51, 1, PARAMETER_WIDTH);
+  }
+  DrawDisplayTexture(infoCache[thisInfo].infoText);
+  thisInfo++;
 
   // Show the last 100 bytes of the text buffer.
-  length = strlen(SSTRING(set, PE_TEXTBUFFER));
-  WriteInt(length, 51, 1, PARAMETER_WIDTH);
-  strncpy(mybuff, SSTRING(set, PE_TEXTBUFFER) + (length > 100 ? length - 100 : 0), 101);
-  // The extra snprintf takes care of overwriting longer lines.
-  snprintf(text, sizeof(text), "  %-105s", mybuff );
-  WriteLine(text, 52, 0, DISPLAY_COLOR_TBUF, DISPLAY_COLOR_TBUFBG);
+  if (initial || (strcmp(oldBuffer, SSTRING(set, PE_TEXTBUFFER)) != 0)) {
+    if (initial) {
+      infoCount++;
+      infoCache = realloc(infoCache, infoCount * sizeof(infoCache_t));
+    } else {
+      SDL_DestroyTexture(infoCache[thisInfo].infoText.texture);
+    }
+    if (oldBufferSize < length) {
+      oldBuffer = realloc(oldBuffer, length + 1);
+      oldBufferSize = length;
+    }
+    strncpy(oldBuffer, SSTRING(set, PE_TEXTBUFFER), length + 1);
+    strncpy(bufferTemp1, SSTRING(set, PE_TEXTBUFFER) + (length > BUFFER_BAR_LENGTH ? length - BUFFER_BAR_LENGTH : 0), BUFFER_BAR_LENGTH + 1);
+    snprintf(bufferTemp2, sizeof(bufferTemp2), " %-*s", BUFFER_BAR_LENGTH + 5, bufferTemp1);
+    WriteLineToTexture(&(infoCache[thisInfo].infoText), bufferTemp2, 52, 0, DISPLAY_COLOR_TBUF, DISPLAY_COLOR_TBUFBG);
+  }
+  DrawDisplayTexture(infoCache[thisInfo].infoText);
+  thisInfo++;
 }
-
 
