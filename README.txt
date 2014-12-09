@@ -1,4 +1,4 @@
-Tensor pattern generation - Version 7.1.0
+Tensor pattern generation - Version 7.1.1
   
 "Frostbyte was an enigineer."
 

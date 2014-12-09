@@ -79,3 +79,8 @@ Version 7.1:
   Added mirroring, sidepulse seed, per pattern set intensity
   limit, re-organized code, added right click to edit parameters
   with the keyboard.
+
+Version 7.1.1:
+  Added text draw caching for CPU improvement.  Finished right
+  click to edit parameters for enumerations. Added half and light
+  colors, gui tweaks.
