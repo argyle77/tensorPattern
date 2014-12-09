@@ -195,18 +195,20 @@
   void DrawSBox(box_t rect, color_t color);
   void DrawOutlineBox(box_t rect, color_t fg, color_t bg);
   void DrawDisplayTexture(displayText_t dTexture);
+  void DrawTexture(SDL_Texture *texture, box_t target);
   void CenterText(box_t box, char * text, color_t fg, color_t bg);
   void CenterSurface(box_t box, SDL_Surface *s);
+  void CenterTexture(box_t box, SDL_Texture *t);
   void UpdateGUI(void);
 
   // Tests
-  void DrawDisplayTexts(void);
+  void DrawDisplayTexts(int selected);
   void DrawPreviewBorder(int x, int y, int tw, int th, bool_t active);
   bool_t IsSameBox(box_t a, box_t b);
   bool_t IsInsideBox(point_t point, box_t box);
 
   // Line, text and data display
-  SDL_Texture * CreateText(char * thisText, color_t fg, color_t bg);
+  SDL_Texture * CreateText(char * thisText, color_t fg);
   void WriteCommand(int index, color_t fg, color_t bg);
   void WriteCommandToTexture(displayText_t *target, int index, color_t fg, color_t bg);
   void WriteBool(bool_t value, int row, int col, int width);

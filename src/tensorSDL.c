@@ -117,6 +117,9 @@ void DrawImage(SDL_Surface *image, double angle, float xoffset, float yoffset, d
 bool_t HandleCommand(int set, command_e command);
 bool_t HandleKey(int set, SDL_Keycode key, SDL_Keymod mod);
 bool_t HandleConfirmation(SDL_Keycode key, bool_t *selected);
+inputMode_e EditValue(int set, int commandToEdit);
+textEntry_e HandleTextEntry(SDL_Keycode key, SDL_Keymod mod, char * textEntry, int maxTextSize);
+bool_t HandleEnumSelect(SDL_Keycode key, int set, int item, int *selected);
 void CopyPatternSet(int dst, int src);
 void BlendAlternate(unsigned char *fba, unsigned char *fbb);
 void CenterText(box_t box, char * text, color_t fg, color_t bg);
@@ -131,15 +134,13 @@ void GenerateDefaultPixelMap(void);
 void VerticalMirror(unsigned char * buffer);
 void HorizontalMirror(unsigned char * buffer);
 void ScrollCycle(int set);
-inputMode_e EditValue(int set, int commandToEdit);
-textEntry_e HandleTextEntry(SDL_Keycode key, SDL_Keymod mod, char * textEntry, int maxTextSize);
 bool_t SetValueInt(int set, patternElement_e element, int value);
 void SetValueFloat(int set, patternElement_e element, float value);
 int OverCommand(point_t mouse, int *lastHover);
 int OverBox(point_t mouse, int item, box_t ** targets, int *lastHover);
 box_t GetCommandBox(int command);
 void DrawSidePulse(int set);
-bool_t HandleEnumSelect(SDL_Keycode key, int set, int item, int *selected);
+
 void UpdateInfoDisplay(int set);
 
 // Main
@@ -170,7 +171,7 @@ int main(int argc, char *argv[]) {
   float valuef;
   char *testptr;
   int enumHover = INVALID;
-  box_t *targets = NULL;  // I've read that this is rare form.  targets is a pointer to an array of box_t.
+  box_t *targets = NULL;
   operateOn_e displaySetOld = OO_INVALID;
 
   // Unbuffer the console...
@@ -251,7 +252,7 @@ int main(int argc, char *argv[]) {
   UpdateDisplays(currentSet, YES, YES, global_intensity_limit);
 
   // Add the text to the window
-  DrawDisplayTexts();
+  DrawDisplayTexts(INVALID);
 
   // Initialize the user events
   FPSEventType = SDL_RegisterEvents(1);
@@ -356,6 +357,7 @@ int main(int argc, char *argv[]) {
             UpdateInfoDisplay(displaySet ? alternateSet : currentSet);
             infoFrameCount++;
             refreshGui = YES;
+            //~ refreshAll = YES;  // EMERGENCY
             if (displaySetOld != displaySet) {
               displaySetOld = displaySet;
               refreshAll = YES;
@@ -757,7 +759,7 @@ int main(int argc, char *argv[]) {
     if (refreshAll) {
       refreshAll = NO;
       ClearWindow();
-      DrawDisplayTexts();
+      DrawDisplayTexts(thisHover);
       DrawPreviewBorder(PREVIEW_LIVE_POS_X, PREVIEW_LIVE_POS_Y, tensorWidth, tensorHeight, displaySet == OO_CURRENT);
       DrawPreviewBorder(PREVIEW_ALT_POS_X, PREVIEW_ALT_POS_Y, tensorWidth, tensorHeight, displaySet == OO_ALTERNATE);
       UpdateInfoDisplay(displaySet ? alternateSet : currentSet);
@@ -1368,6 +1370,7 @@ bool_t HandleEnumSelect(SDL_Keycode key, int set, int item, int *selected) {
       if (*selected >= boxCount) *selected = 0;
       if (*selected < 0) {
         (*selected)++;
+        if (*selected < 0) (*selected) = 0;
       }
       selectionDismissed = NO;
       break;
@@ -1376,6 +1379,7 @@ bool_t HandleEnumSelect(SDL_Keycode key, int set, int item, int *selected) {
       if (*selected >= boxCount) *selected = 0;
       if (*selected < 0) {
         *selected += 2;
+        if (*selected < 0) *selected = 0;
       }
       selectionDismissed = NO;
       break;

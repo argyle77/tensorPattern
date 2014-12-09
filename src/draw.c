@@ -154,7 +154,7 @@ void WriteLine(char * thisText, int line, int col, color_t fg, color_t bg) {
   if (strlen(thisText) == 0) return; // Nothing to write.
 
   // Create the text texture in video ram.
-  textTexture = CreateText(thisText, fg, bg);
+  textTexture = CreateText(thisText, fg);
   if (!textTexture) return;
 
   // Set the position of the output text.
@@ -185,6 +185,7 @@ void WriteLineToTexture(displayText_t *target, char * thisText, int line, int co
 
   // Render the text surface in RAM.
   textSurface = TTF_RenderText_Shaded(screenFont, thisText, fgc, bgc);
+  //~ textSurface = TTF_RenderText_Blended(screenFont, thisText, fgc); // EMERGENCY
   if (!textSurface) {
     fprintf(stderr, "Failed to create surface for \"%s\": %s", thisText, TTF_GetError());
     return;
@@ -208,17 +209,15 @@ void WriteLineToTexture(displayText_t *target, char * thisText, int line, int co
 }
 
 // Creates a text texture
-SDL_Texture * CreateText(char * thisText, color_t fg, color_t bg) {
+SDL_Texture * CreateText(char * thisText, color_t fg) {
   const SDL_Color fgc = {fg.r, fg.g, fg.b};
-  const SDL_Color bgc = {bg.r, bg.g, bg.b, 0};
   SDL_Surface *textSurface;
   SDL_Texture *textTexture;
 
   if (strlen(thisText) == 0) return NULL; // Nothing to write.
 
   // Render the text to a surface.
-  textSurface = TTF_RenderText_Shaded(screenFont, thisText, fgc, bgc);
-  //~ textSurface = TTF_RenderText_Blended(screenFont, thisText, fontColor);
+  textSurface = TTF_RenderText_Blended(screenFont, thisText, fgc);
   if (!textSurface) {
     fprintf(stderr, "Failed to create surface for \"%s\": %s", thisText, TTF_GetError());
     return NULL;
@@ -504,6 +503,19 @@ void CenterSurface(box_t box, SDL_Surface *s) {
   SDL_DestroyTexture(texture);
 }
 
+// Centers a texture inside a box.
+void CenterTexture(box_t box, SDL_Texture *t) {
+  SDL_Rect rect;
+
+  if (!t) return;
+  SDL_QueryTexture(t, NULL, NULL, &(rect.w), &(rect.h));
+  rect.w = min(rect.w, box.w);
+  rect.h = min(rect.h, box.h);
+  rect.x = box.x + (box.w / 2) - (rect.w / 2);
+  rect.y = box.y + (box.h / 2) - (rect.h / 2);
+  SDL_RenderCopy(mwRenderer, t, NULL, &rect);
+}
+
 // Display box for entering keyboard text into a parameter.
 void DrawTextEntryBox(int item, char * text) {
 
@@ -565,14 +577,15 @@ void DrawEnumSelectBox(int item, int selected, box_t ** targets) {
 
   // Vars
   color_t fg = DISPLAY_COLOR_PARMS;
-  color_t bg = DISPLAY_COLOR_PARMSBG;
-  color_t fgh = DISPLAY_COLOR_TEXTS_HL;
   color_t bgh = DISPLAY_COLOR_TEXTSBG_HL;
   point_t boxOrigin;  // All boxes are relative to this.
   int i, h, boxCount;
   int boxH, boxW;
   box_t wholeBox, labelBox;
-  char text[11];
+  char text[100];
+  static SDL_Texture **textures = NULL;
+  static int textureCount = 0;
+  static SDL_Texture *label = NULL;
 
   // Get the number of choices in the selector.
   boxCount = enumerations[patternElements[displayCommand[item].dataSource].etype].size;
@@ -591,13 +604,12 @@ void DrawEnumSelectBox(int item, int selected, box_t ** targets) {
   // Draw the outline of the whole box.
   DrawOutlineBox(wholeBox, DISPLAY_COLOR_PARMS, DISPLAY_COLOR_PARMSBG);
 
-  // Draw the label.
+  // Draw the label decoration.
   labelBox.x = boxOrigin.x;
   labelBox.y = boxOrigin.y;
   labelBox.w = boxW;
   labelBox.h = h;
-  DrawSRectangle(labelBox, DISPLAY_COLOR_PARMS);
-  CenterText(labelBox, displayCommand[item].text, fg, bg);
+  DrawSBox(labelBox, DISPLAY_COLOR_PARMS);
 
   // Initialize the boxes if we haven't.
   if (! *targets) {
@@ -608,6 +620,33 @@ void DrawEnumSelectBox(int item, int selected, box_t ** targets) {
       fprintf(stderr, "Couldn't allocate some important memory.  Fuck it.\n");
       exit(EXIT_FAILURE);
     }
+
+    // Allocate the space for the texture targets.
+    if (textureCount) {
+      // First free the textures.
+      for (i = 0 ; i < textureCount; i++) {
+        SDL_DestroyTexture(textures[i]);
+      }
+      SDL_DestroyTexture(label);
+      // Now free the texture pointers.
+      free(textures);
+    }
+
+    // Allocate the texture pointers.
+    textureCount = boxCount;
+    textures = malloc(boxCount * sizeof(SDL_Texture *));
+    if (!textures) {
+      fprintf(stderr, "Couldn't allocate the text texture memory!\n");
+      exit(EXIT_FAILURE);
+    }
+
+    // Next, generate the texts
+    for(i = 0 ; i < boxCount; i++) {
+      snprintf(text, sizeof(text), "%s", enumerations[patternElements[displayCommand[item].dataSource].etype].texts[i]);
+      textures[i] = CreateText(text, DISPLAY_COLOR_PARMS);
+    }
+    snprintf(text, sizeof(text), "%s", displayCommand[item].text);
+    label = CreateText(text, DISPLAY_COLOR_PARMSBG);
 
     // Calculate the box positions.
     for (i = 0; i < boxCount; i++) {
@@ -621,18 +660,18 @@ void DrawEnumSelectBox(int item, int selected, box_t ** targets) {
   // Draw the boxes.
   for (i = 0; i < boxCount; i++) {
     DrawSRectangle((*targets)[i], DISPLAY_COLOR_PARMS);
-    snprintf(text, sizeof(text), "%s", enumerations[patternElements[displayCommand[item].dataSource].etype].texts[i]);
     if (i == selected) {
       DrawOutlineBox((*targets)[i], fg, bgh);
-      CenterText((*targets)[i], text, fgh, bgh);
+      CenterTexture((*targets)[i], textures[i]);
     } else {
-      CenterText((*targets)[i], text, fg, bg);
+      CenterTexture((*targets)[i], textures[i]);
     }
   }
+  CenterTexture(labelBox, label);
 }
 
 // Write the static menu information to the display.
-void DrawDisplayTexts(void) {
+void DrawDisplayTexts(int selected) {
 
   // Vars
   int i;
@@ -640,6 +679,7 @@ void DrawDisplayTexts(void) {
   static displayText_t *displayTexts = NULL;
   static int textCount = 0;
   displayText_t textTemp;
+  //~ static int headerStart = 0;
 
   // If we haven't done so yet, we'll render all of the display texts to be
   // cached in video RAM.
@@ -656,6 +696,7 @@ void DrawDisplayTexts(void) {
     }
 
     // Render the headers.
+    //~ headerStart = textCount;
     for (i = 0; i < headerTextCount; i++) {
       // We precalculate the width purely to allow the background of the header
       // to span the whole box.  This way we don't have to draw the background
@@ -696,6 +737,11 @@ void DrawDisplayTexts(void) {
 
   // Draw the textures to the rendering surface.
   for (i = 0; i < textCount; i++) {
+    //~ if (i == selected) {
+      //~ DrawSBox(displayTexts[i].targetBox, DISPLAY_COLOR_TEXTSBG_HL);
+    //~ } else if (i >=df headerStart && i < headerStart + headerTextCount) {
+      //~ DrawSBox(displayTexts[i].targetBox, DISPLAY_COLOR_TITLESBG);
+    //~ }
     SDL_RenderCopy(mwRenderer, displayTexts[i].texture, NULL, (SDL_Rect *) &displayTexts[i].targetBox);
   }
 }
@@ -897,3 +943,6 @@ void DrawDisplayTexture(displayText_t dTexture) {
   SDL_RenderCopy(mwRenderer, dTexture.texture, NULL, (SDL_Rect *) &(dTexture.targetBox));
 }
 
+void DrawTexture(SDL_Texture *texture, box_t target) {
+  SDL_RenderCopy(mwRenderer, texture, NULL, (SDL_Rect *) &(target));
+}
