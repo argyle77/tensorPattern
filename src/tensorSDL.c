@@ -71,7 +71,7 @@ Uint32 FPSEventType, DRAWEventTypeA, DRAWEventTypeB, GUIEventType, CONFIRMEventT
 char statusText[100] = "";  // For confirming actions.
 char keySave;
 int setSave;
-box_t liveBox, altBox;
+SDL_Rect liveBox, altBox;
 point_t tensorPixelMap [TENSOR_WIDTH * TENSOR_HEIGHT];
 bool_t useDefaultPixelMap = YES;
 const char **ipmap1;
@@ -114,7 +114,7 @@ void ClearRed(int set);
 void ClearGreen(int set);
 void ClearBlue(int set);
 void DrawImage(SDL_Surface *image, double angle, float xoffset, float yoffset, double expansion, bool_t aliasmode, unsigned char *fb_dst);
-bool_t HandleCommand(int set, command_e command);
+bool_t HandleCommand(int set, command_e command, int selection);
 bool_t HandleKey(int set, SDL_Keycode key, SDL_Keymod mod);
 bool_t HandleConfirmation(SDL_Keycode key, bool_t *selected);
 inputMode_e EditValue(int set, int commandToEdit);
@@ -122,11 +122,11 @@ textEntry_e HandleTextEntry(SDL_Keycode key, SDL_Keymod mod, char * textEntry, i
 bool_t HandleEnumSelect(SDL_Keycode key, int set, int item, int *selected);
 void CopyPatternSet(int dst, int src);
 void BlendAlternate(unsigned char *fba, unsigned char *fbb);
-void CenterText(box_t box, char * text, color_t fg, color_t bg);
+void CenterText(SDL_Rect box, char * text, color_t fg, color_t bg);
 void SnailSeed(int set, int position);
 void FastSnailSeed(int set, int position);
 void CrossBars(int set);
-point_t GetDisplayPixel(point_t mouse, box_t box);
+point_t GetDisplayPixel(point_t mouse, SDL_Rect box);
 void LoadTensorMaps(void);
 void LoadPixelMap(void);
 void LoadIPMap(void);
@@ -137,8 +137,8 @@ void ScrollCycle(int set);
 bool_t SetValueInt(int set, patternElement_e element, int value);
 void SetValueFloat(int set, patternElement_e element, float value);
 int OverCommand(point_t mouse, int *lastHover);
-int OverBox(point_t mouse, int item, box_t ** targets, int *lastHover);
-box_t GetCommandBox(int command);
+int OverBox(point_t mouse, int item, SDL_Rect ** targets, int *lastHover);
+SDL_Rect GetBoxofCommand(int command);
 void DrawSidePulse(int set);
 
 void UpdateInfoDisplay(int set);
@@ -152,8 +152,8 @@ int main(int argc, char *argv[]) {
   SDL_Event event;
   int thisHover = INVALID;
   int lastHover = INVALID;
- box_t box2 = {0, 0, 0, 0}, boxOld2 = {0, 0, 0, 0};
-  box_t boxYes, boxNo;
+ SDL_Rect box2 = {0, 0, 0, 0}, boxOld2 = {0, 0, 0, 0};
+  SDL_Rect boxYes, boxNo;
   point_t mouse, tpixel;
   int leftMouseDownOn = INVALID;
   bool_t leftMouseDown = NO;
@@ -171,7 +171,7 @@ int main(int argc, char *argv[]) {
   float valuef;
   char *testptr;
   int enumHover = INVALID;
-  box_t *targets = NULL;
+  SDL_Rect *targets = NULL;
   operateOn_e displaySetOld = OO_INVALID;
 
   // Unbuffer the console...
@@ -453,15 +453,25 @@ int main(int argc, char *argv[]) {
                 if (event.wheel.y < 0) {
                   // If there are no mouse wheel commands for this item, consider it a click.
                   if (displayCommand[thisHover].commands[MOUSE_WHEEL_DOWN].command == COM_NONE)
-                    HandleCommand(displaySet ? alternateSet : currentSet, displayCommand[thisHover].commands[MOUSE_CLICK].command);
-                  else HandleCommand(displaySet ? alternateSet : currentSet, displayCommand[thisHover].commands[MOUSE_WHEEL_DOWN].command);
+                    HandleCommand(displaySet ? alternateSet : currentSet,
+                      displayCommand[thisHover].commands[MOUSE_CLICK].command,
+                      thisHover);
+                  else
+                    HandleCommand(displaySet ? alternateSet : currentSet,
+                      displayCommand[thisHover].commands[MOUSE_WHEEL_DOWN].command,
+                      thisHover);
 
                 // Wheel up.
                 } else {
                   // If there are no mouse wheel commands for this item, consider it a click.
                   if (displayCommand[thisHover].commands[MOUSE_WHEEL_UP].command == COM_NONE)
-                    HandleCommand(displaySet ? alternateSet : currentSet, displayCommand[thisHover].commands[MOUSE_CLICK].command);
-                  else HandleCommand(displaySet ? alternateSet : currentSet, displayCommand[thisHover].commands[MOUSE_WHEEL_UP].command);
+                    HandleCommand(displaySet ? alternateSet : currentSet,
+                      displayCommand[thisHover].commands[MOUSE_CLICK].command,
+                      thisHover);
+                  else
+                    HandleCommand(displaySet ? alternateSet : currentSet,
+                      displayCommand[thisHover].commands[MOUSE_WHEEL_UP].command,
+                      thisHover);
                 }
 
               // Mouse wheel action over the live preview lets us change colors
@@ -469,31 +479,33 @@ int main(int argc, char *argv[]) {
               } else if (IsInsideBox(mouse, liveBox)) {
                 if (!rightMouseDown) {
                   if (event.wheel.y < 0) { // Wheel down
-                    HandleCommand(currentSet, COM_FG_WHEEL_DOWN);
+                    HandleCommand(currentSet, COM_FG_WHEEL_DOWN, PE_FGE);
                   } else { // Wheel up
-                    HandleCommand(currentSet, COM_FG_WHEEL_UP);
+                    HandleCommand(currentSet, COM_FG_WHEEL_UP, PE_FGE);
                   }
                 } else {
                   // Holding down the right mouse button while wheeling changes the
                   // background color instead.
                   if (event.wheel.y < 0) { // Wheel down
-                    HandleCommand(currentSet, COM_BG_WHEEL_DOWN);
+                    HandleCommand(currentSet, COM_BG_WHEEL_DOWN, PE_BGE);
                   } else { // Wheel up
-                    HandleCommand(currentSet, COM_BG_WHEEL_UP);
+                    HandleCommand(currentSet, COM_BG_WHEEL_UP, PE_BGE);
                   }
                 }
+              // Same for the alternate preview, except we change the alternate
+              // set values.
               } else if (IsInsideBox(mouse, altBox)) {
                 if (!rightMouseDown) {
                   if (event.wheel.y < 0) { // Wheel down
-                    HandleCommand(alternateSet, COM_FG_WHEEL_DOWN);
+                    HandleCommand(alternateSet, COM_FG_WHEEL_DOWN, PE_FGE);
                   } else { // Wheel up
-                    HandleCommand(alternateSet, COM_FG_WHEEL_UP);
+                    HandleCommand(alternateSet, COM_FG_WHEEL_UP, PE_FGE);
                   }
                 } else {
                   if (event.wheel.y < 0) { // Wheel down
-                    HandleCommand(alternateSet, COM_BG_WHEEL_DOWN);
+                    HandleCommand(alternateSet, COM_BG_WHEEL_DOWN, PE_BGE);
                   } else { // Wheel up
-                    HandleCommand(alternateSet, COM_BG_WHEEL_UP);
+                    HandleCommand(alternateSet, COM_BG_WHEEL_UP, PE_BGE);
                   }
                 }
               }
@@ -504,7 +516,9 @@ int main(int argc, char *argv[]) {
               // the same item we down clicked on, execute the command.
               if (event.button.button == SDL_BUTTON_LEFT) {
                 if ((thisHover != INVALID) && (thisHover == leftMouseDownOn)) {
-                  exitProgram = HandleCommand(displaySet ? alternateSet : currentSet, displayCommand[thisHover].commands[MOUSE_CLICK].command);
+                  exitProgram = HandleCommand(displaySet ? alternateSet : currentSet,
+                    displayCommand[thisHover].commands[MOUSE_CLICK].command,
+                    thisHover);
                 }
               } else if (event.button.button == SDL_BUTTON_RIGHT) {
                 if ((thisHover != INVALID) && (thisHover == rightMouseDownOn)) {
@@ -758,7 +772,7 @@ int main(int argc, char *argv[]) {
     // Check for whole gui refresh.
     if (refreshAll) {
       refreshAll = NO;
-      ClearWindow();
+      DrawClearWindow();
       DrawDisplayTexts(thisHover);
       DrawPreviewBorder(PREVIEW_LIVE_POS_X, PREVIEW_LIVE_POS_Y, tensorWidth, tensorHeight, displaySet == OO_CURRENT);
       DrawPreviewBorder(PREVIEW_ALT_POS_X, PREVIEW_ALT_POS_Y, tensorWidth, tensorHeight, displaySet == OO_ALTERNATE);
@@ -979,12 +993,16 @@ void ProcessModes(int set) {
   if (DBOOL(PE_SNAIL)) {
     SnailSeed(currentSet, DINT(PE_SNAIL_POS));
     DINT(PE_SNAIL_POS)++;
+  } else {
+    DINT(PE_SNAIL_POS) = 0;
   }
 
   // Fast snail seed.
   if (DBOOL(PE_FASTSNAIL)) {
     FastSnailSeed(currentSet, DINT(PE_FASTSNAILP));
     DINT(PE_FASTSNAILP)++;
+  } else {
+    DINT(PE_FASTSNAILP) = 0;
   }
 
   // Fader
@@ -1424,7 +1442,7 @@ bool_t HandleKey(int set, SDL_Keycode key, SDL_Keymod mod) {
   for ( i = 0 ; i < displayCommandCount; i++) {
     for (j = 0; j < MOUSE_COUNT; j++) {
       if ((displayCommand[i].commands[j].key == key) && (displayCommand[i].commands[j].mod == mod)) {
-        return(HandleCommand(set, displayCommand[i].commands[j].command));
+        return(HandleCommand(set, displayCommand[i].commands[j].command, displayCommand[i].dataSource));
       }
     }
   }
@@ -1433,7 +1451,7 @@ bool_t HandleKey(int set, SDL_Keycode key, SDL_Keymod mod) {
   for ( i = 0 ; i < otherCommandsCount; i++) {
     for (j = 0 ; j < MOUSE_COUNT; j++) {
       if ((otherCommands[i].commands[j].key == key) && (otherCommands[i].commands[j].mod == mod)) {
-        return(HandleCommand(set, otherCommands[i].commands[j].command));
+        return(HandleCommand(set, otherCommands[i].commands[j].command, displayCommand[i].dataSource));
       }
     }
   }
@@ -1505,21 +1523,61 @@ bool_t HandleKey(int set, SDL_Keycode key, SDL_Keymod mod) {
 }
 
 // Executes a user command - toggles flags, adjusts parameters, etc.
-bool_t HandleCommand(int set, command_e command) {
+bool_t HandleCommand(int set, command_e command, int selection) {
   int i;
 
   switch(command) {
 
-    case COM_SIDEPULSE: SBOOL(set, PE_SIDEPULSE) = !SBOOL(set, PE_SIDEPULSE); break;
-    case COM_SCROLL_RAND_EN: SBOOL(set, PE_SCROLLRANDEN) = !SBOOL(set, PE_SCROLLRANDEN); break;
-    case COM_SCROLL_RAND_RST: SINT(set, PE_SCROLLRANDOM) = patternElements[PE_SCROLLRANDOM].initial.i; break;
-    case COM_SCROLL_RAND_UP: SINT(set, PE_SCROLLRANDOM)++; break;
-    case COM_SCROLL_RAND_DOWN:
-      SINT(set, PE_SCROLLRANDOM)--;
-      if (SINT(set, PE_SCROLLRANDOM) < 1) SINT(set, PE_SCROLLRANDOM) = 1;
+    // First the common cases - Uncomplicated increments, decrements, and resets.
+    case COM_RST_FLOAT:
+      SFLOAT(set, displayCommand[selection].dataSource) = patternElements[displayCommand[selection].dataSource].initial.f; break;
+    case COM_INC_FLOAT:
+      SFLOAT(set, displayCommand[selection].dataSource) += SFLOAT(set, PE_FLOATINC);
+      if (SFLOAT(set, displayCommand[selection].dataSource) > patternElements[displayCommand[selection].dataSource].max.f)
+        SFLOAT(set, displayCommand[selection].dataSource) = patternElements[displayCommand[selection].dataSource].max.f;
       break;
-    case COM_MIRROR_H: SBOOL(set, PE_MIRROR_H) = !SBOOL(set, PE_MIRROR_H); break;
-    case COM_MIRROR_V: SBOOL(set, PE_MIRROR_V) = !SBOOL(set, PE_MIRROR_V); break;
+    case COM_DEC_FLOAT:
+      SFLOAT(set, displayCommand[selection].dataSource) -= SFLOAT(set, PE_FLOATINC);
+      if (SFLOAT(set, displayCommand[selection].dataSource) < patternElements[displayCommand[selection].dataSource].min.f)
+        SFLOAT(set, displayCommand[selection].dataSource) = patternElements[displayCommand[selection].dataSource].min.f;
+      break;
+    case COM_BOOL_FLIP: SBOOL(set, displayCommand[selection].dataSource) = !SBOOL(set, displayCommand[selection].dataSource); break;
+    case COM_ENUM_RST: SENUM(set, displayCommand[selection].dataSource) = patternElements[displayCommand[selection].dataSource].initial.e; break;
+    case COM_ENUM_INC:
+      SENUM(set, displayCommand[selection].dataSource) =
+        (SENUM(set, displayCommand[selection].dataSource) + 1) %
+        enumerations[patternElements[displayCommand[selection].dataSource].etype].size;
+      break;
+    case COM_ENUM_DEC:
+      SENUM(set, displayCommand[selection].dataSource) =
+        (SENUM(set, displayCommand[selection].dataSource) - 1);
+      if (SENUM(set, displayCommand[selection].dataSource) < 0)
+        SENUM(set, displayCommand[selection].dataSource) =
+          enumerations[patternElements[displayCommand[selection].dataSource].etype].size - 1;
+      break;
+    case COM_INT_RST: SINT(set, displayCommand[selection].dataSource) = patternElements[displayCommand[selection].dataSource].initial.i;  break;
+    case COM_INT_INC:
+      SINT(set, displayCommand[selection].dataSource)++;
+      if (SINT(set, displayCommand[selection].dataSource) > patternElements[displayCommand[selection].dataSource].max.i)
+        SINT(set, displayCommand[selection].dataSource) = patternElements[displayCommand[selection].dataSource].max.i;
+      break;
+    case COM_INT_DEC:
+      SINT(set, displayCommand[selection].dataSource)--;
+      if (SINT(set, displayCommand[selection].dataSource) < patternElements[displayCommand[selection].dataSource].min.i)
+        SINT(set, displayCommand[selection].dataSource) = patternElements[displayCommand[selection].dataSource].min.i;
+      break;
+    // The lints are for the randomness vars.  Makes it easier to get through them.
+    case COM_LINT_DEC:
+      SINT(set, displayCommand[selection].dataSource) -= max(1, SINT(set, displayCommand[selection].dataSource) / 50);
+      if (SINT(set, displayCommand[selection].dataSource) < patternElements[displayCommand[selection].dataSource].min.i)
+        SINT(set, displayCommand[selection].dataSource) = patternElements[displayCommand[selection].dataSource].min.i;
+      break;
+    case COM_LINT_INC:
+      SINT(set, displayCommand[selection].dataSource) += max(1, SINT(set, displayCommand[selection].dataSource) / 50);
+      if (SINT(set, displayCommand[selection].dataSource) > patternElements[displayCommand[selection].dataSource].max.i)
+        SINT(set, displayCommand[selection].dataSource) = patternElements[displayCommand[selection].dataSource].max.i;
+      break;
+
     case COM_FG_WHEEL_UP:
       SENUM(set, PE_FGCYCLE) = CM_NONE;
       SENUM(set, PE_FGE) = (SENUM(set, PE_FGE) + 1) % CE_COUNT;
@@ -1542,20 +1600,6 @@ bool_t HandleCommand(int set, command_e command) {
       if (SENUM(set, PE_BGE) < CE_RED) SENUM(set, PE_BGE) = CE_COUNT - 1;
       SCOLOR(set, PE_BGC) = namedColors[SENUM(set, PE_BGE)].color;
       break;
-    case COM_CROSSB_RST: SENUM(set, PE_CROSSBAR) = CB_NONE; break;
-    case COM_CROSSB_UP: SENUM(set, PE_CROSSBAR) = (SENUM(set, PE_CROSSBAR) + 1) % CB_COUNT; break;
-    case COM_CROSSB_DOWN:
-      SENUM(set, PE_CROSSBAR)--;
-      if (SENUM(set, PE_CROSSBAR) < 0) SENUM(set, PE_CROSSBAR) = CB_COUNT - 1;
-      break;
-    case COM_SNAILFAST:
-      SBOOL(set, PE_FASTSNAIL) = !SBOOL(set, PE_FASTSNAIL);
-      SINT(set, PE_FASTSNAILP) = 0;
-      break;
-    case COM_SNAIL:
-      SBOOL(set, PE_SNAIL) = !SBOOL(set, PE_SNAIL);
-      SINT(set, PE_SNAIL_POS) = 0;
-      break;
     case COM_BLEND_RST: alternateBlend = 0; break;
     case COM_BLEND_INC:
       alternateBlend += SFLOAT(set, PE_FLOATINC);
@@ -1564,17 +1608,6 @@ bool_t HandleCommand(int set, command_e command) {
     case COM_BLEND_DEC:
       alternateBlend -= SFLOAT(set, PE_FLOATINC);
       if (alternateBlend < 0.0) alternateBlend = 0.0;
-      break;
-    case COM_INTENSITY_RST: SFLOAT(set, PE_INTENSITY) = patternElements[PE_INTENSITY].initial.f; break;
-    case COM_INTENSITY_UP:
-      SFLOAT(set, PE_INTENSITY) += SFLOAT(set, PE_FLOATINC);
-      if (SFLOAT(set, PE_INTENSITY) > patternElements[PE_INTENSITY].max.f)
-        SFLOAT(set, PE_INTENSITY) = patternElements[PE_INTENSITY].max.f;
-      break;
-    case COM_INTENSITY_DOWN:
-      SFLOAT(set, PE_INTENSITY) -= SFLOAT(set, PE_FLOATINC);
-      if (SFLOAT(set, PE_INTENSITY) < patternElements[PE_INTENSITY].min.f)
-        SFLOAT(set, PE_INTENSITY) = patternElements[PE_INTENSITY].min.f;
       break;
     case COM_BLENDINC_RST: alternateBlendRate = 0.01; break;
     case COM_BLENDINC_INC:
@@ -1592,23 +1625,6 @@ bool_t HandleCommand(int set, command_e command) {
     case COM_ALTERNATE_DEC: alternateSet--; if (alternateSet < 0) alternateSet = PATTERN_SET_COUNT - 1; break;
     case COM_LIVE_INC: currentSet = (currentSet + 1) % PATTERN_SET_COUNT; break;
     case COM_LIVE_DEC: currentSet--; if (currentSet < 0) currentSet = PATTERN_SET_COUNT - 1; break;
-    case COM_CELL: SBOOL(set, PE_CELLFUN) = !SBOOL(set, PE_CELLFUN); break;
-    case COM_TEXT_FLIP: SBOOL(set, PE_FONTFLIP) = !SBOOL(set, PE_FONTFLIP); break;
-    case COM_TEXT_REVERSE: SBOOL(set, PE_FONTDIR) = !SBOOL(set, PE_FONTDIR); break;
-    case COM_TEXT: SBOOL(set, PE_TEXTSEED) = !SBOOL(set, PE_TEXTSEED); break;
-    case COM_BOUNCE_RST: SINT(set, PE_BOUNCER) = patternElements[PE_BOUNCER].initial.i; break;
-    case COM_BOUNCE_UP: SINT(set, PE_BOUNCER)++; break;
-    case COM_BOUNCE_DOWN: if (--SINT(set, PE_BOUNCER) < 0) SINT(set, PE_BOUNCER) = 0; break;
-    case COM_FADE: SBOOL(set, PE_FADE) = !SBOOL(set, PE_FADE); break;
-    case COM_DIFFUSE: SBOOL(set, PE_DIFFUSE) = !SBOOL(set, PE_DIFFUSE); break;
-    case COM_ROLL: SBOOL(set, PE_ROLLOVER) = !SBOOL(set, PE_ROLLOVER); break;
-    case COM_SCROLL: SBOOL(set, PE_SCROLL) = !SBOOL(set, PE_SCROLL); break;
-    case COM_HBAR: SBOOL(set, PE_HBARS) = YES; break;
-    case COM_VBAR: SBOOL(set, PE_VBARS) = YES; break;
-    case COM_FGALL: SBOOL(set, PE_FGCOLORALL) = YES; break;
-    case COM_BGALL: SBOOL(set, PE_BGCOLORALL) = YES; break;
-    case COM_IMAGEALL: SBOOL(set, PE_IMAGEALL) = YES; break;
-    case COM_RDOT: SBOOL(set, PE_RANDOMDOT) = !SBOOL(set, PE_RANDOMDOT); break;
     case COM_FGCYCLE_RST:
       SENUM(set, PE_FGCYCLE) = patternElements[PE_FGCYCLE].initial.e;
       SCOLOR(set, PE_FGC) = namedColors[SENUM(set, PE_FGE)].color;
@@ -1673,49 +1689,12 @@ bool_t HandleCommand(int set, command_e command) {
     case COM_LOADSET7: if (displaySet == OO_ALTERNATE) alternateSet = 7; else currentSet = 7; break;
     case COM_LOADSET8: if (displaySet == OO_ALTERNATE) alternateSet = 8; else currentSet = 8; break;
     case COM_LOADSET9: if (displaySet == OO_ALTERNATE) alternateSet = 9; else currentSet = 9; break;
-    case COM_FADEMODE:
-      SENUM(set, PE_FADEMODE) = (SENUM(set, PE_FADEMODE) + 1) % FM_COUNT;
-      break;
-    case COM_NORED: SBOOL(set, PE_NORED) = !SBOOL(set, PE_NORED); break;
-    case COM_NOGREEN: SBOOL(set, PE_NOGREEN) = !SBOOL(set, PE_NOGREEN); break;
-    case COM_NOBLUE: SBOOL(set, PE_NOBLUE) = !SBOOL(set, PE_NOBLUE); break;
     case COM_TEXTRESET: SINT(set, PE_PIXELINDEX) = INVALID; break;
-    case COM_POSTROTATE:
-      SBOOL(set, PE_POSTRZ) = !SBOOL(set, PE_POSTRZ);
-      SFLOAT(set, PE_POSTRZANGLE) = 0;
-      break;
-    case COM_PREROTATE: SBOOL(set, PE_PRERZ) = !SBOOL(set, PE_PRERZ); break;
-    case COM_AA: SBOOL(set, PE_ALIAS) = !SBOOL(set, PE_ALIAS); break;
-    case COM_MULTIPLY: SBOOL(set, PE_MULTIPLY) = !SBOOL(set, PE_MULTIPLY); break;
-    case COM_SIDEBAR: SBOOL(set, PE_BARSEED) = !SBOOL(set, PE_BARSEED); break;
     case COM_ORIENTATION:
       tensor_landscape_p = !tensor_landscape_p;
       SetDims();
       DrawPreviewBorder(PREVIEW_LIVE_POS_X, PREVIEW_LIVE_POS_Y,  tensorWidth, tensorHeight,displaySet == OO_CURRENT);
       DrawPreviewBorder(PREVIEW_ALT_POS_X, PREVIEW_ALT_POS_Y, tensorWidth, tensorHeight, displaySet == OO_ALTERNATE);
-      break;
-    case COM_TEXT_MODE_UP: SENUM(set, PE_TEXTMODE) = (SENUM(set, PE_TEXTMODE) + 1) % TS_COUNT; break;
-    case COM_TEXT_MODE_DOWN:
-      SENUM(set, PE_TEXTMODE)--;
-      if (SENUM(set, PE_TEXTMODE) < 0) SENUM(set, PE_TEXTMODE) = TS_COUNT - 1;
-      break;
-    case COM_RP_UP: SENUM(set, PE_SHIFTRED) = (SENUM(set, PE_SHIFTRED) + 1) % SM_COUNT; break;
-    case COM_RP_RST: SENUM(set, PE_SHIFTRED) = patternElements[PE_SHIFTRED].initial.e; break;
-    case COM_RP_DOWN:
-      SENUM(set, PE_SHIFTRED)--;
-      if (SENUM(set, PE_SHIFTRED) < 0) SENUM(set, PE_SHIFTRED) = SM_COUNT - 1;
-      break;
-    case COM_GP_UP: SENUM(set, PE_SHIFTGREEN) = (SENUM(set, PE_SHIFTGREEN) + 1) % SM_COUNT; break;
-    case COM_GP_RST: SENUM(set, PE_SHIFTGREEN) = patternElements[PE_SHIFTGREEN].initial.e; break;
-    case COM_GP_DOWN:
-      SENUM(set, PE_SHIFTGREEN)--;
-      if (SENUM(set, PE_SHIFTGREEN) < 0) SENUM(set, PE_SHIFTGREEN) = SM_COUNT - 1;
-      break;
-    case COM_BP_UP: SENUM(set, PE_SHIFTBLUE) = (SENUM(set, PE_SHIFTBLUE) + 1) % SM_COUNT; break;
-    case COM_BP_RST: SENUM(set, PE_SHIFTBLUE) = patternElements[PE_SHIFTBLUE].initial.e; break;
-    case COM_BP_DOWN:
-      SENUM(set, PE_SHIFTBLUE)--;
-      if (SENUM(set, PE_SHIFTBLUE) < 0) SENUM(set, PE_SHIFTBLUE) = SM_COUNT - 1;
       break;
     case COM_FG_DEC:
       SENUM(set, PE_FGE)--;
@@ -1764,65 +1743,6 @@ bool_t HandleCommand(int set, command_e command) {
         SINT(set, PE_TEXTOFFSET) %= tensorWidth;
       }
       break;
-    case COM_DELAY_DEC:
-      SINT(set, PE_DELAY)--;
-      if (SINT(set, PE_DELAY) < 1) SINT(set, PE_DELAY) = 1;  // Can't be 0!
-      break;
-    case COM_DELAY_RST:
-      SINT(set, PE_DELAY) = INITIAL_DELAY;
-      break;
-    case COM_DELAY_INC:
-      SINT(set, PE_DELAY)++;
-      break;
-    case COM_CP_UP: SENUM(set, PE_SHIFTCYAN) = (SENUM(set, PE_SHIFTCYAN) + 1) % SM_COUNT; break;
-    case COM_CP_RST: SENUM(set, PE_SHIFTCYAN) = patternElements[PE_SHIFTCYAN].initial.e; break;
-    case COM_CP_DOWN:
-      SENUM(set, PE_SHIFTCYAN)--;
-      if (SENUM(set, PE_SHIFTCYAN) < 0) SENUM(set, PE_SHIFTCYAN) = SM_COUNT - 1;
-      break;
-    case COM_YP_UP: SENUM(set, PE_SHIFTYELLOW) = (SENUM(set, PE_SHIFTYELLOW) + 1) % SM_COUNT; break;
-    case COM_YP_RST: SENUM(set, PE_SHIFTYELLOW) = patternElements[PE_SHIFTYELLOW].initial.e; break;
-    case COM_YP_DOWN:
-      SENUM(set, PE_SHIFTYELLOW)--;
-      if (SENUM(set, PE_SHIFTYELLOW) < 0) SENUM(set, PE_SHIFTYELLOW) = SM_COUNT - 1;
-      break;
-    case COM_MP_UP: SENUM(set, PE_SHIFTMAGENTA) = (SENUM(set, PE_SHIFTMAGENTA) + 1) % SM_COUNT; break;
-    case COM_MP_RST: SENUM(set, PE_SHIFTMAGENTA) = patternElements[PE_SHIFTMAGENTA].initial.e; break;
-    case COM_MP_DOWN:
-      SENUM(set, PE_SHIFTMAGENTA)--;
-      if (SENUM(set, PE_SHIFTMAGENTA) < 0) SENUM(set, PE_SHIFTMAGENTA) = SM_COUNT - 1;
-      break;
-    case COM_IMAGE: SBOOL(set, PE_POSTIMAGE) = !SBOOL(set, PE_POSTIMAGE); break;
-    case COM_FADE_DEC: SINT(set, PE_FADEINC)--; break;
-    case COM_FADE_INC: SINT(set, PE_FADEINC)++; break;
-    case COM_FADE_RST: SINT(set, PE_FADEINC) = INITIAL_FADE_INC; break;
-    case COM_DIFFUSE_DEC: SFLOAT(set, PE_DIFFUSECOEF) -= SFLOAT(set, PE_FLOATINC); break;
-    case COM_DIFFUSE_RST: SFLOAT(set, PE_DIFFUSECOEF) = INITIAL_DIFF_COEF; break;
-    case COM_DIFFUSE_INC: SFLOAT(set, PE_DIFFUSECOEF) += SFLOAT(set, PE_FLOATINC); break;
-    case COM_EXPAND_DEC: SFLOAT(set, PE_POSTEXP) -= SFLOAT(set, PE_FLOATINC); break;
-    case COM_EXPAND_RST: SFLOAT(set, PE_POSTEXP) = INITIAL_EXPAND; break;
-    case COM_EXPAND_INC: SFLOAT(set, PE_POSTEXP) += SFLOAT(set, PE_FLOATINC); break;
-    case COM_RANDOM_DEC:
-      SINT(set, PE_RANDOMDOTCOEF) -= max(1, SINT(set, PE_RANDOMDOTCOEF) / 50);
-      if (SINT(set, PE_RANDOMDOTCOEF) < 1) SINT(set, PE_RANDOMDOTCOEF) = 1;
-      break;
-    case COM_RANDOM_RST: SINT(set, PE_RANDOMDOTCOEF) = INITIAL_RAND_MOD; break;
-    case COM_RANDOM_INC:
-      SINT(set, PE_RANDOMDOTCOEF) += max(1, SINT(set, PE_RANDOMDOTCOEF) / 50);
-      if (SINT(set, PE_RANDOMDOTCOEF) > 20000) SINT(set, PE_RANDOMDOTCOEF) = 20000;
-      break;
-    case COM_CB_DOWN:
-      SINT(set, PE_CBLIKELY) -= max(1, SINT(set, PE_CBLIKELY) / 50);
-      if (SINT(set, PE_CBLIKELY) < 1) SINT(set, PE_CBLIKELY) = 1;
-      break;
-    case COM_CB_RST: SINT(set, PE_CBLIKELY) = patternElements[PE_CBLIKELY].initial.i; break;
-    case COM_CB_UP:
-      SINT(set, PE_CBLIKELY) += max(1, SINT(set, PE_CBLIKELY) / 50);
-      if (SINT(set, PE_CBLIKELY) > 20000) SINT(set, PE_CBLIKELY) = 20000;
-      break;
-    case COM_POSTROT_DEC: SFLOAT(set, PE_POSTRZANGLE) -= SFLOAT(set, PE_FLOATINC); break;
-    case COM_POSTROT_RST: SFLOAT(set, PE_POSTRZANGLE) = INITIAL_POSTROT_ANGLE; break;
-    case COM_POSTROT_INC: SFLOAT(set, PE_POSTRZANGLE) += SFLOAT(set, PE_FLOATINC); break;
     case COM_LOAD0: memcpy(SBUFFER(set, PE_FRAMEBUFFER), SBUFFER(0, PE_FRAMEBUFFER), patternElements[PE_FRAMEBUFFER].size * sizeof(unsigned char)); break;
     case COM_LOAD1: memcpy(SBUFFER(set, PE_FRAMEBUFFER), SBUFFER(1, PE_FRAMEBUFFER), patternElements[PE_FRAMEBUFFER].size * sizeof(unsigned char)); break;
     case COM_LOAD2: memcpy(SBUFFER(set, PE_FRAMEBUFFER), SBUFFER(2, PE_FRAMEBUFFER), patternElements[PE_FRAMEBUFFER].size * sizeof(unsigned char)); break;
@@ -1833,20 +1753,6 @@ bool_t HandleCommand(int set, command_e command) {
     case COM_LOAD7: memcpy(SBUFFER(set, PE_FRAMEBUFFER), SBUFFER(7, PE_FRAMEBUFFER), patternElements[PE_FRAMEBUFFER].size * sizeof(unsigned char)); break;
     case COM_LOAD8: memcpy(SBUFFER(set, PE_FRAMEBUFFER), SBUFFER(8, PE_FRAMEBUFFER), patternElements[PE_FRAMEBUFFER].size * sizeof(unsigned char)); break;
     case COM_LOAD9: memcpy(SBUFFER(set, PE_FRAMEBUFFER), SBUFFER(9, PE_FRAMEBUFFER), patternElements[PE_FRAMEBUFFER].size * sizeof(unsigned char)); break;
-    case COM_FGRAINBOW_DEC: SINT(set, PE_FGRAINBOW)--; break;
-    case COM_FGRAINBOW_RST: SINT(set, PE_FGRAINBOW) = patternElements[PE_FGRAINBOW].initial.i; break;
-    case COM_FGRAINBOW_INC: SINT(set, PE_FGRAINBOW)++; break;
-    case COM_BGRAINBOW_DEC: SINT(set, PE_BGRAINBOW)--; break;
-    case COM_BGRAINBOW_RST: SINT(set, PE_BGRAINBOW) = patternElements[PE_BGRAINBOW].initial.i; break;
-    case COM_BGRAINBOW_INC: SINT(set, PE_BGRAINBOW)++; break;
-    case COM_CYCLE_MODE: SENUM(set, PE_FGCYCLE) = (SENUM(set, PE_FGCYCLE) + 1) % CM_COUNT; break;
-    case COM_CYCLE_MODE_DOWN:
-      SENUM(set, PE_FGCYCLE)--;
-      if (SENUM(set, PE_FGCYCLE) < 0) SENUM(set, PE_FGCYCLE) = CM_COUNT - 1;
-      break;
-    case COM_PREROT_DEC: SFLOAT(set, PE_PRERZANGLE)-= SFLOAT(set, PE_FLOATINC); break;
-    case COM_PREROT_RST: SFLOAT(set, PE_PRERZANGLE) = INITIAL_PREROT_ANGLE; break;
-    case COM_PREROT_INC: SFLOAT(set, PE_PRERZANGLE)+= SFLOAT(set, PE_FLOATINC); break;
     case COM_SCROLL_UPC:
       SENUM(set, PE_SCROLLDIR) = DIR_UP;
       SBOOL(set, PE_SCROLL) = YES;
@@ -1863,23 +1769,7 @@ bool_t HandleCommand(int set, command_e command) {
       SENUM(set, PE_SCROLLDIR) = DIR_RIGHT;
       SBOOL(set, PE_SCROLL) = YES;
       break;
-    case COM_SCROLL_CYCLE_UP:
-      SENUM(set, PE_SCROLLDIR) = (SENUM(set, PE_SCROLLDIR) + 1) % DIR_COUNT;
-      SBOOL(set, PE_SCROLL) = YES;
-      break;
-    case COM_SCROLL_CYCLE_DOWN:
-      SENUM(set, PE_SCROLLDIR)--;
-      if (SENUM(set, PE_SCROLLDIR) < 0) SENUM(set, PE_SCROLLDIR) = DIR_COUNT - 1;
-      SBOOL(set, PE_SCROLL) = YES;
-      break;
-    case COM_MULT_DEC: SFLOAT(set, PE_MULTIPLYBY) -= SFLOAT(set, PE_FLOATINC); break;
-    case COM_MULT_RST: SFLOAT(set, PE_MULTIPLYBY) = INITIAL_MULTIPLIER; break;
-    case COM_MULT_INC: SFLOAT(set, PE_MULTIPLYBY) += SFLOAT(set, PE_FLOATINC); break;
-    case COM_POSTSPEED_DEC: SFLOAT(set, PE_POSTRZINC) -= SFLOAT(set, PE_FLOATINC); break;
-    case COM_POSTSPEED_RST: SFLOAT(set, PE_POSTRZINC) = INITIAL_POSTROT_INC; break;
-    case COM_POSTSPEED_INC: SFLOAT(set, PE_POSTRZINC) += SFLOAT(set, PE_FLOATINC); break;
     case COM_STEP_INC: SFLOAT(set, PE_FLOATINC) *= 10; break;
-    case COM_STEP_RST: SFLOAT(set, PE_FLOATINC) = INITIAL_FLOAT_INC; break;
     case COM_STEP_DEC: SFLOAT(set, PE_FLOATINC) /= 10; break;
     case COM_SCROLL_UP: SENUM(set, PE_SCROLLDIR) = DIR_UP; break;
     case COM_SCROLL_DOWN: SENUM(set, PE_SCROLLDIR) = DIR_DOWN; break;
@@ -1891,54 +1781,9 @@ bool_t HandleCommand(int set, command_e command) {
       if (SINT(set, PE_TEXTINDEX) < 0) SINT(set, PE_TEXTINDEX) = 0;
       SSTRING(set, PE_TEXTBUFFER)[SINT(set, PE_TEXTINDEX)] = 0x00;
       break;
-    case COM_RETURN:
-      SSTRING(set, PE_TEXTBUFFER)[SINT(set, PE_TEXTINDEX)] = '\n';
-      SSTRING(set, PE_TEXTBUFFER)[SINT(set, PE_TEXTINDEX) + 1] = 0x00;
-      SINT(set, PE_TEXTINDEX)++;
-      if (SINT(set, PE_TEXTINDEX) >= (patternElements[PE_TEXTBUFFER].size - 2)) {
-        SINT(set, PE_TEXTINDEX)--;
-      }
-      break;
     case COM_DELETE:
       SINT(set, PE_TEXTINDEX) = 0;
       SSTRING(set, PE_TEXTBUFFER)[0] = 0x00;
-      break;
-    case COM_INVALID: case COM_NONE: case COM_COUNT:
-      break;
-    case COM_PREROTINC_RST: SFLOAT(set, PE_PRERZINC) = patternElements[PE_PRERZINC].initial.f; break;
-    case COM_PREROTINC_INC: SFLOAT(set, PE_PRERZINC) += SFLOAT(set, PE_FLOATINC); break;
-    case COM_PREROTINC_DEC: SFLOAT(set, PE_PRERZINC) -= SFLOAT(set, PE_FLOATINC); break;
-    case COM_PREALIAS: SBOOL(set, PE_PRERZALIAS) = !SBOOL(set, PE_PRERZALIAS); break;
-    case COM_PREEXP_RST: SFLOAT(set, PE_PRERZEXPAND) = patternElements[PE_PRERZEXPAND].initial.f; break;
-    case COM_PREEXP_INC: SFLOAT(set, PE_PRERZEXPAND) += SFLOAT(set, PE_FLOATINC); break;
-    case COM_PREEXP_DEC: SFLOAT(set, PE_PRERZEXPAND) -= SFLOAT(set, PE_FLOATINC); break;
-    case COM_IMINC_RST: SFLOAT(set, PE_IMAGEINC) = patternElements[PE_IMAGEINC].initial.f; break;
-    case COM_IMINC_INC: SFLOAT(set, PE_IMAGEINC) += SFLOAT(set, PE_FLOATINC); break;
-    case COM_IMINC_DEC: SFLOAT(set, PE_IMAGEINC) -= SFLOAT(set, PE_FLOATINC); break;
-    case COM_IMALIAS: SBOOL(set, PE_IMAGEALIAS) = !SBOOL(set, PE_IMAGEALIAS); break;
-    case COM_IMEXP_RST: SFLOAT(set, PE_IMAGEEXP) = patternElements[PE_IMAGEEXP].initial.f; break;
-    case COM_IMEXP_INC: SFLOAT(set, PE_IMAGEEXP) += SFLOAT(set, PE_FLOATINC); break;
-    case COM_IMEXP_DEC: SFLOAT(set, PE_IMAGEEXP) -= SFLOAT(set, PE_FLOATINC); break;
-    case COM_IMANGLE_RST: SFLOAT(set, PE_IMAGEANGLE) = patternElements[PE_IMAGEANGLE].initial.f; break;
-    case COM_IMANGLE_INC: SFLOAT(set, PE_IMAGEANGLE) += SFLOAT(set, PE_FLOATINC); break;
-    case COM_IMANGLE_DEC: SFLOAT(set, PE_IMAGEANGLE) -= SFLOAT(set, PE_FLOATINC); break;
-    case COM_IMXOFFSET_RST: SFLOAT(set, PE_IMAGEXOFFSET) = patternElements[PE_IMAGEXOFFSET].initial.f; break;
-    case COM_IMXOFFSET_INC:
-      SFLOAT(set, PE_IMAGEXOFFSET) += SFLOAT(set, PE_FLOATINC);
-      if (SFLOAT(set, PE_IMAGEXOFFSET) > 1.0) SFLOAT(set, PE_IMAGEXOFFSET) = 1.0;
-      break;
-    case COM_IMXOFFSET_DEC:
-      SFLOAT(set, PE_IMAGEXOFFSET) -= SFLOAT(set, PE_FLOATINC);
-      if (SFLOAT(set, PE_IMAGEXOFFSET) < 0.0) SFLOAT(set, PE_IMAGEXOFFSET) = 0.0;
-      break;
-    case COM_IMYOFFSET_RST: SFLOAT(set, PE_IMAGEYOFFSET) = patternElements[PE_IMAGEYOFFSET].initial.f; break;
-    case COM_IMYOFFSET_INC:
-      SFLOAT(set, PE_IMAGEYOFFSET) += SFLOAT(set, PE_FLOATINC);
-      if (SFLOAT(set, PE_IMAGEYOFFSET) > 1.0) SFLOAT(set, PE_IMAGEYOFFSET) = 1.0;
-      break;
-    case COM_IMYOFFSET_DEC:
-      SFLOAT(set, PE_IMAGEYOFFSET) -= SFLOAT(set, PE_FLOATINC);
-      if (SFLOAT(set, PE_IMAGEYOFFSET) < 0.0) SFLOAT(set, PE_IMAGEYOFFSET) = 0.0;
       break;
     case COM_FCOUNT_RST:
       SINT(set, PE_FRAMECOUNT) = patternElements[PE_FRAMECOUNT].initial.i;
@@ -1952,6 +1797,8 @@ bool_t HandleCommand(int set, command_e command) {
       SINT(set, PE_FRAMECOUNT)--;
       if (SINT(set, PE_FRAMECOUNT) < 1) SINT(set, PE_FRAMECOUNT) = 1;
       cycleFrameCount = SINT(set, PE_FRAMECOUNT);
+      break;
+    case COM_INVALID: case COM_NONE: case COM_COUNT:
       break;
   }
   return NO;  // NO, don't exit the program.
@@ -3634,7 +3481,7 @@ void CopyPatternSet(int dst, int src) {
 }
 
 // Figure out which pixel of the display the mouse is over.
-point_t GetDisplayPixel(point_t mouse, box_t box) {
+point_t GetDisplayPixel(point_t mouse, SDL_Rect box) {
   point_t pixel;
   pixel.x = (mouse.x - box.x) / PREVIEW_PIXEL_SIZE;
   pixel.y = (mouse.y - box.y) / PREVIEW_PIXEL_SIZE;
@@ -4186,14 +4033,15 @@ void SetValueFloat(int set, patternElement_e element, float value) {
 
 int OverCommand(point_t mouse, int *lastHover) {
   int i;
-  box_t box, boxOld, drawBox;
+  SDL_Rect box, boxOld, drawBox;
+  displayText_t commandTexture;
 
-  boxOld = GetCommandBox(*lastHover);
+  boxOld = GetBoxofCommand(*lastHover);
 
   for (i = 0; i < displayCommandCount; i++) {
     // box is the rectangle encompassing the command text.  We could
     // precompute these if timing were important.
-    box = GetCommandBox(i);
+    box = GetBoxofCommand(i);
 
     // Is it in the rectangle of command i?
     if (IsInsideBox(mouse, box)) {
@@ -4205,14 +4053,18 @@ int OverCommand(point_t mouse, int *lastHover) {
         drawBox = box;
         drawBox.w = GetPixelofColumn(displayCommand[i].col + 1) - drawBox.x;
         DrawSBox(drawBox, DISPLAY_COLOR_TEXTSBG_HL);
-        WriteCommand(i, DISPLAY_COLOR_TEXTS_HL, DISPLAY_COLOR_TEXTSBG_HL);
+        CreateTextureCommand(&commandTexture, i, DISPLAY_COLOR_TEXTS_HL, DISPLAY_COLOR_TEXTSBG_HL);
+        DrawDisplayTexture(commandTexture);
+        SDL_DestroyTexture(commandTexture.texture);
 
         // And if it came off a different command, remove that highlight.
         if (*lastHover != INVALID) {
           drawBox = boxOld;
           drawBox.w = GetPixelofColumn(displayCommand[*lastHover].col + 1) - drawBox.x;
           DrawSBox(drawBox, DISPLAY_COLOR_TEXTSBG);
-          WriteCommand(*lastHover, DISPLAY_COLOR_TEXTS, DISPLAY_COLOR_TEXTSBG);
+          CreateTextureCommand(&commandTexture, *lastHover, DISPLAY_COLOR_TEXTS, DISPLAY_COLOR_TEXTSBG);
+          DrawDisplayTexture(commandTexture);
+          SDL_DestroyTexture(commandTexture.texture);
         }
 
         // New lastHover.
@@ -4229,17 +4081,19 @@ int OverCommand(point_t mouse, int *lastHover) {
   if (*lastHover != INVALID) {
     boxOld.w = GetPixelofColumn(displayCommand[*lastHover].col + 1) - boxOld.x;
     DrawSBox(boxOld, DISPLAY_COLOR_TEXTSBG);
-    WriteCommand(*lastHover, DISPLAY_COLOR_TEXTS, DISPLAY_COLOR_TEXTSBG);
+    CreateTextureCommand(&commandTexture, *lastHover, DISPLAY_COLOR_TEXTS, DISPLAY_COLOR_TEXTSBG);
+    DrawDisplayTexture(commandTexture);
+    SDL_DestroyTexture(commandTexture.texture);
     *lastHover = INVALID;
   }
 
   return INVALID;
 }
 
-int OverBox(point_t mouse, int item, box_t ** targets, int *lastHover) {
+int OverBox(point_t mouse, int item, SDL_Rect ** targets, int *lastHover) {
   int i;
-  box_t box, boxOld;
-  const box_t invalidBox = {0, 0, 0, 0};
+  SDL_Rect box, boxOld;
+  const SDL_Rect invalidBox = {0, 0, 0, 0};
   int boxCount = enumerations[patternElements[displayCommand[item].dataSource].etype].size;
   const color_t fg = DISPLAY_COLOR_PARMS;
   const color_t bg = DISPLAY_COLOR_PARMSBG;
@@ -4264,13 +4118,13 @@ int OverBox(point_t mouse, int item, box_t ** targets, int *lastHover) {
         // Yeah, so draw the new highlight.
         DrawOutlineBox(box, fgh, bgh);
         snprintf(text, sizeof(text), "%s", enumerations[patternElements[displayCommand[item].dataSource].etype].texts[i]);
-        CenterText(box, text, fgh, bgh);
+        DrawCenteredText(box, text, fgh, bgh);
 
         // And if it came off a different command, remove that highlight.
         if (*lastHover != INVALID) {
           DrawOutlineBox(boxOld, fg, bg);
           snprintf(text, sizeof(text), "%s", enumerations[patternElements[displayCommand[item].dataSource].etype].texts[*lastHover]);
-          CenterText(boxOld, text, fg, bg);
+          DrawCenteredText(boxOld, text, fg, bg);
         }
 
         // New lastHover.
@@ -4287,7 +4141,7 @@ int OverBox(point_t mouse, int item, box_t ** targets, int *lastHover) {
   if (*lastHover != INVALID) {
     DrawOutlineBox(boxOld, fg, bg);
     snprintf(text, sizeof(text), "%s", enumerations[patternElements[displayCommand[item].dataSource].etype].texts[*lastHover]);
-    CenterText(boxOld, text, fg, bg);
+    DrawCenteredText(boxOld, text, fg, bg);
     *lastHover = INVALID;
   }
 
@@ -4314,13 +4168,14 @@ void UpdateInfoDisplay(int set) {
   static int oldBufferSize = 0;
 
   // Initialize the texture cache.  All this crap actually lowers my CPU usage
-  // from 25% to 12%.  Half of CPU time was dedicated to generating text.
+  // from 25% to 12%.  Half of CPU time was dedicated to regenerating the text
+  // textures 40x per second.
   if (!infoCount) {
     for (i = 0; i < displayCommandCount; i++) {
       if (displayCommand[i].dataSource != PE_INVALID) {
         switch(patternElements[displayCommand[i].dataSource].type) {
           case ET_BOOL:
-            WriteBoolToTexture(&tempTarget, SBOOL(set, displayCommand[i].dataSource),
+            CreateTextureBoolean(&tempTarget, SBOOL(set, displayCommand[i].dataSource),
               displayCommand[i].line, displayCommand[i].col + 1, PARAMETER_WIDTH);
             if (tempTarget.texture != NULL) {
               infoCount++;
@@ -4331,7 +4186,7 @@ void UpdateInfoDisplay(int set) {
             break;
 
           case ET_FLOAT:
-            WriteFloatToTexture(&tempTarget, SFLOAT(set, displayCommand[i].dataSource),
+            CreateTextureFloat(&tempTarget, SFLOAT(set, displayCommand[i].dataSource),
               displayCommand[i].line, displayCommand[i].col + 1, PARAMETER_WIDTH, PARAMETER_WIDTH / 2);
             if (tempTarget.texture != NULL) {
               infoCount++;
@@ -4342,7 +4197,7 @@ void UpdateInfoDisplay(int set) {
             break;
 
           case ET_INT:
-            WriteIntToTexture(&tempTarget, SINT(set, displayCommand[i].dataSource),
+            CreateTextureInt(&tempTarget, SINT(set, displayCommand[i].dataSource),
               displayCommand[i].line, displayCommand[i].col + 1, PARAMETER_WIDTH);
             if (tempTarget.texture != NULL) {
               infoCount++;
@@ -4353,7 +4208,7 @@ void UpdateInfoDisplay(int set) {
             break;
 
           case ET_ENUM:
-            WriteStringToTexture(&tempTarget,
+            CreateTextureString(&tempTarget,
               enumerations[patternElements[displayCommand[i].dataSource].etype].texts[SENUM(set, displayCommand[i].dataSource)],
               displayCommand[i].line, displayCommand[i].col + 1, PARAMETER_WIDTH);
             if (tempTarget.texture != NULL) {
@@ -4381,7 +4236,7 @@ void UpdateInfoDisplay(int set) {
           if (infoCache[thisInfo].cacheValue.b != SBOOL(set, displayCommand[i].dataSource)) {
             infoCache[thisInfo].cacheValue.b = SBOOL(set, displayCommand[i].dataSource);
             SDL_DestroyTexture(infoCache[thisInfo].infoText.texture);
-            WriteBoolToTexture(&(infoCache[thisInfo].infoText),
+            CreateTextureBoolean(&(infoCache[thisInfo].infoText),
               infoCache[thisInfo].cacheValue.b, displayCommand[i].line,
               displayCommand[i].col + 1, PARAMETER_WIDTH);
           }
@@ -4393,7 +4248,7 @@ void UpdateInfoDisplay(int set) {
           if (infoCache[thisInfo].cacheValue.f != SFLOAT(set, displayCommand[i].dataSource)) {
             infoCache[thisInfo].cacheValue.f = SFLOAT(set, displayCommand[i].dataSource);
             SDL_DestroyTexture(infoCache[thisInfo].infoText.texture);
-            WriteFloatToTexture(&(infoCache[thisInfo].infoText),
+            CreateTextureFloat(&(infoCache[thisInfo].infoText),
               infoCache[thisInfo].cacheValue.f, displayCommand[i].line,
               displayCommand[i].col + 1, PARAMETER_WIDTH, PARAMETER_WIDTH / 2);
           }
@@ -4405,7 +4260,7 @@ void UpdateInfoDisplay(int set) {
           if (infoCache[thisInfo].cacheValue.i != SINT(set, displayCommand[i].dataSource)) {
             infoCache[thisInfo].cacheValue.i = SINT(set, displayCommand[i].dataSource);
             SDL_DestroyTexture(infoCache[thisInfo].infoText.texture);
-            WriteIntToTexture(&(infoCache[thisInfo].infoText),
+            CreateTextureInt(&(infoCache[thisInfo].infoText),
               infoCache[thisInfo].cacheValue.i, displayCommand[i].line,
               displayCommand[i].col + 1, PARAMETER_WIDTH);
           }
@@ -4417,7 +4272,7 @@ void UpdateInfoDisplay(int set) {
           if (infoCache[thisInfo].cacheValue.e != SENUM(set, displayCommand[i].dataSource)) {
             infoCache[thisInfo].cacheValue.e = SENUM(set, displayCommand[i].dataSource);
             SDL_DestroyTexture(infoCache[thisInfo].infoText.texture);
-            WriteStringToTexture(&(infoCache[thisInfo].infoText),
+            CreateTextureString(&(infoCache[thisInfo].infoText),
               enumerations[patternElements[displayCommand[i].dataSource].etype].texts[SENUM(set, displayCommand[i].dataSource)],
               displayCommand[i].line, displayCommand[i].col + 1, PARAMETER_WIDTH);
           }
@@ -4449,7 +4304,7 @@ void UpdateInfoDisplay(int set) {
       SDL_DestroyTexture(infoCache[thisInfo].infoText.texture);
     }
     infoCache[thisInfo].cacheValue.i = previewFPSA;
-    WriteIntToTexture(&(infoCache[thisInfo].infoText), previewFPSA, 21, 1, PARAMETER_WIDTH);
+    CreateTextureInt(&(infoCache[thisInfo].infoText), previewFPSA, 21, 1, PARAMETER_WIDTH);
   }
   DrawDisplayTexture(infoCache[thisInfo].infoText);
   thisInfo++;
@@ -4463,7 +4318,7 @@ void UpdateInfoDisplay(int set) {
       SDL_DestroyTexture(infoCache[thisInfo].infoText.texture);
     }
     infoCache[thisInfo].cacheValue.i = previewFPSB;
-    WriteIntToTexture(&(infoCache[thisInfo].infoText), previewFPSB, 21, 5, PARAMETER_WIDTH);
+    CreateTextureInt(&(infoCache[thisInfo].infoText), previewFPSB, 21, 5, PARAMETER_WIDTH);
   }
   DrawDisplayTexture(infoCache[thisInfo].infoText);
   thisInfo++;
@@ -4477,7 +4332,7 @@ void UpdateInfoDisplay(int set) {
       SDL_DestroyTexture(infoCache[thisInfo].infoText.texture);
     }
     infoCache[thisInfo].cacheValue.i = infoFPS;
-    WriteIntToTexture(&(infoCache[thisInfo].infoText), infoFPS, 53, 5, PARAMETER_WIDTH);
+    CreateTextureInt(&(infoCache[thisInfo].infoText), infoFPS, 53, 5, PARAMETER_WIDTH);
   }
   DrawDisplayTexture(infoCache[thisInfo].infoText);
   thisInfo++;
@@ -4492,7 +4347,7 @@ void UpdateInfoDisplay(int set) {
         SDL_DestroyTexture(infoCache[thisInfo].infoText.texture);
       }
       infoCache[thisInfo].cacheValue.i = cycleFrameCount;
-      WriteIntToTexture(&(infoCache[thisInfo].infoText), cycleFrameCount, ROW_PA + 1, COL_PA + 1,  PARAMETER_WIDTH);
+      CreateTextureInt(&(infoCache[thisInfo].infoText), cycleFrameCount, ROW_PA + 1, COL_PA + 1,  PARAMETER_WIDTH);
     }
   } else {
     if (initial || infoCache[thisInfo].cacheValue.b != cyclePatternSets) {
@@ -4503,7 +4358,7 @@ void UpdateInfoDisplay(int set) {
         SDL_DestroyTexture(infoCache[thisInfo].infoText.texture);
       }
       infoCache[thisInfo].cacheValue.b = cyclePatternSets;
-      WriteBoolToTexture(&(infoCache[thisInfo].infoText), cyclePatternSets, ROW_PA + 1, COL_PA + 1,  PARAMETER_WIDTH);
+      CreateTextureBoolean(&(infoCache[thisInfo].infoText), cyclePatternSets, ROW_PA + 1, COL_PA + 1,  PARAMETER_WIDTH);
     }
   }
   DrawDisplayTexture(infoCache[thisInfo].infoText);
@@ -4518,7 +4373,7 @@ void UpdateInfoDisplay(int set) {
       SDL_DestroyTexture(infoCache[thisInfo].infoText.texture);
     }
     infoCache[thisInfo].cacheValue.i = alternateSet;
-    WriteIntToTexture(&(infoCache[thisInfo].infoText), alternateSet, ROW_PA + 9, COL_PA + 1, PARAMETER_WIDTH);
+    CreateTextureInt(&(infoCache[thisInfo].infoText), alternateSet, ROW_PA + 9, COL_PA + 1, PARAMETER_WIDTH);
   }
   DrawDisplayTexture(infoCache[thisInfo].infoText);
   thisInfo++;
@@ -4532,7 +4387,7 @@ void UpdateInfoDisplay(int set) {
       SDL_DestroyTexture(infoCache[thisInfo].infoText.texture);
     }
     infoCache[thisInfo].cacheValue.i = currentSet;
-    WriteIntToTexture(&(infoCache[thisInfo].infoText), currentSet, ROW_PA + 8, COL_PA + 1, PARAMETER_WIDTH);
+    CreateTextureInt(&(infoCache[thisInfo].infoText), currentSet, ROW_PA + 8, COL_PA + 1, PARAMETER_WIDTH);
   }
   DrawDisplayTexture(infoCache[thisInfo].infoText);
   thisInfo++;
@@ -4547,7 +4402,7 @@ void UpdateInfoDisplay(int set) {
       SDL_DestroyTexture(infoCache[thisInfo].infoText.texture);
     }
     infoCache[thisInfo].cacheValue.i = displaySet;
-    WriteStringToTexture(&(infoCache[thisInfo].infoText), operateText[displaySet],  ROW_PA + 10, COL_PA + 1, PARAMETER_WIDTH);
+    CreateTextureString(&(infoCache[thisInfo].infoText), operateText[displaySet],  ROW_PA + 10, COL_PA + 1, PARAMETER_WIDTH);
   }
   DrawDisplayTexture(infoCache[thisInfo].infoText);
   thisInfo++;
@@ -4561,7 +4416,7 @@ void UpdateInfoDisplay(int set) {
       SDL_DestroyTexture(infoCache[thisInfo].infoText.texture);
     }
     infoCache[thisInfo].cacheValue.f = alternateBlend;
-    WriteFloatToTexture(&(infoCache[thisInfo].infoText), alternateBlend, ROW_PA + 12, COL_PA + 1, PARAMETER_WIDTH, PARAMETER_WIDTH / 2);
+    CreateTextureFloat(&(infoCache[thisInfo].infoText), alternateBlend, ROW_PA + 12, COL_PA + 1, PARAMETER_WIDTH, PARAMETER_WIDTH / 2);
   }
   DrawDisplayTexture(infoCache[thisInfo].infoText);
   thisInfo++;
@@ -4575,7 +4430,7 @@ void UpdateInfoDisplay(int set) {
       SDL_DestroyTexture(infoCache[thisInfo].infoText.texture);
     }
     infoCache[thisInfo].cacheValue.b = autoBlend;
-    WriteBoolToTexture(&(infoCache[thisInfo].infoText), autoBlend, ROW_PA + 13, COL_PA + 1, PARAMETER_WIDTH);
+    CreateTextureBoolean(&(infoCache[thisInfo].infoText), autoBlend, ROW_PA + 13, COL_PA + 1, PARAMETER_WIDTH);
   }
   DrawDisplayTexture(infoCache[thisInfo].infoText);
   thisInfo++;
@@ -4589,7 +4444,7 @@ void UpdateInfoDisplay(int set) {
       SDL_DestroyTexture(infoCache[thisInfo].infoText.texture);
     }
     infoCache[thisInfo].cacheValue.f = alternateBlendRate;
-    WriteFloatToTexture(&(infoCache[thisInfo].infoText), alternateBlendRate, ROW_PA + 14, COL_PA + 1, PARAMETER_WIDTH, PARAMETER_WIDTH / 2);
+    CreateTextureFloat(&(infoCache[thisInfo].infoText), alternateBlendRate, ROW_PA + 14, COL_PA + 1, PARAMETER_WIDTH, PARAMETER_WIDTH / 2);
   }
   DrawDisplayTexture(infoCache[thisInfo].infoText);
   thisInfo++;
@@ -4604,7 +4459,7 @@ void UpdateInfoDisplay(int set) {
     }
     strncpy(oldStatus, statusText, sizeof(statusText));
     snprintf(statusTemp, sizeof(statusTemp) - 1, "%-*.*s", STATUS_BAR_LENGTH, STATUS_BAR_LENGTH, statusText);
-    WriteLineToTexture(&(infoCache[thisInfo].infoText), statusTemp, 53, 1, cBlack, cRed);
+    CreateTextureLine(&(infoCache[thisInfo].infoText), statusTemp, 53, 1, cBlack, cRed);
   }
   DrawDisplayTexture(infoCache[thisInfo].infoText);
   thisInfo++;
@@ -4619,7 +4474,7 @@ void UpdateInfoDisplay(int set) {
       SDL_DestroyTexture(infoCache[thisInfo].infoText.texture);
     }
     infoCache[thisInfo].cacheValue.i = length;
-    WriteIntToTexture(&(infoCache[thisInfo].infoText), length, 51, 1, PARAMETER_WIDTH);
+    CreateTextureInt(&(infoCache[thisInfo].infoText), length, 51, 1, PARAMETER_WIDTH);
   }
   DrawDisplayTexture(infoCache[thisInfo].infoText);
   thisInfo++;
@@ -4639,7 +4494,7 @@ void UpdateInfoDisplay(int set) {
     strncpy(oldBuffer, SSTRING(set, PE_TEXTBUFFER), length + 1);
     strncpy(bufferTemp1, SSTRING(set, PE_TEXTBUFFER) + (length > BUFFER_BAR_LENGTH ? length - BUFFER_BAR_LENGTH : 0), BUFFER_BAR_LENGTH + 1);
     snprintf(bufferTemp2, sizeof(bufferTemp2), " %-*s", BUFFER_BAR_LENGTH + 5, bufferTemp1);
-    WriteLineToTexture(&(infoCache[thisInfo].infoText), bufferTemp2, 52, 0, DISPLAY_COLOR_TBUF, DISPLAY_COLOR_TBUFBG);
+    CreateTextureLine(&(infoCache[thisInfo].infoText), bufferTemp2, 52, 0, DISPLAY_COLOR_TBUF, DISPLAY_COLOR_TBUFBG);
   }
   DrawDisplayTexture(infoCache[thisInfo].infoText);
   thisInfo++;

@@ -170,65 +170,54 @@
     int x, y;
   } point_t;
 
-  // Rectangular box.
-  typedef struct box_t {
-    int x, y;
-    int w, h;
-  } box_t;
-
-  //
+  // A video texture and its target location / size.
   typedef struct displayText_t {
     SDL_Texture * texture;
-    box_t targetBox;
+    SDL_Rect targetBox;
   } displayText_t;
 
   // Function prototypes
   bool_t InitGui(void);
   void QuitGui(void);
+  void UpdateGUI(void);
   void WindowTitle(const char * text);
 
   // Simple drawing functions.
-  void ClearWindow(void);
+  void DrawClearWindow(void);
   void DrawRectangle(int x, int y, int w, int h, color_t color);
-  void DrawSRectangle(box_t rect, color_t color);
+  void DrawSRectangle(SDL_Rect rect, color_t color);
   void DrawBox(int x, int y, int w, int h, color_t color);
-  void DrawSBox(box_t rect, color_t color);
-  void DrawOutlineBox(box_t rect, color_t fg, color_t bg);
+  void DrawSBox(SDL_Rect rect, color_t color);
+  void DrawOutlineBox(SDL_Rect rect, color_t fg, color_t bg);
+  void DrawTexture(SDL_Texture *texture, SDL_Rect target);
   void DrawDisplayTexture(displayText_t dTexture);
-  void DrawTexture(SDL_Texture *texture, box_t target);
-  void CenterText(box_t box, char * text, color_t fg, color_t bg);
-  void CenterSurface(box_t box, SDL_Surface *s);
-  void CenterTexture(box_t box, SDL_Texture *t);
-  void UpdateGUI(void);
+  void DrawCenteredText(SDL_Rect box, char * text, color_t fg, color_t bg);
+  void DrawCenteredSurface(SDL_Rect box, SDL_Surface *s);
+  void DrawCenteredTexture(SDL_Rect box, SDL_Texture *t);
+
 
   // Tests
-  void DrawDisplayTexts(int selected);
-  void DrawPreviewBorder(int x, int y, int tw, int th, bool_t active);
-  bool_t IsSameBox(box_t a, box_t b);
-  bool_t IsInsideBox(point_t point, box_t box);
+  bool_t IsSameBox(SDL_Rect a, SDL_Rect b);
+  bool_t IsInsideBox(point_t point, SDL_Rect box);
 
   // Line, text and data display
-  SDL_Texture * CreateText(char * thisText, color_t fg);
-  void WriteCommand(int index, color_t fg, color_t bg);
-  void WriteCommandToTexture(displayText_t *target, int index, color_t fg, color_t bg);
-  void WriteBool(bool_t value, int row, int col, int width);
-  void WriteBoolToTexture(displayText_t *target, bool_t value, int row, int col, int width);
-  void WriteInt(int value, int row, int col, int width);
-  void WriteIntToTexture(displayText_t * target, int value, int row, int col, int width);
-  void WriteFloat(float value, int row, int col, int width, int precision);
-  void WriteFloatToTexture(displayText_t *target, float value, int row, int col, int width, int precision);
-  void WriteString(const char *text, int line, int col, int width);
-  void WriteStringToTexture(displayText_t *target, const char *text, int line, int col, int width);
-  void WriteLine(char * thisText, int line, int col, color_t fg, color_t bg);
-  void WriteLineToTexture(displayText_t *target, char * thisText, int line, int col, color_t fg, color_t bg);
+  SDL_Texture * CreateTextureText(char * thisText, color_t fg);
+  void CreateTextureCommand(displayText_t *target, int index, color_t fg, color_t bg);
+  void CreateTextureBoolean(displayText_t *target, bool_t value, int row, int col, int width);
+  void CreateTextureInt(displayText_t * target, int value, int row, int col, int width);
+  void CreateTextureFloat(displayText_t *target, float value, int row, int col, int width, int precision);
+  void CreateTextureString(displayText_t *target, const char *text, int line, int col, int width);
+  void CreateTextureLine(displayText_t *target, char * thisText, int line, int col, color_t fg, color_t bg);
 
 
   int GetPixelofColumn(int col);
-  box_t GetCommandBox(int command);
+  SDL_Rect GetBoxofCommand(int command);
 
-  // Widgety things
-  void DrawConfirmationBox(box_t *yesBox, box_t *noBox, bool_t selected, char *label);
+  // Complex drawing functions and widgety things
+  void DrawDisplayTexts(int selected);
+  void DrawPreviewBorder(int x, int y, int tw, int th, bool_t active);
+  void DrawConfirmationBox(SDL_Rect *yesBox, SDL_Rect *noBox, bool_t selected, char *label);
   void DrawTextEntryBox(int item, char * text);
-  void DrawEnumSelectBox(int item, int selected, box_t ** targets);
+  void DrawEnumSelectBox(int item, int selected, SDL_Rect ** targets);
 
 #endif /* ifndef DRAW_H_ */

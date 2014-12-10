@@ -26,6 +26,7 @@
 #define ECOL (DCOL + 13 * CHAR_W)
 #define FCOL (ECOL + 26 * CHAR_W)
 #define ENUM_BORDER 4
+#define TEXTURE_BORDER 3
 
 // Named color constants
 const color_t cRed = CD_RED;
@@ -123,7 +124,7 @@ void DrawRectangle(int x, int y, int w, int h, color_t color) {
 }
 
 // Outline, but with easier passing var.
-void DrawSRectangle(box_t rect, color_t color) {
+void DrawSRectangle(SDL_Rect rect, color_t color) {
   DrawRectangle(rect.x, rect.y, rect.w, rect.h, color);
 }
 
@@ -134,46 +135,18 @@ void DrawBox(int x, int y, int w, int h, color_t color) {
 }
 
 // Filled, but with easier passing var.
-void DrawSBox(box_t rect, color_t color) {
+void DrawSBox(SDL_Rect rect, color_t color) {
   DrawBox(rect.x, rect.y, rect.w, rect.h, color);
 }
 
-void DrawOutlineBox(box_t rect, color_t fg, color_t bg) {
+void DrawOutlineBox(SDL_Rect rect, color_t fg, color_t bg) {
   DrawSRectangle(rect, fg);
   DrawBox(rect.x + 1, rect.y + 1, rect.w - 2, rect.h - 2, bg);
 }
 
 // Writes a line of text to the selected line and column of the
 // output window with the selected color.
-void WriteLine(char * thisText, int line, int col, color_t fg, color_t bg) {
-
-  // Vars
-  SDL_Texture *textTexture;
-  SDL_Rect rect;
-
-  if (strlen(thisText) == 0) return; // Nothing to write.
-
-  // Create the text texture in video ram.
-  textTexture = CreateText(thisText, fg);
-  if (!textTexture) return;
-
-  // Set the position of the output text.
-  rect.x = colToPixel[col];
-  rect.y = line * (DISPLAY_TEXT_HEIGHT);
-
-  // Set the width and height of the output text.
-  SDL_QueryTexture(textTexture, NULL, NULL, &(rect.w), NULL);
-  // Beh.  Text rendered at 19 pixel high, but gets squished to 14 here.
-  rect.h = DISPLAY_TEXT_HEIGHT;
-
-  // Copy it to the rendering context.
-  SDL_RenderCopy(mwRenderer, textTexture, NULL, &rect);
-  SDL_DestroyTexture(textTexture);  // Free video memory
-}
-
-// Writes a line of text to the selected line and column of the
-// output window with the selected color.
-void WriteLineToTexture(displayText_t *target, char * thisText, int line, int col, color_t fg, color_t bg) {
+void CreateTextureLine(displayText_t *target, char * thisText, int line, int col, color_t fg, color_t bg) {
 
   // Vars
   SDL_Surface *textSurface;
@@ -209,7 +182,7 @@ void WriteLineToTexture(displayText_t *target, char * thisText, int line, int co
 }
 
 // Creates a text texture
-SDL_Texture * CreateText(char * thisText, color_t fg) {
+SDL_Texture * CreateTextureText(char * thisText, color_t fg) {
   const SDL_Color fgc = {fg.r, fg.g, fg.b};
   SDL_Surface *textSurface;
   SDL_Texture *textTexture;
@@ -239,7 +212,7 @@ void UpdateGUI(void) {
   SDL_RenderPresent(mwRenderer);
 }
 
-void ClearWindow(void) {
+void DrawClearWindow(void) {
   SDL_SetRenderDrawColor(mwRenderer, 0, 0, 0, 255);
   SDL_RenderClear(mwRenderer);
 }
@@ -258,8 +231,8 @@ int GetPixelofColumn(int col) {
 
 
 // Return the rectangular region surrounding a displayed command.
-box_t GetCommandBox(int command) {
-  box_t box = {0, 0, 0, 0};
+SDL_Rect GetBoxofCommand(int command) {
+  SDL_Rect box = {0, 0, 0, 0};
 
   if (command < 0 || command >= displayCommandCount) {
     return box;
@@ -272,52 +245,25 @@ box_t GetCommandBox(int command) {
   return box;
 }
 
-void WriteBool(bool_t value, int row, int col, int width) {
-  char text[100];
-  if (value) {
-    snprintf(text, sizeof(text), "%*.*s", width, width, "YES");
-  } else {
-    snprintf(text, sizeof(text), "%*.*s", width, width, "NO");
-  }
-  WriteLine(text, row, col, DISPLAY_COLOR_PARMS, DISPLAY_COLOR_PARMSBG);
-  //~ WriteLine(text, row, col, DISPLAY_COLOR_PARMS, cOrange);
-}
-
-void WriteBoolToTexture(displayText_t *target, bool_t value, int row, int col, int width) {
+void CreateTextureBoolean(displayText_t *target, bool_t value, int row, int col, int width) {
   char * text;
   text = malloc((width + 1) * sizeof(char));
   if (!text) return;
   snprintf(text, width + 1, "%*.*s", width, width, value ? "YES" : "NO");
-  WriteLineToTexture(target, text, row, col, DISPLAY_COLOR_PARMS, DISPLAY_COLOR_PARMSBG);
+  CreateTextureLine(target, text, row, col, DISPLAY_COLOR_PARMS, DISPLAY_COLOR_PARMSBG);
   free(text);
 }
 
-void WriteInt(int value, int row, int col, int width) {
-  char text[100];
-  snprintf(text, sizeof(text), "%*i", width, value);
-  WriteLine(text, row, col, DISPLAY_COLOR_PARMS, DISPLAY_COLOR_PARMSBG);
-  //~ WriteLine(text, row, col, DISPLAY_COLOR_PARMS, cYellow);
-}
-
-void WriteIntToTexture(displayText_t * target, int value, int row, int col, int width) {
+void CreateTextureInt(displayText_t * target, int value, int row, int col, int width) {
   char * text;
   text = malloc((width + 1) * sizeof(char));
   if (!text) return;
   snprintf(text, width + 1, "%*i", width, value);
-  WriteLineToTexture(target, text, row, col, DISPLAY_COLOR_PARMS, DISPLAY_COLOR_PARMSBG);
+  CreateTextureLine(target, text, row, col, DISPLAY_COLOR_PARMS, DISPLAY_COLOR_PARMSBG);
   free(text);
 }
 
-void WriteFloat(float value, int row, int col, int width, int precision) {
-  char text[100];
-  char text2[100];
-  snprintf(text, sizeof(text), "%*.*f", width, precision, value);
-  snprintf(text2, sizeof(text2), "%.*s", width, text); // Hard limit the width
-  WriteLine(text2, row, col, DISPLAY_COLOR_PARMS, DISPLAY_COLOR_PARMSBG);
-  //~ WriteLine(text2, row, col, DISPLAY_COLOR_PARMS, cAqua);
-}
-
-void WriteFloatToTexture(displayText_t *target, float value, int row, int col, int width, int precision) {
+void CreateTextureFloat(displayText_t *target, float value, int row, int col, int width, int precision) {
   char *text, *text2;
   text = malloc((width * 10) * sizeof(char));
   if (!text) return;
@@ -325,30 +271,23 @@ void WriteFloatToTexture(displayText_t *target, float value, int row, int col, i
   if (!text2) { free(text); return; }
   snprintf(text, width * 10, "%*.*f", width, precision, value);
   snprintf(text2, width + 1, "%.*s", width, text); // Hard limit the width
-  WriteLineToTexture(target, text2, row, col, DISPLAY_COLOR_PARMS, DISPLAY_COLOR_PARMSBG);
+  CreateTextureLine(target, text2, row, col, DISPLAY_COLOR_PARMS, DISPLAY_COLOR_PARMSBG);
   free(text);
   free(text2);
 }
 
-void WriteStringToTexture(displayText_t *target, const char *text, int line, int col, int width) {
+void CreateTextureString(displayText_t *target, const char *text, int line, int col, int width) {
   char * tempText;
   tempText = malloc((width + 1) * sizeof(char));
   if (!tempText) return;
   snprintf(tempText, width + 1, "%*.*s", width, width, text);
-  WriteLineToTexture(target, tempText, line, col, DISPLAY_COLOR_PARMS, DISPLAY_COLOR_PARMSBG);
+  CreateTextureLine(target, tempText, line, col, DISPLAY_COLOR_PARMS, DISPLAY_COLOR_PARMSBG);
   free(tempText);
-}
-
-void WriteString(const char *text, int line, int col, int width) {
-  char temp[200];
-  snprintf(temp, sizeof(temp), "%*.*s", width, width, text);
-  WriteLine(temp, line, col, DISPLAY_COLOR_PARMS, DISPLAY_COLOR_PARMSBG);
-  //~ WriteLine(temp, line, col, DISPLAY_COLOR_PARMS, cRose);
 }
 
 #define CONFBOX_BORDER_WIDTH 10
 // Confirmation box for dangerous actions.
-void DrawConfirmationBox(box_t *yesBox, box_t *noBox, bool_t selected, char *label) {
+void DrawConfirmationBox(SDL_Rect *yesBox, SDL_Rect *noBox, bool_t selected, char *label) {
   SDL_Surface *t1 = NULL, *t2 = NULL, *t3 = NULL;
   SDL_Texture *texture = NULL;
   SDL_Color fg = {DISPLAY_COLOR_TEXTS.r, DISPLAY_COLOR_TEXTS.g, DISPLAY_COLOR_TEXTS.b};
@@ -455,7 +394,7 @@ void DrawConfirmationBox(box_t *yesBox, box_t *noBox, bool_t selected, char *lab
 }
 
 // Centers some text inside a box.
-void CenterText(box_t box, char * text, color_t fg, color_t bg) {
+void DrawCenteredText(SDL_Rect box, char * text, color_t fg, color_t bg) {
   SDL_Surface *textS = NULL;
   SDL_Texture *texture = NULL;
   SDL_Rect rect;
@@ -484,7 +423,7 @@ void CenterText(box_t box, char * text, color_t fg, color_t bg) {
 }
 
 // Centers a surface inside a box.
-void CenterSurface(box_t box, SDL_Surface *s) {
+void DrawCenteredSurface(SDL_Rect box, SDL_Surface *s) {
   SDL_Texture *texture = NULL;
   SDL_Rect rect;
 
@@ -503,14 +442,15 @@ void CenterSurface(box_t box, SDL_Surface *s) {
   SDL_DestroyTexture(texture);
 }
 
-// Centers a texture inside a box.
-void CenterTexture(box_t box, SDL_Texture *t) {
+// Centers a texture inside a box.  Provides a border if the texture is too
+// large.
+void DrawCenteredTexture(SDL_Rect box, SDL_Texture *t) {
   SDL_Rect rect;
 
   if (!t) return;
   SDL_QueryTexture(t, NULL, NULL, &(rect.w), &(rect.h));
-  rect.w = min(rect.w, box.w);
-  rect.h = min(rect.h, box.h);
+  rect.w = min(rect.w, box.w - TEXTURE_BORDER);
+  rect.h = min(rect.h, box.h - TEXTURE_BORDER);
   rect.x = box.x + (box.w / 2) - (rect.w / 2);
   rect.y = box.y + (box.h / 2) - (rect.h / 2);
   SDL_RenderCopy(mwRenderer, t, NULL, &rect);
@@ -520,7 +460,7 @@ void CenterTexture(box_t box, SDL_Texture *t) {
 void DrawTextEntryBox(int item, char * text) {
 
   // Vars
-  box_t box;
+  SDL_Rect box;
   SDL_Rect dstRect;
   SDL_Color fontColor = {DISPLAY_COLOR_PARMS.r, DISPLAY_COLOR_PARMS.g, DISPLAY_COLOR_PARMS.b};
   SDL_Color fontBGColor = {DISPLAY_COLOR_PARMSBG.r, DISPLAY_COLOR_PARMSBG.g, DISPLAY_COLOR_PARMSBG.b};
@@ -573,7 +513,7 @@ void DrawTextEntryBox(int item, char * text) {
 
 
 // Enumeration Selection Boxes
-void DrawEnumSelectBox(int item, int selected, box_t ** targets) {
+void DrawEnumSelectBox(int item, int selected, SDL_Rect ** targets) {
 
   // Vars
   color_t fg = DISPLAY_COLOR_PARMS;
@@ -581,7 +521,7 @@ void DrawEnumSelectBox(int item, int selected, box_t ** targets) {
   point_t boxOrigin;  // All boxes are relative to this.
   int i, h, boxCount;
   int boxH, boxW;
-  box_t wholeBox, labelBox;
+  SDL_Rect wholeBox, labelBox;
   char text[100];
   static SDL_Texture **textures = NULL;
   static int textureCount = 0;
@@ -643,10 +583,10 @@ void DrawEnumSelectBox(int item, int selected, box_t ** targets) {
     // Next, generate the texts
     for(i = 0 ; i < boxCount; i++) {
       snprintf(text, sizeof(text), "%s", enumerations[patternElements[displayCommand[item].dataSource].etype].texts[i]);
-      textures[i] = CreateText(text, DISPLAY_COLOR_PARMS);
+      textures[i] = CreateTextureText(text, DISPLAY_COLOR_PARMS);
     }
     snprintf(text, sizeof(text), "%s", displayCommand[item].text);
-    label = CreateText(text, DISPLAY_COLOR_PARMSBG);
+    label = CreateTextureText(text, DISPLAY_COLOR_PARMSBG);
 
     // Calculate the box positions.
     for (i = 0; i < boxCount; i++) {
@@ -662,12 +602,12 @@ void DrawEnumSelectBox(int item, int selected, box_t ** targets) {
     DrawSRectangle((*targets)[i], DISPLAY_COLOR_PARMS);
     if (i == selected) {
       DrawOutlineBox((*targets)[i], fg, bgh);
-      CenterTexture((*targets)[i], textures[i]);
+      DrawCenteredTexture((*targets)[i], textures[i]);
     } else {
-      CenterTexture((*targets)[i], textures[i]);
+      DrawCenteredTexture((*targets)[i], textures[i]);
     }
   }
-  CenterTexture(labelBox, label);
+  DrawCenteredTexture(labelBox, label);
 }
 
 // Write the static menu information to the display.
@@ -687,7 +627,7 @@ void DrawDisplayTexts(int selected) {
 
     // Render the commands
     for (i = 0; i < displayCommandCount; i++) {
-      WriteCommandToTexture(&textTemp, i, DISPLAY_COLOR_TEXTS, DISPLAY_COLOR_TEXTSBG);
+      CreateTextureCommand(&textTemp, i, DISPLAY_COLOR_TEXTS, DISPLAY_COLOR_TEXTSBG);
       if (textTemp.texture != NULL) {
         textCount++;
         displayTexts = realloc(displayTexts, textCount * sizeof(displayText_t));
@@ -704,7 +644,7 @@ void DrawDisplayTexts(int selected) {
       textTemp.targetBox.x = GetPixelofColumn(headerText[i].col);
       textTemp.targetBox.w = GetPixelofColumn(headerText[i].col + 1) - textTemp.targetBox.x + ((CHAR_W * PARAMETER_WIDTH) - CHAR_W);
       snprintf(text, sizeof(text), " %-*s", textTemp.targetBox.w / CHAR_W, headerText[i].text);
-      WriteLineToTexture(&textTemp, text, headerText[i].line, headerText[i].col, DISPLAY_COLOR_TITLES, DISPLAY_COLOR_TITLESBG);
+      CreateTextureLine(&textTemp, text, headerText[i].line, headerText[i].col, DISPLAY_COLOR_TITLES, DISPLAY_COLOR_TITLESBG);
       if (textTemp.texture != NULL) {
         textCount++;
         displayTexts = realloc(displayTexts, textCount * sizeof(displayText_t));
@@ -715,7 +655,7 @@ void DrawDisplayTexts(int selected) {
     // Render the labels
     for (i = 0; i < labelCount; i++) {
       snprintf(text, sizeof(text), " %s", labelText[i].text);
-      WriteLineToTexture(&textTemp, text, labelText[i].line, labelText[i].col, DISPLAY_COLOR_LABEL, DISPLAY_COLOR_LABELBG);
+      CreateTextureLine(&textTemp, text, labelText[i].line, labelText[i].col, DISPLAY_COLOR_LABEL, DISPLAY_COLOR_LABELBG);
       if (textTemp.texture != NULL) {
         textCount++;
         displayTexts = realloc(displayTexts, textCount * sizeof(displayText_t));
@@ -726,7 +666,7 @@ void DrawDisplayTexts(int selected) {
     // Render the texts.
     for (i = 0; i < displayTextCount; i++) {
       snprintf(text, sizeof(text), " %s", displayText[i].text);
-      WriteLineToTexture(&textTemp, text, displayText[i].line, displayText[i].col, DISPLAY_COLOR_INFO, DISPLAY_COLOR_INFOBG);
+      CreateTextureLine(&textTemp, text, displayText[i].line, displayText[i].col, DISPLAY_COLOR_INFO, DISPLAY_COLOR_INFOBG);
       if (textTemp.texture != NULL) {
         textCount++;
         displayTexts = realloc(displayTexts, textCount * sizeof(displayText_t));
@@ -742,11 +682,11 @@ void DrawDisplayTexts(int selected) {
     //~ } else if (i >=df headerStart && i < headerStart + headerTextCount) {
       //~ DrawSBox(displayTexts[i].targetBox, DISPLAY_COLOR_TITLESBG);
     //~ }
-    SDL_RenderCopy(mwRenderer, displayTexts[i].texture, NULL, (SDL_Rect *) &displayTexts[i].targetBox);
+    SDL_RenderCopy(mwRenderer, displayTexts[i].texture, NULL, &displayTexts[i].targetBox);
   }
 }
 
-void WriteCommand(int index, color_t fg, color_t bg) {
+void CreateTextureCommand(displayText_t *target, int index, color_t fg, color_t bg) {
   char text[100] = "";
   char *ind = text;
   char * const end = text + sizeof(text);
@@ -803,73 +743,12 @@ void WriteCommand(int index, color_t fg, color_t bg) {
   }
 
   // Write it.
-  WriteLine(text, displayCommand[index].line, displayCommand[index].col, fg, bg);
-}
-
-
-void WriteCommandToTexture(displayText_t *target, int index, color_t fg, color_t bg) {
-  char text[100] = "";
-  char *ind = text;
-  char * const end = text + sizeof(text);
-  int i;
-  bool_t modified = NO;
-
-  // Verify the index.
-  if (index < 0 || index >= displayCommandCount) return;
-
-  // Exclude any command with invalid line position.
-  if (displayCommand[index].line == INVALID) return;
-
-  // Add the text from the displayCommand structure.
-  ind += snprintf(ind, end - ind, "  %s", displayCommand[index].text);
-
-  // Handle the modifier keys - worked well when we had only one modifier key
-  // possible for each command, but now... Strategy: Show the modifiers from
-  // the first command in the list that doesn't have KMOD_NONE, and assume it
-  // will be the same for all three.
-  for (i = 0; i < MOUSE_COUNT; i++) {
-    if (displayCommand[index].commands[i].mod != KMOD_NONE) {
-      modified = YES;
-      ind += snprintf(ind, end - ind, " %s%s%s",
-        displayCommand[index].commands[i].mod & KMOD_CTRL ? "<c>" : "",
-        displayCommand[index].commands[i].mod & KMOD_SHIFT ? "<s>" : "",
-        displayCommand[index].commands[i].mod & KMOD_ALT ? "<a>" : "");
-      break;  // Found the first, skip the rest.
-    }
-  }
-
-  if (modified) ind += snprintf(ind, end - ind, " ");
-
-  // Handle the key selection. TODO: Fix this mess.
-  if (modified) {
-    ind += snprintf(ind, end - ind, "%s%s", SDL_GetKeyName(displayCommand[index].commands[MOUSE_WHEEL_UP].key),
-      strlen(SDL_GetKeyName(displayCommand[index].commands[MOUSE_WHEEL_UP].key)) ? " " : "");
-    ind += snprintf(ind, end - ind, "%s%s", SDL_GetKeyName(displayCommand[index].commands[MOUSE_CLICK].key),
-      strlen(SDL_GetKeyName(displayCommand[index].commands[MOUSE_CLICK].key)) ? " " : "");
-    ind += snprintf(ind, end - ind, "%s%s", SDL_GetKeyName(displayCommand[index].commands[MOUSE_WHEEL_DOWN].key),
-      strlen(SDL_GetKeyName(displayCommand[index].commands[MOUSE_WHEEL_DOWN].key)) ? " " : "");
-  } else {
-    ind += snprintf(ind, end - ind, "%s%s%s",
-      strlen(SDL_GetKeyName(displayCommand[index].commands[MOUSE_WHEEL_UP].key)) ? " - " : "",
-      SDL_GetKeyName(displayCommand[index].commands[MOUSE_WHEEL_UP].key),
-      strlen(SDL_GetKeyName(displayCommand[index].commands[MOUSE_WHEEL_UP].key)) ? " " : "");
-    ind += snprintf(ind, end - ind, "%s%s%s",
-      strlen(SDL_GetKeyName(displayCommand[index].commands[MOUSE_CLICK].key)) ? " - " : "",
-      SDL_GetKeyName(displayCommand[index].commands[MOUSE_CLICK].key),
-      strlen(SDL_GetKeyName(displayCommand[index].commands[MOUSE_CLICK].key)) ? " " : "");
-    ind += snprintf(ind, end - ind, "%s%s%s",
-      strlen(SDL_GetKeyName(displayCommand[index].commands[MOUSE_WHEEL_DOWN].key)) ? " - " : "",
-      SDL_GetKeyName(displayCommand[index].commands[MOUSE_WHEEL_DOWN].key),
-      strlen(SDL_GetKeyName(displayCommand[index].commands[MOUSE_WHEEL_DOWN].key)) ? " " : "");
-  }
-
-  // Write it.
-  WriteLineToTexture(target, text, displayCommand[index].line, displayCommand[index].col, fg, bg);
+  CreateTextureLine(target, text, displayCommand[index].line, displayCommand[index].col, fg, bg);
 }
 
 
 // Test two boxes to see if they are the same.
-bool_t IsSameBox(box_t a, box_t b) {
+bool_t IsSameBox(SDL_Rect a, SDL_Rect b) {
   if ((a.x == b.x) && (a.y == b.y) && (a.w == b.w) && (a.h == b.h)) {
     return YES;
   } else {
@@ -878,7 +757,7 @@ bool_t IsSameBox(box_t a, box_t b) {
 }
 
 // Test a point to see if its inside a box.
-bool_t IsInsideBox(point_t point, box_t box){
+bool_t IsInsideBox(point_t point, SDL_Rect box){
   if ((point.x >= box.x) &&
       (point.y >= box.y) &&
       (point.x <= box.x + box.w) &&
@@ -940,9 +819,9 @@ void DrawPreviewBorder(int x, int y, int tw, int th, bool_t active) {
 }
 
 void DrawDisplayTexture(displayText_t dTexture) {
-  SDL_RenderCopy(mwRenderer, dTexture.texture, NULL, (SDL_Rect *) &(dTexture.targetBox));
+  SDL_RenderCopy(mwRenderer, dTexture.texture, NULL, &(dTexture.targetBox));
 }
 
-void DrawTexture(SDL_Texture *texture, box_t target) {
-  SDL_RenderCopy(mwRenderer, texture, NULL, (SDL_Rect *) &(target));
+void DrawTexture(SDL_Texture *texture, SDL_Rect target) {
+  SDL_RenderCopy(mwRenderer, texture, NULL, &(target));
 }

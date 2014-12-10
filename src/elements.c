@@ -24,11 +24,11 @@ const char *dirText[] = { "Up", "Left", "Down", "Right" };
 const int dirTextCount = sizeof(dirText) / sizeof(const char *);
 
 // Color cycling modes
-const char *colorCycleText[] = { "None", "R-G-B", "C-M-Y", "Secondary", "Tertiary", "Graystep", "Rainbow", "Random", "FG-BG Fade", "Tertiary-Blk" };
+const char *colorCycleText[] = { "None", "R-G-B", "C-M-Y", "Secondary", "Tertiary", "Graysteps", "Rainbow", "Random", "FG-BG Fade", "Tertiary-Black" };
 const int colorCycleTextCount = sizeof(colorCycleText) / sizeof(const char *);
 
 // Text background modes
-const char *textModeText[] = { "8 Row", "9 Row Stag", "10 Row", "Full BG", "No BG", "Black" };
+const char *textModeText[] = { "8 Row", "9 Row Stagger", "10 Row", "Full BG", "No BG", "Black" };
 const int textModeTextCount = sizeof(textModeText) / sizeof(const char *);
 
 // Crossbar seed types
@@ -191,7 +191,7 @@ const patternElement_t patternElements[] = {
   { PE_FASTSNAIL,   "FastSnail",   ET_BOOL,   {.b = NO} },
   { PE_FASTSNAILP,  "FastSnailP",  ET_INT,    {.i = 0} }, // Not user
   { PE_CROSSBAR,    "Crossbar",    ET_ENUM,   {.e = CB_NONE}, .etype = E_CROSSBAR },
-  { PE_CBLIKELY,    "CrossLikely", ET_INT,    {.i = 1002 }, {.i = 1}, {.i = INT_MAX} },
+  { PE_CBLIKELY,    "CrossLikely", ET_INT,    {.i = 1002 }, {.i = 1}, {.i = 20000} },
   { PE_MIRROR_V,    "MirrorV",     ET_BOOL,   {.b = NO } },
   { PE_MIRROR_H,    "MirrorH",     ET_BOOL,   {.b = NO } },
   { PE_SCROLLRANDEN,"ScrollRandE", ET_BOOL,   {.b = NO } },
@@ -205,119 +205,119 @@ const int patternElementCount = PATTERN_ELEMENT_COUNT;
 // Clickable commands displayed on the gui.
 const command_t displayCommand[] = {
   // Pattern sets
-  {ROW_PA + 1, COL_PA, "Cycle through pattern sets",   PE_INVALID,  {{KMOD_CTRL, SDLK_g, COM_CYCLESET}}},
-  {ROW_PA + 2, COL_PA, "Frames to play this set", PE_FRAMECOUNT, {{0, 0, COM_FCOUNT_RST}, {0, 0, COM_FCOUNT_INC}, {0, 0, COM_FCOUNT_DEC}}},
-  {ROW_PA + 8, COL_PA, "Live preview set (left)",PE_INVALID, {{0, 0, COM_LIVE_INC}, {}, {0, 0, COM_LIVE_DEC}}},
-  {ROW_PA + 9, COL_PA, "Alternate preview set (right)",PE_INVALID, {{0, 0, COM_ALTERNATE_INC}, {}, {0, 0, COM_ALTERNATE_DEC}}},
-  {ROW_PA + 10,COL_PA, "Controls operate on set",     PE_INVALID, {{0, 0, COM_OPERATE}}},
-  {ROW_PA + 11,COL_PA, "Exchange live and alternate sets", PE_INVALID, {{0, 0, COM_EXCHANGE}}},
-  {ROW_PA + 12,COL_PA, "Alternate set blending amount", PE_INVALID, {{0, 0, COM_BLEND_RST}, {0, 0, COM_BLEND_INC}, {0, 0, COM_BLEND_DEC}}},
-  {ROW_PA + 13,COL_PA, "Auto blend & switch sets", PE_INVALID, {{0, 0, COM_BLENDSWITCH}}},
-  {ROW_PA + 14,COL_PA, "Auto blend rate", PE_INVALID, {{0, 0, COM_BLENDINC_RST},{0, 0, COM_BLENDINC_INC}, {0, 0, COM_BLENDINC_DEC}}},
+  {ROW_PA + 1, COL_PA, "Cycle through pattern sets",       PE_INVALID,    {{KMOD_CTRL, SDLK_g, COM_CYCLESET}}},
+  {ROW_PA + 2, COL_PA, "Frames to play this set",          PE_FRAMECOUNT, {{0, 0, COM_FCOUNT_RST}, {0, 0, COM_FCOUNT_INC}, {0, 0, COM_FCOUNT_DEC}}},
+  {ROW_PA + 8, COL_PA, "Live preview set (left)",          PE_INVALID,    {{0, 0, COM_LIVE_INC}, {}, {0, 0, COM_LIVE_DEC}}},
+  {ROW_PA + 9, COL_PA, "Alternate preview set (right)",    PE_INVALID,    {{0, 0, COM_ALTERNATE_INC}, {}, {0, 0, COM_ALTERNATE_DEC}}},
+  {ROW_PA + 10,COL_PA, "Controls operate on set",          PE_INVALID,    {{0, 0, COM_OPERATE}}},
+  {ROW_PA + 11,COL_PA, "Exchange live and alternate sets", PE_INVALID,    {{0, 0, COM_EXCHANGE}}},
+  {ROW_PA + 12,COL_PA, "Alternate set blending amount",    PE_INVALID,    {{0, 0, COM_BLEND_RST}, {0, 0, COM_BLEND_INC}, {0, 0, COM_BLEND_DEC}}},
+  {ROW_PA + 13,COL_PA, "Auto blend & switch sets",         PE_INVALID,    {{0, 0, COM_BLENDSWITCH}}},
+  {ROW_PA + 14,COL_PA, "Auto blend rate",                  PE_INVALID,    {{0, 0, COM_BLENDINC_RST},{0, 0, COM_BLENDINC_INC}, {0, 0, COM_BLENDINC_DEC}}},
 
   // Auxillary
-  {ROW_A + 1, COL_A, "Set output intensity", PE_INTENSITY,    {{0, 0, COM_INTENSITY_RST}, {0, 0, COM_INTENSITY_UP}, {0, 0, COM_INTENSITY_DOWN}}},
-  {ROW_A + 2, COL_A, "Frame delay(ms)", PE_DELAY,    {{0, 0, COM_DELAY_RST}, {0, 0, COM_DELAY_INC}, {0, 0, COM_DELAY_DEC}}},
-  {ROW_A + 3, COL_A, "Float step", PE_FLOATINC, {{KMOD_ALT, SDLK_COMMA, COM_STEP_RST}, {KMOD_ALT, SDLK_m, COM_STEP_INC}, {KMOD_ALT, SDLK_PERIOD, COM_STEP_DEC}}},
-  {ROW_A + 4, COL_A, "All modes off",   PE_INVALID,  {{KMOD_CTRL, SDLK_l, COM_MODEOFF}}},
+  {ROW_A + 1, COL_A, "Set output intensity", PE_INTENSITY, {{0, 0, COM_RST_FLOAT}, {0, 0, COM_INC_FLOAT}, {0, 0, COM_DEC_FLOAT}}},
+  {ROW_A + 2, COL_A, "Frame delay(ms)",      PE_DELAY,     {{0, 0, COM_INT_RST}, {0, 0, COM_INT_INC}, {0, 0, COM_INT_DEC}}},
+  {ROW_A + 3, COL_A, "Float step",           PE_FLOATINC,  {{KMOD_ALT, SDLK_COMMA, COM_RST_FLOAT}, {KMOD_ALT, SDLK_m, COM_STEP_INC}, {KMOD_ALT, SDLK_PERIOD, COM_STEP_DEC}}},
+  {ROW_A + 4, COL_A, "All modes off",        PE_INVALID,   {{KMOD_CTRL, SDLK_l, COM_MODEOFF}}},
 
   // Plane suppression
-  {ROW_P + 1, COL_P, "Supress red",     PE_NORED,    {{KMOD_CTRL, SDLK_m, COM_NORED}}},
-  {ROW_P + 2, COL_P, "Supress green",   PE_NOGREEN,  {{KMOD_CTRL, SDLK_COMMA, COM_NOGREEN}}},
-  {ROW_P + 3, COL_P, "Supress blue",    PE_NOBLUE,   {{KMOD_CTRL, SDLK_PERIOD, COM_NOBLUE}}},
+  {ROW_P + 1, COL_P, "Supress red",     PE_NORED,    {{KMOD_CTRL, SDLK_m,      COM_BOOL_FLIP}}},
+  {ROW_P + 2, COL_P, "Supress green",   PE_NOGREEN,  {{KMOD_CTRL, SDLK_COMMA,  COM_BOOL_FLIP}}},
+  {ROW_P + 3, COL_P, "Supress blue",    PE_NOBLUE,   {{KMOD_CTRL, SDLK_PERIOD, COM_BOOL_FLIP}}},
 
   // Diffusion
-  {ROW_D + 1, COL_D, "Enable",      PE_DIFFUSE,     {{KMOD_CTRL, SDLK_r, COM_DIFFUSE}}},
-  {ROW_D + 2, COL_D, "Coefficient", PE_DIFFUSECOEF, {{KMOD_ALT, SDLK_w, COM_DIFFUSE_RST}, {KMOD_ALT, SDLK_q, COM_DIFFUSE_INC}, {KMOD_ALT, SDLK_e, COM_DIFFUSE_DEC}}},
+  {ROW_D + 1, COL_D, "Enable",      PE_DIFFUSE,     {{KMOD_CTRL, SDLK_r, COM_BOOL_FLIP}}},
+  {ROW_D + 2, COL_D, "Coefficient", PE_DIFFUSECOEF, {{KMOD_ALT, SDLK_w, COM_RST_FLOAT}, {KMOD_ALT, SDLK_q, COM_INC_FLOAT}, {KMOD_ALT, SDLK_e, COM_DEC_FLOAT}}},
 
   // One shot seeds
-  {ROW_O + 1, COL_O, "Horizontal bars", PE_INVALID,  {{KMOD_CTRL, SDLK_i, COM_HBAR}}},
-  {ROW_O + 2, COL_O, "Vertical bars",   PE_INVALID,  {{KMOD_CTRL, SDLK_o, COM_VBAR}}},
-  {ROW_O + 3, COL_O, "Foreground all",  PE_INVALID,  {{KMOD_CTRL, SDLK_p, COM_FGALL}}},
-  {ROW_O + 4, COL_O, "Background all",  PE_INVALID,  {{KMOD_CTRL, SDLK_a, COM_BGALL}}},
-  {ROW_O + 5, COL_O, "Image seed",      PE_INVALID,  {{0, 0, COM_IMAGEALL}}},
-  {ROW_O + 6, COL_O, "Small snail seed",      PE_SNAIL,    {{0, 0, COM_SNAIL}}},
-  {ROW_O + 7, COL_O, "Large snail seed", PE_FASTSNAIL,{{0, 0, COM_SNAILFAST}}},
+  {ROW_O + 1, COL_O, "Horizontal bars",  PE_HBARS,     {{KMOD_CTRL, SDLK_i, COM_BOOL_FLIP}}},
+  {ROW_O + 2, COL_O, "Vertical bars",    PE_VBARS,     {{KMOD_CTRL, SDLK_o, COM_BOOL_FLIP}}},
+  {ROW_O + 3, COL_O, "Foreground all",   PE_FGCOLORALL,{{KMOD_CTRL, SDLK_p, COM_BOOL_FLIP}}},
+  {ROW_O + 4, COL_O, "Background all",   PE_BGCOLORALL,{{KMOD_CTRL, SDLK_a, COM_BOOL_FLIP}}},
+  {ROW_O + 5, COL_O, "Image seed",       PE_IMAGEALL,  {{0, 0, COM_BOOL_FLIP}}},
+  {ROW_O + 6, COL_O, "Small snail seed", PE_SNAIL,     {{0, 0, COM_BOOL_FLIP}}},
+  {ROW_O + 7, COL_O, "Large snail seed", PE_FASTSNAIL, {{0, 0, COM_BOOL_FLIP}}},
 
   // Persistent Seeds
-  {ROW_MI + 1, COL_MI, "Cell pattern",    PE_CELLFUN,  {{KMOD_CTRL, SDLK_q, COM_CELL}}},
-  {ROW_MI + 2, COL_MI, "Sidebar seed",    PE_BARSEED,  {{KMOD_CTRL, SDLK_n, COM_SIDEBAR}}},
-  {ROW_MI + 3, COL_MI, "Sidepulse seed",  PE_SIDEPULSE,{{0, 0, COM_SIDEPULSE}}},
+  {ROW_MI + 1, COL_MI, "Cell pattern",    PE_CELLFUN,  {{KMOD_CTRL, SDLK_q, COM_BOOL_FLIP}}},
+  {ROW_MI + 2, COL_MI, "Sidebar seed",    PE_BARSEED,  {{KMOD_CTRL, SDLK_n, COM_BOOL_FLIP}}},
+  {ROW_MI + 3, COL_MI, "Sidepulse seed",  PE_SIDEPULSE,{{0, 0, COM_BOOL_FLIP}}},
 
   // Crossbar seeds
-  {ROW_CB + 1, COL_CB, "Enable",  PE_CROSSBAR, {{0, 0, COM_CROSSB_RST}, {0, 0, COM_CROSSB_UP}, {0, 0, COM_CROSSB_DOWN}}},
-  {ROW_CB + 2, COL_CB, "Randomness",  PE_CBLIKELY, {{0, 0, COM_CB_RST}, {0, 0, COM_CB_UP}, {0, 0, COM_CB_DOWN}}},
+  {ROW_CB + 1, COL_CB, "Enable",  PE_CROSSBAR, {{0, 0, COM_ENUM_RST}, {0, 0, COM_ENUM_INC}, {0, 0, COM_ENUM_DEC}}},
+  {ROW_CB + 2, COL_CB, "Randomness",  PE_CBLIKELY, {{0, 0, COM_INT_RST}, {0, 0, COM_LINT_INC}, {0, 0, COM_LINT_DEC}}},
 
   // Random Dots
-  {ROW_R + 1, COL_R, "Enable",     PE_RANDOMDOT,     {{KMOD_CTRL, SDLK_s, COM_RDOT}}},
-  {ROW_R + 2, COL_R, "Randomness", PE_RANDOMDOTCOEF, {{KMOD_ALT, SDLK_LEFTBRACKET, COM_RANDOM_RST}, {KMOD_ALT, SDLK_p, COM_RANDOM_INC}, {KMOD_ALT, SDLK_RIGHTBRACKET, COM_RANDOM_DEC}}},
+  {ROW_R + 1, COL_R, "Enable",     PE_RANDOMDOT,     {{KMOD_CTRL, SDLK_s, COM_BOOL_FLIP}}},
+  {ROW_R + 2, COL_R, "Randomness", PE_RANDOMDOTCOEF, {{KMOD_ALT, SDLK_LEFTBRACKET, COM_INT_RST}, {KMOD_ALT, SDLK_p, COM_LINT_INC}, {KMOD_ALT, SDLK_RIGHTBRACKET, COM_LINT_DEC}}},
 
   // Fader
-  {ROW_F + 1, COL_F, "Enable",           PE_FADE,     {{KMOD_CTRL, SDLK_e,  COM_FADE}}},
-  {ROW_F + 2, COL_F, "Amount",     PE_FADEINC,  {{KMOD_ALT, SDLK_x, COM_FADE_RST}, {KMOD_ALT, SDLK_z, COM_FADE_INC}, {KMOD_ALT, SDLK_c, COM_FADE_DEC}}},
-  {ROW_F + 3, COL_F, "Mode",      PE_FADEMODE, {{KMOD_CTRL, SDLK_h, COM_FADEMODE}}},
+  {ROW_F + 1, COL_F, "Enable", PE_FADE,     {{KMOD_CTRL, SDLK_e, COM_BOOL_FLIP}}},
+  {ROW_F + 2, COL_F, "Amount", PE_FADEINC,  {{KMOD_ALT,  SDLK_x, COM_INT_RST}, {KMOD_ALT, SDLK_z, COM_INT_INC}, {KMOD_ALT, SDLK_c, COM_INT_DEC}}},
+  {ROW_F + 3, COL_F, "Mode",   PE_FADEMODE, {{KMOD_CTRL, SDLK_h, COM_ENUM_RST}, {0, 0, COM_ENUM_INC}, {0, 0, COM_ENUM_DEC}}},
 
   // Multiplier
-  {ROW_M + 1, COL_M, "Enable",      PE_MULTIPLY, {{KMOD_CTRL, SDLK_c, COM_MULTIPLY}}},
-  {ROW_M + 2, COL_M, "Multiply by", PE_MULTIPLYBY, {{KMOD_ALT, SDLK_i, COM_MULT_RST}, {KMOD_ALT, SDLK_u, COM_MULT_INC}, {KMOD_ALT, SDLK_o, COM_MULT_DEC}}},
+  {ROW_M + 1, COL_M, "Enable",      PE_MULTIPLY, {{KMOD_CTRL, SDLK_c, COM_BOOL_FLIP}}},
+  {ROW_M + 2, COL_M, "Multiply by", PE_MULTIPLYBY, {{KMOD_ALT, SDLK_i, COM_RST_FLOAT}, {KMOD_ALT, SDLK_u, COM_INC_FLOAT}, {KMOD_ALT, SDLK_o, COM_DEC_FLOAT}}},
 
   // Mirrors
-  {ROW_MIR + 1, COL_MIR, "Vertical Mirror", PE_MIRROR_V, {{0, 0, COM_MIRROR_V}}},
-  {ROW_MIR + 2, COL_MIR, "Horizontal Mirror", PE_MIRROR_H, {{0, 0, COM_MIRROR_H}}},
+  {ROW_MIR + 1, COL_MIR, "Vertical Mirror", PE_MIRROR_V, {{0, 0, COM_BOOL_FLIP}}},
+  {ROW_MIR + 2, COL_MIR, "Horizontal Mirror", PE_MIRROR_H, {{0, 0, COM_BOOL_FLIP}}},
 
   // Colors
   {ROW_C + 1, COL_C, "Foreground",    PE_FGE,       {{KMOD_ALT | KMOD_CTRL, SDLK_q, COM_FG_INC}, {}, {KMOD_ALT | KMOD_CTRL, SDLK_w, COM_FG_DEC}}},
   {ROW_C + 2, COL_C, "Background",    PE_BGE,       {{KMOD_ALT | KMOD_CTRL, SDLK_a, COM_BG_INC}, {}, {KMOD_ALT | KMOD_CTRL, SDLK_s, COM_BG_DEC}}},
   {ROW_C + 3, COL_C, "FG cycle mode", PE_FGCYCLE,   {{0, 0, COM_FGCYCLE_RST}, {KMOD_CTRL, SDLK_d, COM_FGCYCLE_UP}, {0, 0, COM_FGCYCLE_DOWN}}},
   {ROW_C + 4, COL_C, "BG cycle mode", PE_BGCYCLE,   {{0, 0, COM_BGCYCLE_RST}, {KMOD_CTRL, SDLK_f, COM_BGCYCLE_UP}, {0, 0, COM_BGCYCLE_DOWN}}},
-  {ROW_C + 5, COL_C, "FG Delta",      PE_FGRAINBOW, {{KMOD_ALT, SDLK_g, COM_FGRAINBOW_RST}, {KMOD_ALT, SDLK_f, COM_FGRAINBOW_INC}, {KMOD_ALT, SDLK_h, COM_FGRAINBOW_DEC}}},
-  {ROW_C + 6, COL_C, "BG Delta",      PE_BGRAINBOW ,{{0, 0, COM_BGRAINBOW_RST}, {0, 0, COM_BGRAINBOW_INC}, {0, 0, COM_BGRAINBOW_DEC}}},
+  {ROW_C + 5, COL_C, "FG Delta",      PE_FGRAINBOW, {{KMOD_ALT, SDLK_g, COM_INT_RST}, {KMOD_ALT, SDLK_f, COM_INT_INC}, {KMOD_ALT, SDLK_h, COM_INT_DEC}}},
+  {ROW_C + 6, COL_C, "BG Delta",      PE_BGRAINBOW ,{{0, 0, COM_INT_RST}, {0, 0, COM_INT_INC}, {0, 0, COM_INT_DEC}}},
 
   // Scrollers
-  {ROW_S + 1, COL_S, "Scroller",             PE_SCROLL,       {{KMOD_CTRL, SDLK_u, COM_SCROLL}}},
-  {ROW_S + 2, COL_S, "Scroll Direction: (<a>) <arrows>", PE_SCROLLDIR, {{0, 0, COM_SCROLL_CYCLE_UP}, {}, {0, 0, COM_SCROLL_CYCLE_DOWN}}},
-  {ROW_S + 3, COL_S, "Direction randomizer", PE_SCROLLRANDEN,  {{0, 0, COM_SCROLL_RAND_EN}}},
-  {ROW_S + 4, COL_S, "Direction randomness", PE_SCROLLRANDOM, {{0, 0, COM_SCROLL_RAND_RST}, {0, 0, COM_SCROLL_RAND_UP}, {0, 0, COM_SCROLL_RAND_DOWN}}},
-  {ROW_S + 5, COL_S, "Cycle Scroller (0 = Off)",     PE_BOUNCER,  {{0, 0, COM_BOUNCE_RST}, {0, 0, COM_BOUNCE_UP}, {0, 0, COM_BOUNCE_DOWN}}},
-  {ROW_S + 6, COL_S, "Red plane",            PE_SHIFTRED,     {{0, 0, COM_RP_RST}, {KMOD_CTRL, SDLK_LEFTBRACKET, COM_RP_UP}, {0, 0, COM_RP_DOWN}}},
-  {ROW_S + 7, COL_S, "Green plane",          PE_SHIFTGREEN,   {{0, 0, COM_GP_RST}, {KMOD_CTRL, SDLK_RIGHTBRACKET, COM_GP_UP}, {0, 0, COM_GP_DOWN}}},
-  {ROW_S + 8, COL_S, "Blue plane",           PE_SHIFTBLUE,    {{0, 0, COM_BP_RST}, {KMOD_CTRL, SDLK_BACKSLASH, COM_BP_UP}, {0, 0, COM_BP_DOWN}}},
-  {ROW_S + 9, COL_S, "Cyan plane",          PE_SHIFTCYAN,    {{0, 0, COM_CP_RST}, {KMOD_CTRL | KMOD_ALT, SDLK_LEFTBRACKET, COM_CP_UP}, {0, 0, COM_CP_DOWN}}},
-  {ROW_S + 10, COL_S, "Yellow plane",        PE_SHIFTYELLOW,  {{0, 0, COM_YP_RST}, {KMOD_CTRL | KMOD_ALT, SDLK_RIGHTBRACKET, COM_YP_UP}, {0, 0, COM_YP_DOWN}}},
-  {ROW_S + 11, COL_S, "Magenta plane",       PE_SHIFTMAGENTA, {{0, 0, COM_MP_RST}, {KMOD_CTRL | KMOD_ALT, SDLK_BACKSLASH, COM_MP_UP}, {0, 0, COM_MP_DOWN}}},
-  {ROW_S + 12, COL_S, "Toroidal",             PE_ROLLOVER, {{KMOD_CTRL, SDLK_y, COM_ROLL}}},
+  {ROW_S + 1, COL_S, "Scroller",             PE_SCROLL,       {{KMOD_CTRL, SDLK_u, COM_BOOL_FLIP}}},
+  {ROW_S + 2, COL_S, "Scroll Direction: (<a>) <arrows>", PE_SCROLLDIR, {{0, 0, COM_ENUM_INC}, {}, {0, 0, COM_ENUM_DEC}}},
+  {ROW_S + 3, COL_S, "Direction randomizer", PE_SCROLLRANDEN,  {{0, 0, COM_BOOL_FLIP}}},
+  {ROW_S + 4, COL_S, "Direction randomness", PE_SCROLLRANDOM, {{0, 0, COM_INT_RST}, {0, 0, COM_INT_INC}, {0, 0, COM_INT_DEC}}},
+  {ROW_S + 5, COL_S, "Cycle Scroller (0 = Off)",     PE_BOUNCER,  {{0, 0, COM_INT_RST}, {0, 0, COM_INT_INC}, {0, 0, COM_INT_DEC}}},
+  {ROW_S + 6, COL_S, "Red plane",      PE_SHIFTRED,     {{0, 0, COM_ENUM_RST}, {KMOD_CTRL, SDLK_LEFTBRACKET, COM_ENUM_INC}, {0, 0, COM_ENUM_DEC}}},
+  {ROW_S + 7, COL_S, "Green plane",    PE_SHIFTGREEN,   {{0, 0, COM_ENUM_RST}, {KMOD_CTRL, SDLK_RIGHTBRACKET, COM_ENUM_INC}, {0, 0, COM_ENUM_DEC}}},
+  {ROW_S + 8, COL_S, "Blue plane",     PE_SHIFTBLUE,    {{0, 0, COM_ENUM_RST}, {KMOD_CTRL, SDLK_BACKSLASH, COM_ENUM_INC}, {0, 0, COM_ENUM_DEC}}},
+  {ROW_S + 9, COL_S, "Cyan plane",     PE_SHIFTCYAN,    {{0, 0, COM_ENUM_RST}, {KMOD_CTRL | KMOD_ALT, SDLK_LEFTBRACKET, COM_ENUM_INC}, {0, 0, COM_ENUM_DEC}}},
+  {ROW_S + 10, COL_S, "Yellow plane",  PE_SHIFTYELLOW,  {{0, 0, COM_ENUM_RST}, {KMOD_CTRL | KMOD_ALT, SDLK_RIGHTBRACKET, COM_ENUM_INC}, {0, 0, COM_ENUM_DEC}}},
+  {ROW_S + 11, COL_S, "Magenta plane", PE_SHIFTMAGENTA, {{0, 0, COM_ENUM_RST}, {KMOD_CTRL | KMOD_ALT, SDLK_BACKSLASH, COM_ENUM_INC}, {0, 0, COM_ENUM_DEC}}},
+  {ROW_S + 12, COL_S, "Toroidal",      PE_ROLLOVER, {{KMOD_CTRL, SDLK_y, COM_BOOL_FLIP}}},
 
   // Post rotozoom
-  {ROW_PR + 1, COL_PR, "Enable",     PE_POSTRZ,      {{KMOD_CTRL, SDLK_k, COM_POSTROTATE}}},
-  {ROW_PR + 2, COL_PR, "Angle",      PE_POSTRZANGLE, {{KMOD_ALT, SDLK_b, COM_POSTROT_RST}, {KMOD_ALT, SDLK_v, COM_POSTROT_INC}, {KMOD_ALT, SDLK_n, COM_POSTROT_DEC}}},
-  {ROW_PR + 3, COL_PR, "Angle Inc",  PE_POSTRZINC,   {{KMOD_ALT, SDLK_k, COM_POSTSPEED_RST}, {KMOD_ALT, SDLK_j, COM_POSTSPEED_INC}, {KMOD_ALT, SDLK_l, COM_POSTSPEED_DEC}}},
-  {ROW_PR + 4, COL_PR, "Expansion",  PE_POSTEXP,      {{KMOD_ALT, SDLK_s, COM_EXPAND_RST}, {KMOD_ALT, SDLK_a, COM_EXPAND_INC}, {KMOD_ALT, SDLK_d, COM_EXPAND_DEC}}},
-  {ROW_PR + 5, COL_PR, "Anti-alias", PE_ALIAS,       {{KMOD_CTRL, SDLK_x, COM_AA}}},
+  {ROW_PR + 1, COL_PR, "Enable",     PE_POSTRZ,      {{KMOD_CTRL, SDLK_k, COM_BOOL_FLIP}}},
+  {ROW_PR + 2, COL_PR, "Angle",      PE_POSTRZANGLE, {{KMOD_ALT, SDLK_b, COM_RST_FLOAT}, {KMOD_ALT, SDLK_v, COM_INC_FLOAT}, {KMOD_ALT, SDLK_n, COM_DEC_FLOAT}}},
+  {ROW_PR + 3, COL_PR, "Angle Inc",  PE_POSTRZINC,   {{KMOD_ALT, SDLK_k, COM_RST_FLOAT}, {KMOD_ALT, SDLK_j, COM_INC_FLOAT}, {KMOD_ALT, SDLK_l, COM_DEC_FLOAT}}},
+  {ROW_PR + 4, COL_PR, "Expansion",  PE_POSTEXP,     {{KMOD_ALT, SDLK_s, COM_RST_FLOAT}, {KMOD_ALT, SDLK_a, COM_INC_FLOAT}, {KMOD_ALT, SDLK_d, COM_DEC_FLOAT}}},
+  {ROW_PR + 5, COL_PR, "Anti-alias", PE_ALIAS,       {{KMOD_CTRL, SDLK_x, COM_BOOL_FLIP}}},
 
   // Pre rotozoom
-  {ROW_PE + 1, COL_PE, "Enable",    PE_PRERZ,      {{KMOD_CTRL, SDLK_z, COM_PREROTATE}}},
-  {ROW_PE + 2, COL_PE, "Angle",     PE_PRERZANGLE, {{KMOD_ALT, SDLK_t, COM_PREROT_RST}, {KMOD_ALT, SDLK_r, COM_PREROT_INC}, {KMOD_ALT, SDLK_y, COM_PREROT_DEC}}},
-  {ROW_PE + 3, COL_PE, "Angle Inc", PE_PRERZINC,   {{0, 0, COM_PREROTINC_RST}, {0, 0, COM_PREROTINC_INC}, {0, 0, COM_PREROTINC_DEC}}},
-  {ROW_PE + 4, COL_PE, "Expansion", PE_PRERZEXPAND,{{0, 0, COM_PREEXP_RST}, {0, 0, COM_PREEXP_INC}, {0, 0, COM_PREEXP_DEC}}},
-  {ROW_PE + 5, COL_PE, "Anti-alias",PE_PRERZALIAS, {{0, 0, COM_PREALIAS}}},
+  {ROW_PE + 1, COL_PE, "Enable",    PE_PRERZ,      {{KMOD_CTRL, SDLK_z, COM_BOOL_FLIP}}},
+  {ROW_PE + 2, COL_PE, "Angle",     PE_PRERZANGLE, {{KMOD_ALT, SDLK_t, COM_RST_FLOAT}, {KMOD_ALT, SDLK_r, COM_INC_FLOAT}, {KMOD_ALT, SDLK_y, COM_DEC_FLOAT}}},
+  {ROW_PE + 3, COL_PE, "Angle Inc", PE_PRERZINC,   {{0, 0, COM_RST_FLOAT}, {0, 0, COM_INC_FLOAT}, {0, 0, COM_DEC_FLOAT}}},
+  {ROW_PE + 4, COL_PE, "Expansion", PE_PRERZEXPAND,{{0, 0, COM_RST_FLOAT}, {0, 0, COM_INC_FLOAT}, {0, 0, COM_DEC_FLOAT}}},
+  {ROW_PE + 5, COL_PE, "Anti-alias",PE_PRERZALIAS, {{0, 0, COM_BOOL_FLIP}}},
 
   // Image stuff
-  {ROW_I + 1, COL_I, "Enable",        PE_POSTIMAGE,  {{KMOD_CTRL | KMOD_ALT, SDLK_p, COM_IMAGE}}},
-  {ROW_I + 2, COL_I, "Angle",         PE_IMAGEANGLE, {{0, 0, COM_IMANGLE_RST}, {0, 0, COM_IMANGLE_INC}, {0, 0, COM_IMANGLE_DEC}}},
-  {ROW_I + 3, COL_I, "Angle Inc",     PE_IMAGEINC,   {{0, 0, COM_IMINC_RST},   {0, 0, COM_IMINC_INC},   {0, 0, COM_IMINC_DEC}}},
-  {ROW_I + 4, COL_I, "Expansion",     PE_IMAGEEXP,   {{0, 0, COM_IMEXP_RST},   {0, 0, COM_IMEXP_INC},   {0, 0, COM_IMEXP_DEC}}},
-  {ROW_I + 5, COL_I, "Center x",      PE_IMAGEXOFFSET, {{0, 0, COM_IMXOFFSET_RST}, {0, 0, COM_IMXOFFSET_INC}, {0, 0, COM_IMXOFFSET_DEC}}},
-  {ROW_I + 6, COL_I, "Center y",      PE_IMAGEYOFFSET, {{0, 0, COM_IMYOFFSET_RST}, {0, 0, COM_IMYOFFSET_INC}, {0, 0, COM_IMYOFFSET_DEC}}},
-  {ROW_I + 7, COL_I, "Anti-alias",    PE_IMAGEALIAS, {{0, 0, COM_IMALIAS}}},
+  {ROW_I + 1, COL_I, "Enable",        PE_POSTIMAGE,    {{KMOD_CTRL | KMOD_ALT, SDLK_p, COM_BOOL_FLIP}}},
+  {ROW_I + 2, COL_I, "Angle",         PE_IMAGEANGLE,   {{0, 0, COM_RST_FLOAT}, {0, 0, COM_INC_FLOAT}, {0, 0, COM_DEC_FLOAT}}},
+  {ROW_I + 3, COL_I, "Angle Inc",     PE_IMAGEINC,     {{0, 0, COM_RST_FLOAT}, {0, 0, COM_INC_FLOAT}, {0, 0, COM_DEC_FLOAT}}},
+  {ROW_I + 4, COL_I, "Expansion",     PE_IMAGEEXP,     {{0, 0, COM_RST_FLOAT}, {0, 0, COM_INC_FLOAT}, {0, 0, COM_DEC_FLOAT}}},
+  {ROW_I + 5, COL_I, "Center x",      PE_IMAGEXOFFSET, {{0, 0, COM_RST_FLOAT}, {0, 0, COM_INC_FLOAT}, {0, 0, COM_DEC_FLOAT}}},
+  {ROW_I + 6, COL_I, "Center y",      PE_IMAGEYOFFSET, {{0, 0, COM_RST_FLOAT}, {0, 0, COM_INC_FLOAT}, {0, 0, COM_DEC_FLOAT}}},
+  {ROW_I + 7, COL_I, "Anti-alias",    PE_IMAGEALIAS,   {{0, 0, COM_BOOL_FLIP}}},
 
   // Text
-  {ROW_T + 1, COL_T, "Text seed",         PE_TEXTSEED,   {{KMOD_CTRL, SDLK_t, COM_TEXT}}},
+  {ROW_T + 1, COL_T, "Text seed",          PE_TEXTSEED,   {{KMOD_CTRL, SDLK_t, COM_BOOL_FLIP}}},
   {ROW_T + 3, COL_T, "Delete last letter", PE_INVALID,    {{KMOD_NONE, SDLK_BACKSPACE, COM_BACKSPACE}}},
   {ROW_T + 4, COL_T, "Erase all text",     PE_INVALID,    {{KMOD_NONE, SDLK_DELETE, COM_DELETE}}},
-  {ROW_T + 5, COL_T, "Reverse text",      PE_FONTDIR,    {{KMOD_CTRL, SDLK_QUOTE, COM_TEXT_REVERSE}}},
-  {ROW_T + 6, COL_T, "Flip text.",         PE_FONTFLIP,   {{KMOD_CTRL, SDLK_SEMICOLON, COM_TEXT_FLIP}}},
-  {ROW_T + 7, COL_T, "Text background",   PE_TEXTMODE,   {{KMOD_CTRL, SDLK_b, COM_TEXT_MODE_UP}, {}, {0, 0, COM_TEXT_MODE_DOWN}}},
-  {ROW_T + 8, COL_T, "Edge Offset",       PE_TEXTOFFSET, {{KMOD_ALT | KMOD_CTRL, SDLK_z, COM_TEXTO_INC}, {}, {KMOD_ALT | KMOD_CTRL, SDLK_x, COM_TEXTO_DEC}}},
+  {ROW_T + 5, COL_T, "Reverse text",       PE_FONTDIR,    {{KMOD_CTRL, SDLK_QUOTE, COM_BOOL_FLIP}}},
+  {ROW_T + 6, COL_T, "Flip text.",         PE_FONTFLIP,   {{KMOD_CTRL, SDLK_SEMICOLON, COM_BOOL_FLIP}}},
+  {ROW_T + 7, COL_T, "Text background",    PE_TEXTMODE,   {{KMOD_CTRL, SDLK_b, COM_ENUM_RST}, {0, 0, COM_ENUM_INC}, {0, 0, COM_ENUM_DEC}}},
+  {ROW_T + 8, COL_T, "Edge Offset",        PE_TEXTOFFSET, {{KMOD_ALT | KMOD_CTRL, SDLK_z, COM_TEXTO_INC}, {}, {KMOD_ALT | KMOD_CTRL, SDLK_x, COM_TEXTO_DEC}}},
   {ROW_T + 9, COL_T, "Restart text",       PE_INVALID,    {{KMOD_CTRL, SDLK_j, COM_TEXTRESET}}},
 
   // Quit
