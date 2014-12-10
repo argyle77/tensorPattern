@@ -84,3 +84,7 @@ Version 7.1.1:
   Added text draw caching for CPU improvement.  Finished right
   click to edit parameters for enumerations. Added half and light
   colors, gui tweaks.
+
+Version 7.2
+  Added alpha channels for scrolling, fg, bg, and image overlay.
+  Automatic set switching enabled by default. 

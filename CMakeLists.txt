@@ -8,8 +8,8 @@ project(tensorPattern)
 # Let's set a version number.
 # This file must be manually changed to effect version change.
 set (VERSION_MAJOR 7)
-set (VERSION_MINOR 1)
-set (VERSION_PATCH 1)
+set (VERSION_MINOR 2)
+set (VERSION_PATCH 0)
 set (VERSION_PRERELEASE)
 
 if ("${VERSION_PRERELEASE}" STREQUAL "")

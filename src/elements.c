@@ -24,7 +24,7 @@ const char *dirText[] = { "Up", "Left", "Down", "Right" };
 const int dirTextCount = sizeof(dirText) / sizeof(const char *);
 
 // Color cycling modes
-const char *colorCycleText[] = { "None", "R-G-B", "C-M-Y", "Secondary", "Tertiary", "Graysteps", "Rainbow", "Random", "FG-BG Fade", "Tertiary-Black" };
+const char *colorCycleText[] = { "None", "R-G-B", "C-M-Y", "Secondary", "Tertiary", "Graysteps", "Rainbow", "Random", "FG-BG Fade", "Tertiary-BG" };
 const int colorCycleTextCount = sizeof(colorCycleText) / sizeof(const char *);
 
 // Text background modes
@@ -198,6 +198,10 @@ const patternElement_t patternElements[] = {
   { PE_SCROLLRANDOM,"ScrollRand",  ET_INT,    {.i = 50 }, {.i = 1}, {.i = INT_MAX} },
   { PE_SIDEPULSE,   "SidePulse",   ET_BOOL,   {.b = NO } },
   { PE_INTENSITY,   "Intensity",   ET_FLOAT,  {.f = 1.0}, {.f = 0}, {.f = 1} },
+  { PE_SCROLLALPHA, "ScrollAlpha", ET_FLOAT,  {.f = 1.0}, {.f = 0}, {.f = 1.0} },
+  { PE_IMAGEALPHA,  "ImageAlpha",  ET_FLOAT,  {.f = 1.0}, {.f = 0}, {.f = 1.0} },
+  { PE_FGALPHA,     "FGAlpha",     ET_FLOAT,  {.f = 1.0}, {.f = 0}, {.f = 1.0} },
+  { PE_BGALPHA,     "BGAlpha",     ET_FLOAT,  {.f = 1.0}, {.f = 0}, {.f = 1.0} },
 };
 #define PATTERN_ELEMENT_COUNT ( sizeof(patternElements) / sizeof(patternElement_t) )
 const int patternElementCount = PATTERN_ELEMENT_COUNT;
@@ -266,12 +270,14 @@ const command_t displayCommand[] = {
   {ROW_MIR + 2, COL_MIR, "Horizontal Mirror", PE_MIRROR_H, {{0, 0, COM_BOOL_FLIP}}},
 
   // Colors
-  {ROW_C + 1, COL_C, "Foreground",    PE_FGE,       {{KMOD_ALT | KMOD_CTRL, SDLK_q, COM_FG_INC}, {}, {KMOD_ALT | KMOD_CTRL, SDLK_w, COM_FG_DEC}}},
-  {ROW_C + 2, COL_C, "Background",    PE_BGE,       {{KMOD_ALT | KMOD_CTRL, SDLK_a, COM_BG_INC}, {}, {KMOD_ALT | KMOD_CTRL, SDLK_s, COM_BG_DEC}}},
-  {ROW_C + 3, COL_C, "FG cycle mode", PE_FGCYCLE,   {{0, 0, COM_FGCYCLE_RST}, {KMOD_CTRL, SDLK_d, COM_FGCYCLE_UP}, {0, 0, COM_FGCYCLE_DOWN}}},
-  {ROW_C + 4, COL_C, "BG cycle mode", PE_BGCYCLE,   {{0, 0, COM_BGCYCLE_RST}, {KMOD_CTRL, SDLK_f, COM_BGCYCLE_UP}, {0, 0, COM_BGCYCLE_DOWN}}},
-  {ROW_C + 5, COL_C, "FG Delta",      PE_FGRAINBOW, {{KMOD_ALT, SDLK_g, COM_INT_RST}, {KMOD_ALT, SDLK_f, COM_INT_INC}, {KMOD_ALT, SDLK_h, COM_INT_DEC}}},
-  {ROW_C + 6, COL_C, "BG Delta",      PE_BGRAINBOW ,{{0, 0, COM_INT_RST}, {0, 0, COM_INT_INC}, {0, 0, COM_INT_DEC}}},
+  {ROW_C + 1, COL_C, "Foreground",     PE_FGE,       {{KMOD_ALT | KMOD_CTRL, SDLK_q, COM_FG_INC}, {}, {KMOD_ALT | KMOD_CTRL, SDLK_w, COM_FG_DEC}}},
+  {ROW_C + 2, COL_C, "Background",     PE_BGE,       {{KMOD_ALT | KMOD_CTRL, SDLK_a, COM_BG_INC}, {}, {KMOD_ALT | KMOD_CTRL, SDLK_s, COM_BG_DEC}}},
+  {ROW_C + 3, COL_C, "FG cycle mode",  PE_FGCYCLE,   {{0, 0, COM_FGCYCLE_RST}, {KMOD_CTRL, SDLK_d, COM_FGCYCLE_UP}, {0, 0, COM_FGCYCLE_DOWN}}},
+  {ROW_C + 4, COL_C, "BG cycle mode",  PE_BGCYCLE,   {{0, 0, COM_BGCYCLE_RST}, {KMOD_CTRL, SDLK_f, COM_BGCYCLE_UP}, {0, 0, COM_BGCYCLE_DOWN}}},
+  {ROW_C + 5, COL_C, "FG cycle delta", PE_FGRAINBOW, {{KMOD_ALT, SDLK_g, COM_INT_RST}, {KMOD_ALT, SDLK_f, COM_INT_INC}, {KMOD_ALT, SDLK_h, COM_INT_DEC}}},
+  {ROW_C + 6, COL_C, "BG cycle delta", PE_BGRAINBOW, {{0, 0, COM_INT_RST}, {0, 0, COM_INT_INC}, {0, 0, COM_INT_DEC}}},
+  {ROW_C + 7, COL_C, "FG Alpha",       PE_FGALPHA,   {{0, 0, COM_RST_FLOAT}, {0, 0, COM_INC_FLOAT}, {0, 0, COM_DEC_FLOAT}}},
+  {ROW_C + 8, COL_C, "BG Alpha",       PE_BGALPHA,   {{0, 0, COM_RST_FLOAT}, {0, 0, COM_INC_FLOAT}, {0, 0, COM_DEC_FLOAT}}},
 
   // Scrollers
   {ROW_S + 1, COL_S, "Scroller",             PE_SCROLL,       {{KMOD_CTRL, SDLK_u, COM_BOOL_FLIP}}},
@@ -286,6 +292,7 @@ const command_t displayCommand[] = {
   {ROW_S + 10, COL_S, "Yellow plane",  PE_SHIFTYELLOW,  {{0, 0, COM_ENUM_RST}, {KMOD_CTRL | KMOD_ALT, SDLK_RIGHTBRACKET, COM_ENUM_INC}, {0, 0, COM_ENUM_DEC}}},
   {ROW_S + 11, COL_S, "Magenta plane", PE_SHIFTMAGENTA, {{0, 0, COM_ENUM_RST}, {KMOD_CTRL | KMOD_ALT, SDLK_BACKSLASH, COM_ENUM_INC}, {0, 0, COM_ENUM_DEC}}},
   {ROW_S + 12, COL_S, "Toroidal",      PE_ROLLOVER, {{KMOD_CTRL, SDLK_y, COM_BOOL_FLIP}}},
+  {ROW_S + 13, COL_S, "Scroll alpha", PE_SCROLLALPHA, {{0, 0, COM_RST_FLOAT}, {0, 0, COM_INC_FLOAT}, {0, 0, COM_DEC_FLOAT}}},
 
   // Post rotozoom
   {ROW_PR + 1, COL_PR, "Enable",     PE_POSTRZ,      {{KMOD_CTRL, SDLK_k, COM_BOOL_FLIP}}},
@@ -309,6 +316,7 @@ const command_t displayCommand[] = {
   {ROW_I + 5, COL_I, "Center x",      PE_IMAGEXOFFSET, {{0, 0, COM_RST_FLOAT}, {0, 0, COM_INC_FLOAT}, {0, 0, COM_DEC_FLOAT}}},
   {ROW_I + 6, COL_I, "Center y",      PE_IMAGEYOFFSET, {{0, 0, COM_RST_FLOAT}, {0, 0, COM_INC_FLOAT}, {0, 0, COM_DEC_FLOAT}}},
   {ROW_I + 7, COL_I, "Anti-alias",    PE_IMAGEALIAS,   {{0, 0, COM_BOOL_FLIP}}},
+  {ROW_I + 8, COL_I, "Image alpha", PE_IMAGEALPHA,       {{0, 0, COM_RST_FLOAT}, {0, 0, COM_INC_FLOAT}, {0,0,COM_DEC_FLOAT}}},
 
   // Text
   {ROW_T + 1, COL_T, "Text seed",          PE_TEXTSEED,   {{KMOD_CTRL, SDLK_t, COM_BOOL_FLIP}}},
@@ -321,7 +329,7 @@ const command_t displayCommand[] = {
   {ROW_T + 9, COL_T, "Restart text",       PE_INVALID,    {{KMOD_CTRL, SDLK_j, COM_TEXTRESET}}},
 
   // Quit
-  {51, 4, "Quit",           PE_INVALID,  {{KMOD_NONE, SDLK_ESCAPE, COM_EXIT}}},
+  {52, 4, "Quit",           PE_INVALID,  {{KMOD_NONE, SDLK_ESCAPE, COM_EXIT}}},
 };
 const int displayCommandCount = sizeof(displayCommand) / sizeof(command_t);
 
@@ -353,7 +361,7 @@ const guiText_t headerText[] = {
   {ROW_MI, COL_MI, "Misc seeds:"},
   {ROW_CB, COL_CB, "Crossbar seeds:"},
   {ROW_I, COL_I,   "Image overlay:"},
-  {ROW_R, COL_R,   "Random dots:"},
+  {ROW_R, COL_R,   "Random dot seeds:"},
   {ROW_C, COL_C,   "Colors:"},
   {ROW_D, COL_D,   "Averager:"},
   {ROW_O, COL_O,   "One-shot seeds:"},

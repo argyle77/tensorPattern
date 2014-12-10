@@ -22,13 +22,11 @@
   // Layout
   #define ROW_PA 0
   #define COL_PA 2
-  #define ROW_A 45
-  #define COL_A 4
-  #define ROW_P 35
+  #define ROW_P 34
   #define COL_P 2
   #define ROW_D 15
   #define COL_D 2
-  #define ROW_O 23
+  #define ROW_O 22
   #define COL_O 0
   #define ROW_MI (ROW_O + 8)
   #define COL_MI COL_O
@@ -40,19 +38,21 @@
   #define COL_F 2
   #define ROW_M 22
   #define COL_M 2
-  #define ROW_MIR 25
-  #define COL_MIR 2
-  #define ROW_C 28
+  #define ROW_MIR 22
+  #define COL_MIR 4
+  #define ROW_C 25
   #define COL_C 2
-  #define ROW_S 39
+  #define ROW_S 38
   #define COL_S 2
-  #define ROW_PR 23
-  #define COL_PR 4
-  #define ROW_PE (ROW_PR + 7)
+  #define ROW_PR (ROW_MIR + 3)
+  #define COL_PR COL_MIR
+  #define ROW_PE (ROW_PR + 6)
   #define COL_PE COL_PR
-  #define ROW_I (ROW_PE + 7)
+  #define ROW_I (ROW_PE + 6)
   #define COL_I COL_PE
-  #define ROW_T 41
+  #define ROW_A (ROW_I + 9)
+  #define COL_A COL_I
+  #define ROW_T 40
   #define COL_T 0
 
   #define PARAMETER_WIDTH 10

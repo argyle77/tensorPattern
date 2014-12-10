@@ -55,7 +55,7 @@ typedef enum textEntry_e {
 // sign of a weakly structured program.
 SDL_Surface *imageSeed[PATTERN_SET_COUNT];
 int tensorWidth, tensorHeight;
-bool_t cyclePatternSets = NO;  // cyclePatternSets mode is a global (for now).
+bool_t cyclePatternSets = YES;  // cyclePatternSets mode is a global (for now).
 int cycleFrameCount = INITIAL_FRAMECYCLECOUNT;    // Frame Count for cycling.
 bool_t enableTensor = YES;
 int currentSet = 0;
@@ -85,7 +85,7 @@ Uint32 TriggerFrameDrawA(Uint32 interval, void *param);
 Uint32 TriggerFrameDrawB(Uint32 interval, void *param);
 Uint32 TriggerFrameCount(Uint32 interval, void *param);
 Uint32 TriggerGUIUpdate(Uint32 interval, void *param);
-void SetPixelByPlane(int x, int y, color_t color, unsigned char plane, unsigned char *buffer);
+void SetPixelByPlaneA(int x, int y, color_t color, unsigned char plane, unsigned char *buffer);
 void SetPixelA(int x, int y, color_t color, unsigned char *buffer);
 void SetPixel(int x, int y, color_t color, unsigned char *fb);
 color_t GetPixel(int x, int y, unsigned char *buffer);
@@ -113,7 +113,8 @@ void Multiply(float multiplier, unsigned char *buffer);
 void ClearRed(int set);
 void ClearGreen(int set);
 void ClearBlue(int set);
-void DrawImage(SDL_Surface *image, double angle, float xoffset, float yoffset, double expansion, bool_t aliasmode, unsigned char *fb_dst);
+void DrawImage(SDL_Surface *image, double angle, float xoffset, float yoffset, double expansion, bool_t aliasmode, unsigned char *fb_dst, float alpha);
+void CopyFbAlpha(unsigned char *dest, unsigned char *src, float alpha);
 bool_t HandleCommand(int set, command_e command, int selection);
 bool_t HandleKey(int set, SDL_Keycode key, SDL_Keymod mod);
 bool_t HandleConfirmation(SDL_Keycode key, bool_t *selected);
@@ -121,6 +122,9 @@ inputMode_e EditValue(int set, int commandToEdit);
 textEntry_e HandleTextEntry(SDL_Keycode key, SDL_Keymod mod, char * textEntry, int maxTextSize);
 bool_t HandleEnumSelect(SDL_Keycode key, int set, int item, int *selected);
 void CopyPatternSet(int dst, int src);
+void CopyBuffer(int dst, int set);
+void SwitchToSet(int set);
+
 void BlendAlternate(unsigned char *fba, unsigned char *fbb);
 void CenterText(SDL_Rect box, char * text, color_t fg, color_t bg);
 void SnailSeed(int set, int position);
@@ -906,24 +910,22 @@ void ProcessModes(int set) {
     DCOLOR(PE_BGC) = ColorCycle(currentSet, DENUM(PE_BGCYCLE), &DINT(PE_CYCLESAVEBG), DINT(PE_BGRAINBOW));
   }
 
+  // Adjust the fg and bg alpha channels - Must be after the cycles.
+  DCOLOR(PE_FGC).a = (unsigned char) (DFLOAT(PE_FGALPHA) * 255.0);
+  DCOLOR(PE_BGC).a = (unsigned char) (DFLOAT(PE_BGALPHA) * 255.0);
+
   // Slap an image down on the display (every frame).
   if (DBOOL(PE_POSTIMAGE)) {
     DrawImage(imageSeed[currentSet], DFLOAT(PE_IMAGEANGLE), DFLOAT(PE_IMAGEXOFFSET), DFLOAT(PE_IMAGEYOFFSET),
-      DFLOAT(PE_IMAGEEXP), DBOOL(PE_IMAGEALIAS), DBUFFER(PE_FRAMEBUFFER));
+      DFLOAT(PE_IMAGEEXP), DBOOL(PE_IMAGEALIAS), DBUFFER(PE_FRAMEBUFFER), DFLOAT(PE_IMAGEALPHA));
     DFLOAT(PE_IMAGEANGLE) += DFLOAT(PE_IMAGEINC);
   }
 
-  // Image one-shot
+  // Image one-shot - We'll use the foreground alpha instead of image alpha.
   if (DBOOL(PE_IMAGEALL)) {
     DrawImage(imageSeed[currentSet], DFLOAT(PE_IMAGEANGLE), DFLOAT(PE_IMAGEXOFFSET), DFLOAT(PE_IMAGEYOFFSET),
-      DFLOAT(PE_IMAGEEXP), DBOOL(PE_IMAGEALIAS), DBUFFER(PE_FRAMEBUFFER));
+      DFLOAT(PE_IMAGEEXP), DBOOL(PE_IMAGEALIAS), DBUFFER(PE_FRAMEBUFFER), DFLOAT(PE_FGALPHA));
     DBOOL(PE_IMAGEALL) = NO;
-  }
-
-  // Seed the entire array with the foreground color.
-  if (DBOOL(PE_FGCOLORALL)) {
-    ColorAll(DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
-    DBOOL(PE_FGCOLORALL) = NO;
   }
 
   // Scroller.
@@ -1015,12 +1017,6 @@ void ProcessModes(int set) {
     Diffuse(DFLOAT(PE_DIFFUSECOEF), DBOOL(PE_ROLLOVER), DBUFFER(PE_FRAMEBUFFER));
   }
 
-  // Clear screen.
-  if (DBOOL(PE_BGCOLORALL)) {
-    ColorAll(DCOLOR(PE_BGC), DBUFFER(PE_FRAMEBUFFER));
-    DBOOL(PE_BGCOLORALL) = NO;
-  }
-
   // Multiplier
   if (DBOOL(PE_MULTIPLY)) {
     Multiply(DFLOAT(PE_MULTIPLYBY), DBUFFER(PE_FRAMEBUFFER));
@@ -1058,6 +1054,18 @@ void ProcessModes(int set) {
   // Post rotation increment.
   if (DBOOL(PE_POSTRZ)) {
     DFLOAT(PE_POSTRZANGLE) += DFLOAT(PE_POSTRZINC);
+  }
+
+  // Seed the entire array with the foreground color.
+  if (DBOOL(PE_FGCOLORALL)) {
+    ColorAll(DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
+    DBOOL(PE_FGCOLORALL) = NO;
+  }
+
+  // Clear screen.
+  if (DBOOL(PE_BGCOLORALL)) {
+    ColorAll(DCOLOR(PE_BGC), DBUFFER(PE_FRAMEBUFFER));
+    DBOOL(PE_BGCOLORALL) = NO;
   }
 }
 
@@ -1114,7 +1122,7 @@ void SnailSeed(int set, int position) {
   for (i = 0; i < TENSOR_HEIGHT * TENSOR_WIDTH; i++) {
     if (position == tp) {
       //~ printf("tp: %i, (%i, %i)\n", tp, x, y);
-      SetPixel(x, y, DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
+      SetPixelA(x, y, DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
       break;
     }
     tp++;
@@ -1170,10 +1178,10 @@ void FastSnailSeed(int set, int position) {
   for (i = 0; i < TENSOR_HEIGHT * TENSOR_WIDTH; i++) {
     if (position == tp) {
       //~ printf("tp: %i, (%i, %i)\n", tp, x, y);
-      SetPixel(x, y, DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
-      SetPixel(x, y + 1, DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
-      SetPixel(x + 1, y + 1, DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
-      SetPixel(x + 1, y, DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
+      SetPixelA(x, y, DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
+      SetPixelA(x, y + 1, DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
+      SetPixelA(x + 1, y + 1, DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
+      SetPixelA(x + 1, y, DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
       break;
     }
     tp++;
@@ -1296,7 +1304,7 @@ void CrossBars(int set) {
   // Process the array.
   for (i = 0; i < CBARSMAX; i++) {
     if (cbars[set][i].inProgress) {
-      SetPixel(cbars[set][i].x, cbars[set][i].y, DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
+      SetPixelA(cbars[set][i].x, cbars[set][i].y, DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
       switch(cbars[set][i].orient) {
         case DIR_UP:
           cbars[set][i].y--;
@@ -1678,17 +1686,6 @@ bool_t HandleCommand(int set, command_e command, int selection) {
       SENUM(set, PE_CROSSBAR) = CB_NONE;
       cyclePatternSets = NO;
       break;
-    // For load, we want to replace the displayed set.
-    case COM_LOADSET0: if (displaySet == OO_ALTERNATE) alternateSet = 0; else currentSet = 0; break;
-    case COM_LOADSET1: if (displaySet == OO_ALTERNATE) alternateSet = 1; else currentSet = 1; break;
-    case COM_LOADSET2: if (displaySet == OO_ALTERNATE) alternateSet = 2; else currentSet = 2; break;
-    case COM_LOADSET3: if (displaySet == OO_ALTERNATE) alternateSet = 3; else currentSet = 3; break;
-    case COM_LOADSET4: if (displaySet == OO_ALTERNATE) alternateSet = 4; else currentSet = 4; break;
-    case COM_LOADSET5: if (displaySet == OO_ALTERNATE) alternateSet = 5; else currentSet = 5; break;
-    case COM_LOADSET6: if (displaySet == OO_ALTERNATE) alternateSet = 6; else currentSet = 6; break;
-    case COM_LOADSET7: if (displaySet == OO_ALTERNATE) alternateSet = 7; else currentSet = 7; break;
-    case COM_LOADSET8: if (displaySet == OO_ALTERNATE) alternateSet = 8; else currentSet = 8; break;
-    case COM_LOADSET9: if (displaySet == OO_ALTERNATE) alternateSet = 9; else currentSet = 9; break;
     case COM_TEXTRESET: SINT(set, PE_PIXELINDEX) = INVALID; break;
     case COM_ORIENTATION:
       tensor_landscape_p = !tensor_landscape_p;
@@ -1714,7 +1711,16 @@ bool_t HandleCommand(int set, command_e command, int selection) {
       SENUM(set, PE_BGE) = (SENUM(set, PE_BGE) + 1) % CE_COUNT;
       SCOLOR(set, PE_BGC) = namedColors[SENUM(set, PE_BGE)].color;
       break;
-    // We want to copy the display set to the selected set.  This accomplishes that.
+    case COM_LOADSET0: SwitchToSet(0); break;
+    case COM_LOADSET1: SwitchToSet(1); break;
+    case COM_LOADSET2: SwitchToSet(2); break;
+    case COM_LOADSET3: SwitchToSet(3); break;
+    case COM_LOADSET4: SwitchToSet(4); break;
+    case COM_LOADSET5: SwitchToSet(5); break;
+    case COM_LOADSET6: SwitchToSet(6); break;
+    case COM_LOADSET7: SwitchToSet(7); break;
+    case COM_LOADSET8: SwitchToSet(8); break;
+    case COM_LOADSET9: SwitchToSet(9); break;
     case COM_COPYSET0: CopyPatternSet(0, set); break;
     case COM_COPYSET1: CopyPatternSet(1, set); break;
     case COM_COPYSET2: CopyPatternSet(2, set); break;
@@ -1725,6 +1731,16 @@ bool_t HandleCommand(int set, command_e command, int selection) {
     case COM_COPYSET7: CopyPatternSet(7, set); break;
     case COM_COPYSET8: CopyPatternSet(8, set); break;
     case COM_COPYSET9: CopyPatternSet(9, set); break;
+    case COM_LOAD0: CopyBuffer(set, 0); break;
+    case COM_LOAD1: CopyBuffer(set, 1); break;
+    case COM_LOAD2: CopyBuffer(set, 2); break;
+    case COM_LOAD3: CopyBuffer(set, 3); break;
+    case COM_LOAD4: CopyBuffer(set, 4); break;
+    case COM_LOAD5: CopyBuffer(set, 5); break;
+    case COM_LOAD6: CopyBuffer(set, 6); break;
+    case COM_LOAD7: CopyBuffer(set, 7); break;
+    case COM_LOAD8: CopyBuffer(set, 8); break;
+    case COM_LOAD9: CopyBuffer(set, 9); break;
     case COM_TEXTO_DEC:
       SINT(set, PE_TEXTOFFSET)--;
       if (SINT(set, PE_TEXTOFFSET) < 0) {
@@ -1743,16 +1759,6 @@ bool_t HandleCommand(int set, command_e command, int selection) {
         SINT(set, PE_TEXTOFFSET) %= tensorWidth;
       }
       break;
-    case COM_LOAD0: memcpy(SBUFFER(set, PE_FRAMEBUFFER), SBUFFER(0, PE_FRAMEBUFFER), patternElements[PE_FRAMEBUFFER].size * sizeof(unsigned char)); break;
-    case COM_LOAD1: memcpy(SBUFFER(set, PE_FRAMEBUFFER), SBUFFER(1, PE_FRAMEBUFFER), patternElements[PE_FRAMEBUFFER].size * sizeof(unsigned char)); break;
-    case COM_LOAD2: memcpy(SBUFFER(set, PE_FRAMEBUFFER), SBUFFER(2, PE_FRAMEBUFFER), patternElements[PE_FRAMEBUFFER].size * sizeof(unsigned char)); break;
-    case COM_LOAD3: memcpy(SBUFFER(set, PE_FRAMEBUFFER), SBUFFER(3, PE_FRAMEBUFFER), patternElements[PE_FRAMEBUFFER].size * sizeof(unsigned char)); break;
-    case COM_LOAD4: memcpy(SBUFFER(set, PE_FRAMEBUFFER), SBUFFER(4, PE_FRAMEBUFFER), patternElements[PE_FRAMEBUFFER].size * sizeof(unsigned char)); break;
-    case COM_LOAD5: memcpy(SBUFFER(set, PE_FRAMEBUFFER), SBUFFER(5, PE_FRAMEBUFFER), patternElements[PE_FRAMEBUFFER].size * sizeof(unsigned char)); break;
-    case COM_LOAD6: memcpy(SBUFFER(set, PE_FRAMEBUFFER), SBUFFER(6, PE_FRAMEBUFFER), patternElements[PE_FRAMEBUFFER].size * sizeof(unsigned char)); break;
-    case COM_LOAD7: memcpy(SBUFFER(set, PE_FRAMEBUFFER), SBUFFER(7, PE_FRAMEBUFFER), patternElements[PE_FRAMEBUFFER].size * sizeof(unsigned char)); break;
-    case COM_LOAD8: memcpy(SBUFFER(set, PE_FRAMEBUFFER), SBUFFER(8, PE_FRAMEBUFFER), patternElements[PE_FRAMEBUFFER].size * sizeof(unsigned char)); break;
-    case COM_LOAD9: memcpy(SBUFFER(set, PE_FRAMEBUFFER), SBUFFER(9, PE_FRAMEBUFFER), patternElements[PE_FRAMEBUFFER].size * sizeof(unsigned char)); break;
     case COM_SCROLL_UPC:
       SENUM(set, PE_SCROLLDIR) = DIR_UP;
       SBOOL(set, PE_SCROLL) = YES;
@@ -1874,7 +1880,7 @@ void ColorAll(color_t color, unsigned char *fb) {
   int x,y;
   for (x = 0; x < tensorWidth; x++) {
     for (y = 0; y < tensorHeight; y++) {
-      SetPixel(x, y, color, fb);
+      SetPixelA(x, y, color, fb);
     }
   }
 }
@@ -1935,11 +1941,8 @@ void FadeAll(int inc, fadeModes_e fadeMode, unsigned char *buffer) {
 
 // Set a single pixel a particular color.
 void SetPixel(int x, int y, color_t color, unsigned char *buffer) {
-  if ((x >= tensorWidth) || (y >= tensorHeight) ||
-      (x < 0) || (y < 0)) {
-    //~ fprintf(stderr, "Attempt to set pixel outside of frame buffer! %i, %i\n", x, y);
-    return;
-  }
+  if ((x >= tensorWidth) || (y >= tensorHeight) || (x < 0) || (y < 0)) return;
+
   buffer[(y * tensorWidth * 3) + (x * 3) + 0] = color.r;
   buffer[(y * tensorWidth * 3) + (x * 3) + 1] = color.g;
   buffer[(y * tensorWidth * 3) + (x * 3) + 2] = color.b;
@@ -1947,79 +1950,53 @@ void SetPixel(int x, int y, color_t color, unsigned char *buffer) {
 
 // Set a single pixel a particular color by color plane.
 // Rediculous.
-void SetPixelByPlane(int x, int y, color_t color, unsigned char plane, unsigned char *buffer) {
-  if ((x >= tensorWidth) || (y >= tensorHeight)) {
-    fprintf(stderr, "Attempt to set pixel outside of frame buffer! %i, %i\n", x, y);
+void SetPixelByPlaneA(int x, int y, color_t newColor, unsigned char plane, unsigned char *buffer) {
+  color_t curColor;
+  float a;
+
+  if ((x >= tensorWidth) || (y >= tensorHeight) || (x < 0) || (y < 0)) return;
+
+  // Do the alpha blending, if called for.
+  if (newColor.a != 255) {
+
+    // Get the current pixel color.
+    curColor = GetPixel(x, y, buffer);
+
+    // Normalize the alpha value. Normal = (in - min) / (max - min)
+    a = (float) newColor.a / 255.0;
+
+    // Calculate the blended outputs => value = (1 - a) Value0 + a Value1
+    newColor.r = (unsigned char) ((a * newColor.r) + ((1.0 - a) * curColor.r));
+    newColor.g = (unsigned char) ((a * newColor.g) + ((1.0 - a) * curColor.g));
+    newColor.b = (unsigned char) ((a * newColor.b) + ((1.0 - a) * curColor.b));
   }
-  switch(plane) {
-    case PLANE_ALL:
-      buffer[(y * tensorWidth * 3) + (x * 3) + 0] = color.r;
-      buffer[(y * tensorWidth * 3) + (x * 3) + 1] = color.g;
-      buffer[(y * tensorWidth * 3) + (x * 3) + 2] = color.b;
-      break;
 
-    case PLANE_RED:
-      buffer[(y * tensorWidth * 3) + (x * 3) + 0] = color.r;
-      break;
-
-    case PLANE_GREEN:
-      buffer[(y * tensorWidth * 3) + (x * 3) + 1] = color.g;
-      break;
-
-    case PLANE_BLUE:
-      buffer[(y * tensorWidth * 3) + (x * 3) + 2] = color.b;
-      break;
-
-    // More complicated.
-    case PLANE_CYAN:
-      buffer[(y * tensorWidth * 3) + (x * 3) + 1] = color.g;
-      buffer[(y * tensorWidth * 3) + (x * 3) + 2] = color.b;
-      break;
-
-    case PLANE_YELLOW:
-      buffer[(y * tensorWidth * 3) + (x * 3) + 0] = color.r;
-      buffer[(y * tensorWidth * 3) + (x * 3) + 1] = color.g;
-      break;
-
-    case PLANE_MAGENTA:
-      buffer[(y * tensorWidth * 3) + (x * 3) + 0] = color.r;
-      buffer[(y * tensorWidth * 3) + (x * 3) + 2] = color.b;
-      break;
-    default:
-      break;
-
-  }
+  if (plane & PLANE_RED)
+    buffer[(y * tensorWidth * 3) + (x * 3) + 0] = newColor.r;
+  if (plane & PLANE_GREEN)
+    buffer[(y * tensorWidth * 3) + (x * 3) + 1] = newColor.g;
+  if (plane & PLANE_BLUE)
+    buffer[(y * tensorWidth * 3) + (x * 3) + 2] = newColor.b;
 }
 
 // Set a single pixel a particular color with alpha blending.
 // Is this ever used?  Does it work?
 void SetPixelA(int x, int y, color_t color, unsigned char *buffer) {
-  color_t colorTemp;
-  float a, r1, g1, b1, r2, g2, b2;
+  color_t curColor;
+  float a;
 
-  if ((x >= tensorWidth) || (y >= tensorHeight)) {
-    fprintf(stderr, "Attempt to set pixel outside of frame buffer! %i, %i\n", x, y);
-  }
-
-  // Input colors.
-  r1 = color.r;
-  g1 = color.g;
-  b1 = color.b;
+  if (x >= tensorWidth || y >= tensorHeight || x < 0 || y < 0) return;
 
   // Get the current color.
-  colorTemp = GetPixel(x, y, buffer);
-  r2 = colorTemp.r;
-  g2 = colorTemp.g;
-  b2 = colorTemp.b;
+  curColor = GetPixel(x, y, buffer);
 
   // Normalize the alpha value. Normal = (in - min) / (max - min)
-  a = color.a;
-  a = a / 255;
+  a = (float) color.a / 255.0;
 
   // Calculate the blended outputs = value = (1 - a) Value0 + a Value1
-  color.r = (unsigned char) (a * r1) + ((1 - a) * r2);
-  color.g = (unsigned char) (a * g1) + ((1 - a) * g2);
-  color.b = (unsigned char) (a * b1) + ((1 - a) * b2);
+  color.r = (unsigned char) ((a * color.r) + ((1.0 - a) * curColor.r));
+  color.g = (unsigned char) ((a * color.g) + ((1.0 - a) * curColor.g));
+  color.b = (unsigned char) ((a * color.b) + ((1.0 - a) * curColor.b));
 
   buffer[(y * tensorWidth * 3) + (x * 3) + 0] = color.r;
   buffer[(y * tensorWidth * 3) + (x * 3) + 1] = color.g;
@@ -2033,7 +2010,7 @@ color_t GetPixel(int x, int y, unsigned char *buffer) {
   colorTemp.r = buffer[(y * tensorWidth * 3) + (x * 3) + 0];
   colorTemp.g = buffer[(y * tensorWidth * 3) + (x * 3) + 1];
   colorTemp.b = buffer[(y * tensorWidth * 3) + (x * 3) + 2];
-  colorTemp.a = 255; // We don't return an alpha for a written pixel?
+  colorTemp.a = 255;
   return colorTemp;
 }
 
@@ -2280,8 +2257,15 @@ void UpdatePreview(int xOffset, int yOffset, unsigned char *buffer) {
 // Scroller buffer manipulation
 void Scroll (int set, dir_e direction, bool_t toroidal, unsigned char *fb, unsigned char plane) {
   int currentSet = set;  // Override
-  int x, y, i;
+  int x, y, i, j;
   color_t rollSave[TENSOR_WIDTH];  // TENSOR_WIDTH is larger than TENSOR_HEIGHT
+  unsigned char alpha;
+  color_t temp;
+
+  if ((shiftModes_e) direction == SM_HOLD) return;
+
+  // Get the scroller alpha
+  alpha = (unsigned char) (DFLOAT(PE_SCROLLALPHA) * 255.0);
 
   // If the topology of the surface is toroidal, we save aside the edge so that
   // it can be wrapped.
@@ -2314,6 +2298,11 @@ void Scroll (int set, dir_e direction, bool_t toroidal, unsigned char *fb, unsig
       default:
         break;
     }
+
+    // Add in the scroller alpha
+    for (j = 0 ; j < i; j++) {
+      rollSave[j].a = alpha;
+    }
   }
 
   // Make the shift.
@@ -2322,13 +2311,17 @@ void Scroll (int set, dir_e direction, bool_t toroidal, unsigned char *fb, unsig
       if (DBOOL(PE_MIRROR_H)) {
         for (y = 0; y < (tensorHeight - 1) / 2; y++) {
           for (x = 0; x < tensorWidth; x++) {
-            SetPixelByPlane(x, y, GetPixel(x, y+1, fb), plane, fb);
+            temp = GetPixel(x, y + 1, fb);
+            temp.a = alpha;
+            SetPixelByPlaneA(x, y, temp, plane, fb);
           }
         }
       } else {
         for (y = 0; y < (tensorHeight - 1); y++) {
           for (x = 0; x < tensorWidth; x++) {
-            SetPixelByPlane(x, y, GetPixel(x, y+1, fb), plane, fb);
+            temp = GetPixel(x, y + 1, fb);
+            temp.a = alpha;
+            SetPixelByPlaneA(x, y, temp, plane, fb);
           }
         }
       }
@@ -2337,7 +2330,9 @@ void Scroll (int set, dir_e direction, bool_t toroidal, unsigned char *fb, unsig
     case DIR_DOWN:
       for (y = (tensorHeight - 1); y > 0; y--) {
         for (x = 0; x < tensorWidth; x++) {
-          SetPixelByPlane(x, y, GetPixel(x, y - 1, fb), plane, fb);
+          temp = GetPixel(x, y - 1, fb);
+          temp.a = alpha;
+          SetPixelByPlaneA(x, y, temp, plane, fb);
         }
       }
       break;
@@ -2346,13 +2341,17 @@ void Scroll (int set, dir_e direction, bool_t toroidal, unsigned char *fb, unsig
       if (DBOOL(PE_MIRROR_V)) {
         for (y = 0; y < tensorHeight; y++) {
           for (x = 0; x < (tensorWidth - 1) / 2; x++) {
-            SetPixelByPlane(x, y, GetPixel(x + 1, y, fb),plane, fb);
+            temp = GetPixel(x + 1, y, fb);
+            temp.a = alpha;
+            SetPixelByPlaneA(x, y, temp, plane, fb);
           }
         }
       } else {
         for (y = 0; y < tensorHeight; y++) {
           for (x = 0; x < (tensorWidth - 1); x++) {
-            SetPixelByPlane(x, y, GetPixel(x + 1, y, fb),plane, fb);
+            temp = GetPixel(x + 1, y, fb);
+            temp.a = alpha;
+            SetPixelByPlaneA(x, y, temp, plane, fb);
           }
         }
       }
@@ -2362,11 +2361,15 @@ void Scroll (int set, dir_e direction, bool_t toroidal, unsigned char *fb, unsig
       for (y = 0; y < tensorHeight; y++) {
         if (DBOOL(PE_MIRROR_V)) {
           for (x = (tensorWidth - 1) / 2; x > 0; x--) {
-            SetPixelByPlane(x, y, GetPixel(x - 1, y, fb),plane, fb);
+            temp = GetPixel(x - 1, y, fb);
+            temp.a = alpha;
+            SetPixelByPlaneA(x, y, temp, plane, fb);
           }
         } else {
           for (x = (tensorWidth - 1); x > 0; x--) {
-            SetPixelByPlane(x, y, GetPixel(x - 1, y, fb),plane, fb);
+            temp = GetPixel(x - 1, y, fb);
+            temp.a = alpha;
+            SetPixelByPlaneA(x, y, temp, plane, fb);
           }
         }
       }
@@ -2382,30 +2385,30 @@ void Scroll (int set, dir_e direction, bool_t toroidal, unsigned char *fb, unsig
       case DIR_UP:
         if (DBOOL(PE_MIRROR_H)) {
           for(i = 0; i < tensorWidth; i++)
-            SetPixelByPlane(i, (tensorHeight - 1)/2, rollSave[i], plane, fb);
+            SetPixelByPlaneA(i, (tensorHeight - 1)/2, rollSave[i], plane, fb);
         } else {
           for(i = 0; i < tensorWidth; i++)
-            SetPixelByPlane(i, tensorHeight - 1, rollSave[i], plane, fb);
+            SetPixelByPlaneA(i, tensorHeight - 1, rollSave[i], plane, fb);
         }
         break;
 
       case DIR_DOWN:
         for (i = 0; i < tensorWidth; i++)
-          SetPixelByPlane(i, 0, rollSave[i],plane, fb);
+          SetPixelByPlaneA(i, 0, rollSave[i],plane, fb);
         break;
 
       case DIR_RIGHT:
         for (i = 0; i < tensorHeight; i++)
-          SetPixelByPlane(0, i, rollSave[i],plane, fb);
+          SetPixelByPlaneA(0, i, rollSave[i],plane, fb);
         break;
 
       case DIR_LEFT:
         if (DBOOL(PE_MIRROR_V)) {
           for (i = 0; i < tensorHeight; i++)
-            SetPixelByPlane((tensorWidth - 1)/2, i, rollSave[i],plane, fb);
+            SetPixelByPlaneA((tensorWidth - 1)/2, i, rollSave[i],plane, fb);
         } else {
           for (i = 0; i < tensorHeight; i++)
-            SetPixelByPlane(tensorWidth - 1, i, rollSave[i],plane, fb);
+            SetPixelByPlaneA(tensorWidth - 1, i, rollSave[i],plane, fb);
         }
         break;
 
@@ -2670,7 +2673,7 @@ void HorizontalBars(color_t color, unsigned char *buffer) {
   int i, j;
   for (i = 0; i < tensorWidth; i++) {
     for (j = 0; j < tensorHeight; j += 2) {
-      SetPixel(i, j, color, buffer);
+      SetPixelA(i, j, color, buffer);
     }
   }
 }
@@ -2680,7 +2683,7 @@ void VerticalBars(color_t color, unsigned char *buffer) {
   int i, j;
   for (i = 0; i < tensorWidth; i+=2) {
     for (j = 0; j < tensorHeight; j++) {
-      SetPixel(i,j, color, buffer);
+      SetPixelA(i,j, color, buffer);
     }
   }
 }
@@ -2692,7 +2695,7 @@ void RandomDots(color_t color, unsigned int rFreq, unsigned char *buffer) {
   for (x = 0; x < tensorWidth; x++) {
     for (y = 0; y < tensorHeight; y++) {
       if (!(rand() % rFreq)) {
-        SetPixel(x, y, color, buffer);
+        SetPixelA(x, y, color, buffer);
       }
     }
   }
@@ -2889,12 +2892,13 @@ void SetDims(void) {
 // Draw an image to the output with rotation and expansion.
 // Rotation is acheived using SDL_gfx primitive rotozoom.
 // Angle is given in degrees.  Offsets specify the center (0..1).
-void DrawImage(SDL_Surface *image, double angle, float xoffset, float yoffset, double expansion, bool_t aliasmode, unsigned char *fb_dst) {
+void DrawImage(SDL_Surface *image, double angle, float xoffset, float yoffset, double expansion, bool_t aliasmode, unsigned char *fb_dst, float alpha) {
   SDL_Surface *s1 = NULL;
   SDL_Surface *s2 = NULL;
   SDL_Rect offset;
   int tempx, tempy;
   int cx, cy;
+  unsigned char fba[TENSOR_BYTES];
 
   // If not, don't.
   if (!image) return;
@@ -2957,8 +2961,27 @@ void DrawImage(SDL_Surface *image, double angle, float xoffset, float yoffset, d
   SDL_BlitSurface(s2, NULL, s1, &offset);
   SDL_FreeSurface(s2);
 
-  SurfaceToFB(fb_dst, s1);
+  // Copy to a frame buffer.
+  SurfaceToFB(fba, s1);
   SDL_FreeSurface(s1);
+
+  // Copy to the destination frame buffer using alpha blending.
+  CopyFbAlpha(fb_dst, fba, alpha);
+}
+
+void CopyFbAlpha(unsigned char *dest, unsigned char *src, float alpha) {
+  int x, y;
+  unsigned char a;
+  color_t temp;
+  a = (unsigned char) (alpha * 255.0);
+
+  for (x = 0 ; x < tensorWidth; x++) {
+    for (y = 0; y < tensorHeight; y++) {
+      temp = GetPixel(x, y, src);
+      temp.a = a;
+      SetPixelA(x, y, temp, dest);
+    }
+  }
 }
 
 
@@ -2977,7 +3000,8 @@ void CellFun(int set) {
       pixelColor.r = ((x + 1) * (y + 1)) + (oldColor.r / 2);
       pixelColor.g = oldColor.g + pixelColor.r;
       pixelColor.b = DINT(PE_CELLFUNCOUNT);
-      SetPixel(x, y, pixelColor,  DBUFFER(PE_FRAMEBUFFER));
+      pixelColor.a = (unsigned char) (DFLOAT(PE_FGALPHA) * 255.0);
+      SetPixelA(x, y, pixelColor,  DBUFFER(PE_FRAMEBUFFER));
     }
   }
 }
@@ -3317,32 +3341,32 @@ void DrawSideBar(int set) {
     case DIR_LEFT:
       for (i = 0; i < tensorHeight; i++) {
         if (DBOOL(PE_MIRROR_V)) {
-          SetPixel((tensorWidth - 1) / 2, i, DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
+          SetPixelA((tensorWidth - 1) / 2, i, DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
         } else {
-          SetPixel(tensorWidth - 1, i, DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
+          SetPixelA(tensorWidth - 1, i, DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
         }
       }
       break;
 
     case DIR_RIGHT:
       for (i = 0; i < tensorHeight; i++) {
-        SetPixel(0, i, DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
+        SetPixelA(0, i, DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
       }
       break;
 
     case DIR_UP:
       for (i = 0; i < tensorWidth; i++) {
         if (DBOOL(PE_MIRROR_H)) {
-          SetPixel(i, (tensorHeight - 1) / 2, DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
+          SetPixelA(i, (tensorHeight - 1) / 2, DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
         } else {
-          SetPixel(i, tensorHeight - 1, DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
+          SetPixelA(i, tensorHeight - 1, DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
         }
       }
       break;
 
     case DIR_DOWN:
       for (i = 0; i < tensorWidth; i++) {
-        SetPixel(i, 0, DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
+        SetPixelA(i, 0, DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
       }
       break;
     default:
@@ -3368,7 +3392,7 @@ void DrawSidePulse(int set) {
   switch (DSENUM(PE_SCROLLDIR, dir_e)) {
     case DIR_LEFT:
       if (DBOOL(PE_MIRROR_V)) {
-        SetPixel((tensorWidth - 1) / 2, pos[set], DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
+        SetPixelA((tensorWidth - 1) / 2, pos[set], DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
         pos[set] += dir[set];
         if (DBOOL(PE_MIRROR_H)) {
           if (pos[set] >= (tensorHeight - 1) / 2) dir[set] = -1;
@@ -3376,7 +3400,7 @@ void DrawSidePulse(int set) {
           if (pos[set] >= (tensorHeight - 1) ) dir[set] = -1;
         }
       } else {
-        SetPixel(tensorWidth - 1, pos[set], DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
+        SetPixelA(tensorWidth - 1, pos[set], DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
         pos[set] += dir[set];
         if (DBOOL(PE_MIRROR_H)) {
           if (pos[set] >= (tensorHeight - 1) / 2) dir[set] = -1;
@@ -3388,7 +3412,7 @@ void DrawSidePulse(int set) {
       break;
 
     case DIR_RIGHT:
-        SetPixel(0, pos[set], DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
+        SetPixelA(0, pos[set], DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
         pos[set] += dir[set];
         if (DBOOL(PE_MIRROR_H)) {
           if (pos[set] >= (tensorHeight - 1) / 2) dir[set] = -1;
@@ -3400,7 +3424,7 @@ void DrawSidePulse(int set) {
 
     case DIR_UP:
       if (DBOOL(PE_MIRROR_H)) {
-        SetPixel(pos[set], (tensorHeight - 1) / 2, DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
+        SetPixelA(pos[set], (tensorHeight - 1) / 2, DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
         pos[set] += dir[set];
         if (DBOOL(PE_MIRROR_V)) {
           if (pos[set] >= (tensorWidth - 1) / 2) dir[set] = -1;
@@ -3408,7 +3432,7 @@ void DrawSidePulse(int set) {
           if (pos[set] >= tensorWidth - 1) dir[set] = -1;
         }
       } else {
-        SetPixel(pos[set], tensorHeight - 1, DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
+        SetPixelA(pos[set], tensorHeight - 1, DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
         pos[set] += dir[set];
         if (DBOOL(PE_MIRROR_V)) {
           if (pos[set] >= (tensorWidth - 1) / 2) dir[set] = -1;
@@ -3420,7 +3444,7 @@ void DrawSidePulse(int set) {
       break;
 
     case DIR_DOWN:
-      SetPixel(pos[set], 0, DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
+      SetPixelA(pos[set], 0, DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
       pos[set] += dir[set];
       if (DBOOL(PE_MIRROR_V)) {
         if (pos[set] >= (tensorWidth - 1) / 2) dir[set] = -1;
@@ -3478,6 +3502,7 @@ void CopyPatternSet(int dst, int src) {
       case ET_COUNT: case ET_INVALID: break;
     }
   }
+  snprintf(statusText, sizeof(statusText), "Copied pattern set %i to set %i", src, dst);
 }
 
 // Figure out which pixel of the display the mouse is over.
@@ -4151,7 +4176,7 @@ int OverBox(point_t mouse, int item, SDL_Rect ** targets, int *lastHover) {
 // Update the values of the text on the display window.
 // TODO: Shorten this function.  Lots of repetition.
 #define STATUS_BAR_LENGTH 75
-#define BUFFER_BAR_LENGTH 100
+#define BUFFER_BAR_LENGTH 87
 void UpdateInfoDisplay(int set) {
   int length;
   int i;
@@ -4493,10 +4518,26 @@ void UpdateInfoDisplay(int set) {
     }
     strncpy(oldBuffer, SSTRING(set, PE_TEXTBUFFER), length + 1);
     strncpy(bufferTemp1, SSTRING(set, PE_TEXTBUFFER) + (length > BUFFER_BAR_LENGTH ? length - BUFFER_BAR_LENGTH : 0), BUFFER_BAR_LENGTH + 1);
-    snprintf(bufferTemp2, sizeof(bufferTemp2), " %-*s", BUFFER_BAR_LENGTH + 5, bufferTemp1);
+    snprintf(bufferTemp2, sizeof(bufferTemp2), " %-*s", BUFFER_BAR_LENGTH + 3, bufferTemp1);
     CreateTextureLine(&(infoCache[thisInfo].infoText), bufferTemp2, 52, 0, DISPLAY_COLOR_TBUF, DISPLAY_COLOR_TBUFBG);
   }
   DrawDisplayTexture(infoCache[thisInfo].infoText);
   thisInfo++;
+}
+
+void CopyBuffer(int dst, int src) {
+  if (src == dst) return;
+  memcpy(SBUFFER(dst, PE_FRAMEBUFFER), SBUFFER(src, PE_FRAMEBUFFER), patternElements[PE_FRAMEBUFFER].size * sizeof(unsigned char));
+  snprintf(statusText, sizeof(statusText), "Loaded buffer from set %i into set %i", src, dst);
+}
+
+void SwitchToSet(int set) {
+  if (displaySet == OO_ALTERNATE) {
+    alternateSet = set;
+  } else {
+    currentSet = set;
+  }
+  snprintf(statusText, sizeof(statusText), "Switched %s set to #%i",
+    displaySet == OO_ALTERNATE ? "alternate" : "live", set);
 }
 
