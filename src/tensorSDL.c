@@ -10,6 +10,7 @@
 #include <string.h>  // memcpy, strtok
 #include <time.h>    // nanosleep
 #include <errno.h>   // errno for string conversions.
+#include <limits.h>  // INT_MIN
 #include <SDL.h>
 #include <SDL2_rotozoom.h>
 #include <SDL_image.h>
@@ -40,7 +41,7 @@
 // Gui input modes
 typedef enum inputMode_e {
   IM_INVALID = -1,
-  IM_NORMAL = 0, IM_CONFIRM, IM_INT, IM_FLOAT, IM_ENUM,
+  IM_NORMAL = 0, IM_CONFIRM, IM_INT, IM_FLOAT, IM_ENUM, IM_COLOR,
   IM_COUNT // Last
 } inputMode_e;
 
@@ -77,6 +78,8 @@ bool_t useDefaultPixelMap = YES;
 const char **ipmap1;
 const char **ipmap2;
 const char **ipmap3;
+color_t fgOutput[A_COUNT][PATTERN_SET_COUNT];
+color_t bgOutput[A_COUNT][PATTERN_SET_COUNT];
 
 // Prototypes
 void DrawNewFrame(int set, unsigned char primary);
@@ -95,8 +98,8 @@ void WriteSlice(int set);
 void CellFun(int set);
 void DrawSideBar(int set);
 void Diffuse(float diffusionCoeff, bool_t isToroid, unsigned char *buffer);
-void HorizontalBars(color_t color, unsigned char *buffer);
-void VerticalBars(color_t color, unsigned char *buffer);
+void HorizontalBars(color_t fg, color_t bg, unsigned char *buffer);
+void VerticalBars(color_t fg, color_t bg, unsigned char *buffer);
 void SavePatternSet(char key, int set, bool_t overWrite, bool_t backup);
 void LoadPatternSet(char key, int set);
 void RandomDots(color_t color, unsigned int rFreq, unsigned char *buffer);
@@ -141,11 +144,12 @@ void ScrollCycle(int set);
 bool_t SetValueInt(int set, patternElement_e element, int value);
 void SetValueFloat(int set, patternElement_e element, float value);
 int OverCommand(point_t mouse, int *lastHover);
-int OverBox(point_t mouse, int item, SDL_Rect ** targets, int *lastHover);
+int OverBox(int set, point_t mouse, int item, SDL_Rect ** targets, int *lastHover);
 SDL_Rect GetBoxofCommand(int command);
 void DrawSidePulse(int set);
-
+int HandleColorSelection(point_t mouse, int thisHover, bool_t resetEvent, int set);
 void UpdateInfoDisplay(int set);
+int OverColorBox(int set, point_t mouse, int item, SDL_Rect ** targets, int *lastHover);
 
 // Main
 int main(int argc, char *argv[]) {
@@ -177,6 +181,8 @@ int main(int argc, char *argv[]) {
   int enumHover = INVALID;
   SDL_Rect *targets = NULL;
   operateOn_e displaySetOld = OO_INVALID;
+  patternElement_e element;
+  command_e command;
 
   // Unbuffer the console...
   setvbuf(stdout, (char *)NULL, _IONBF, 0);
@@ -450,66 +456,67 @@ int main(int argc, char *argv[]) {
             case SDL_MOUSEWHEEL:
               // The mouse wheel moved.  See if we should act on that.  We don't
               // check HandleCommand return codes because there are no mouse wheel
-              // commands that exit the program.
+              // commands that exit the program.  Wheel up increases a value.
+              // Wheel down decreases a value.  Left click edits a value, right
+              // click resets that value to default.  If there are no wheel down
+              // commands, the wheel up command is used.  If there are no wheel
+              // up command, the edit value command is used.
               if (thisHover != INVALID) {
 
                 // Wheel down.
                 if (event.wheel.y < 0) {
-                  // If there are no mouse wheel commands for this item, consider it a click.
-                  if (displayCommand[thisHover].commands[MOUSE_WHEEL_DOWN].command == COM_NONE)
-                    HandleCommand(displaySet ? alternateSet : currentSet,
-                      displayCommand[thisHover].commands[MOUSE_CLICK].command,
-                      thisHover);
-                  else
-                    HandleCommand(displaySet ? alternateSet : currentSet,
-                      displayCommand[thisHover].commands[MOUSE_WHEEL_DOWN].command,
-                      thisHover);
+                  command = displayCommand[thisHover].commands[MOUSE_WHEEL_DOWN].command;
+                  if (command == COM_NONE) {
+                    command = displayCommand[thisHover].commands[MOUSE_WHEEL_UP].command;
+                  }
+                  if (command == COM_NONE) {
+                    command = displayCommand[thisHover].commands[MOUSE_EDIT].command;
+                  }
+                  HandleCommand(displaySet ? alternateSet : currentSet, command, thisHover);
 
                 // Wheel up.
                 } else {
-                  // If there are no mouse wheel commands for this item, consider it a click.
-                  if (displayCommand[thisHover].commands[MOUSE_WHEEL_UP].command == COM_NONE)
-                    HandleCommand(displaySet ? alternateSet : currentSet,
-                      displayCommand[thisHover].commands[MOUSE_CLICK].command,
-                      thisHover);
-                  else
-                    HandleCommand(displaySet ? alternateSet : currentSet,
-                      displayCommand[thisHover].commands[MOUSE_WHEEL_UP].command,
-                      thisHover);
+                  command = displayCommand[thisHover].commands[MOUSE_WHEEL_UP].command;
+                  if (command == COM_NONE) {
+                    command = displayCommand[thisHover].commands[MOUSE_EDIT].command;
+                  }
+                  HandleCommand(displaySet ? alternateSet : currentSet, command, thisHover);
                 }
 
               // Mouse wheel action over the live preview lets us change colors
               // without having to go to the command.
+              // TODO: This is obsolete.  Fix it.
               } else if (IsInsideBox(mouse, liveBox)) {
                 if (!rightMouseDown) {
                   if (event.wheel.y < 0) { // Wheel down
-                    HandleCommand(currentSet, COM_FG_WHEEL_DOWN, PE_FGE);
+                    //~ HandleCommand(currentSet, COM_FG_WHEEL_DOWN, PE_FGE);
                   } else { // Wheel up
-                    HandleCommand(currentSet, COM_FG_WHEEL_UP, PE_FGE);
+                    //~ HandleCommand(currentSet, COM_FG_WHEEL_UP, PE_FGE);
                   }
                 } else {
                   // Holding down the right mouse button while wheeling changes the
                   // background color instead.
                   if (event.wheel.y < 0) { // Wheel down
-                    HandleCommand(currentSet, COM_BG_WHEEL_DOWN, PE_BGE);
+                    //~ HandleCommand(currentSet, COM_BG_WHEEL_DOWN, PE_BGE);
                   } else { // Wheel up
-                    HandleCommand(currentSet, COM_BG_WHEEL_UP, PE_BGE);
+                    //~ HandleCommand(currentSet, COM_BG_WHEEL_UP, PE_BGE);
                   }
                 }
               // Same for the alternate preview, except we change the alternate
               // set values.
+              // TODO: This is obsolete.  Fix it.
               } else if (IsInsideBox(mouse, altBox)) {
                 if (!rightMouseDown) {
                   if (event.wheel.y < 0) { // Wheel down
-                    HandleCommand(alternateSet, COM_FG_WHEEL_DOWN, PE_FGE);
+                    //~ HandleCommand(alternateSet, COM_FG_WHEEL_DOWN, PE_FGE);
                   } else { // Wheel up
-                    HandleCommand(alternateSet, COM_FG_WHEEL_UP, PE_FGE);
+                    //~ HandleCommand(alternateSet, COM_FG_WHEEL_UP, PE_FGE);
                   }
                 } else {
                   if (event.wheel.y < 0) { // Wheel down
-                    HandleCommand(alternateSet, COM_BG_WHEEL_DOWN, PE_BGE);
+                    //~ HandleCommand(alternateSet, COM_BG_WHEEL_DOWN, PE_BGE);
                   } else { // Wheel up
-                    HandleCommand(alternateSet, COM_BG_WHEEL_UP, PE_BGE);
+                    //~ HandleCommand(alternateSet, COM_BG_WHEEL_UP, PE_BGE);
                   }
                 }
               }
@@ -518,27 +525,58 @@ int main(int argc, char *argv[]) {
             case SDL_MOUSEBUTTONUP:
               // Mouse button unpushed.  Consider this a click.  If we're over
               // the same item we down clicked on, execute the command.
-              if (event.button.button == SDL_BUTTON_LEFT) {
-                if ((thisHover != INVALID) && (thisHover == leftMouseDownOn)) {
-                  exitProgram = HandleCommand(displaySet ? alternateSet : currentSet,
-                    displayCommand[thisHover].commands[MOUSE_CLICK].command,
-                    thisHover);
-                }
-              } else if (event.button.button == SDL_BUTTON_RIGHT) {
+              // Right mouse button click is a parameter reset.  Left mouse
+              // button click is a parameter edit.  Right click over a color
+              // resets the color.  Left click over a color sets to color
+              // selector to edit this item.
+              if (event.button.button == SDL_BUTTON_RIGHT) {
                 if ((thisHover != INVALID) && (thisHover == rightMouseDownOn)) {
-                  inputMode = EditValue(currentSet, thisHover);
-                  if ((inputMode == IM_INT) || (inputMode == IM_FLOAT)) {
-                    // Initial value to edit.
-                    //~ snprintf(textEntry, sizeof(textEntry), "%i", DINT(displayCommand[thisHover].dataSource));
-                    textEntry[0] = '\0';
-                  } else if (inputMode == IM_ENUM) {
-                    if (targets) {
-                      free(targets);
-                      targets = NULL;
-                    }
+                  if (!HandleColorSelection(mouse, thisHover, YES, displaySet ? alternateSet : currentSet)) {
+                    exitProgram = HandleCommand(displaySet ? alternateSet : currentSet,
+                      displayCommand[thisHover].commands[MOUSE_RST].command, thisHover);
                   }
                 }
-              }
+              } else if (event.button.button == SDL_BUTTON_LEFT) {
+                if ((thisHover != INVALID) && (thisHover == leftMouseDownOn)) {
+                  // First check if we clicked on a color selector.
+                  if (HandleColorSelection(mouse, thisHover, NO, displaySet ? alternateSet : currentSet)) {
+                    // For edit clicks on the color boxes, we set the color
+                    // selector to the appropriate color source.
+                    SENUM(displaySet ? alternateSet : currentSet, PE_PALETTEALTER) =
+                      displayCommand[thisHover].colorSource;
+                  } else {
+                    // Otherwise, not on a color box, we execute the edit
+                    // command (which may be nothing), and possibly change the
+                    // input mode.
+                    exitProgram = HandleCommand(displaySet ? alternateSet : currentSet,
+                        displayCommand[thisHover].commands[MOUSE_EDIT].command,
+                        thisHover);
+
+                    // Change input mode?
+                    inputMode = EditValue(currentSet, thisHover);
+                  }
+                  switch(inputMode) {
+                    case IM_INT:
+                    case IM_FLOAT:
+                      // Initial value to edit would go here, if our editor had
+                      // a moveable cursor.
+                      //~ snprintf(textEntry, sizeof(textEntry), "%i", DINT(displayCommand[thisHover].dataSource));
+                      textEntry[0] = '\0';
+                      break;
+                    case IM_ENUM:
+                    case IM_COLOR:
+                      // For enum edits, we first free the target boxes so that
+                      // new ones can be generated.
+                      if (targets) {
+                        free(targets);
+                        targets = NULL;
+                      }
+                      break;
+                    default:
+                      break;
+                  } // End inputMode switch
+                } // End left mouse down if handler
+              } // End mouse button if
               break;  // End SDL_MOUSEBUTTONUP case.
 
             default:
@@ -557,7 +595,9 @@ int main(int argc, char *argv[]) {
                     errno = 0;
                     value = strtol(textEntry, &testptr, 0);
                     if ((errno == 0) && (testptr - strlen(textEntry) == textEntry)) {
-                      if (SetValueInt(displaySet ? alternateSet : currentSet, displayCommand[thisHover].dataSource, value)) {
+                      element = displayCommand[thisHover].dataSource;
+                      if (element < PE_INVALID) element = GetSelectElement(displaySet ? alternateSet : currentSet, element);
+                      if (SetValueInt(displaySet ? alternateSet : currentSet, element, value)) {
                         snprintf(statusText, sizeof(statusText), "New value accepted.");
                       } else {
                         snprintf(statusText, sizeof(statusText), "New value rejected.");
@@ -604,7 +644,9 @@ int main(int argc, char *argv[]) {
                       if (valuef != valuef) {
                         snprintf(statusText, sizeof(statusText), "That's not a number.");
                       } else {
-                        SetValueFloat(displaySet ? alternateSet : currentSet, displayCommand[thisHover].dataSource, valuef);
+                        element = displayCommand[thisHover].dataSource;
+                        if (element < PE_INVALID) element = GetSelectElement(displaySet ? alternateSet : currentSet, element);
+                        SetValueFloat(displaySet ? alternateSet : currentSet, element,  valuef);
                       }
                     } else {
                       snprintf(statusText, sizeof(statusText), "New value rejected.");
@@ -645,7 +687,7 @@ int main(int argc, char *argv[]) {
               break;
             case SDL_MOUSEMOTION:
               // Check if its hovering over a command.
-              enumHover = OverBox(mouse, thisHover, &targets, &lastHover);
+              enumHover = OverBox(displaySet ? alternateSet : currentSet, mouse, thisHover, &targets, &lastHover);
               break;  // End case SDL_MOUSEMOTION.
             case SDL_MOUSEBUTTONDOWN:
               // Correct the error made by the common code.
@@ -656,18 +698,12 @@ int main(int argc, char *argv[]) {
               // the same item we down clicked on, the user has chosen.
               if (event.button.button == SDL_BUTTON_LEFT) {
                 if ((enumHover != INVALID) && (enumHover == leftMouseDownOn)) {
-                  SENUM(displaySet ? alternateSet : currentSet, displayCommand[thisHover].dataSource) = enumHover;
+                  element = displayCommand[thisHover].dataSource;
+                  if (element < PE_INVALID) element = GetSelectElement(displaySet ? alternateSet : currentSet, element);
+                  SENUM(displaySet ? alternateSet : currentSet, element) = enumHover;
                   snprintf(statusText, sizeof(statusText), "Item %s set to %s",
                     displayCommand[thisHover].text,
-                    enumerations[patternElements[displayCommand[thisHover].dataSource].etype].texts[enumHover]);
-                  // Special handling for the foreground and background
-                  // color selectors:
-                  if (displayCommand[thisHover].dataSource == PE_FGE)
-                    SCOLOR(displaySet ? alternateSet : currentSet, PE_FGC) =
-                      namedColors[SENUM(displaySet ? alternateSet : currentSet, PE_FGE)].color;
-                  else if (displayCommand[thisHover].dataSource == PE_BGE)
-                    SCOLOR(displaySet ? alternateSet : currentSet, PE_BGC) =
-                      namedColors[SENUM(displaySet ? alternateSet : currentSet, PE_BGE)].color;
+                    enumerations[patternElements[element].etype].texts[enumHover]);
                   inputMode = IM_NORMAL;
                 }
               } else if (event.button.button == SDL_BUTTON_RIGHT) {
@@ -678,11 +714,53 @@ int main(int argc, char *argv[]) {
             default:
               if (event.type == GUIEventType) {
                 // Handle drawing the input selection boxes.
-                DrawEnumSelectBox(thisHover, enumHover, &targets);
+                DrawEnumSelectBox(displaySet ? alternateSet : currentSet, thisHover, enumHover, &targets);
               }
               break;
           } // End event processing switch for ENUM selection
           break; // End case IM_ENUM
+
+        // Handle color selection dialog
+        case IM_COLOR:
+          switch(event.type) {
+            case SDL_KEYDOWN:
+              // Put some stuff here.
+              //~ if (HandleColorSelect(event.key.keysym.sym,
+                //~ displaySet ? alternateSet : currentSet, thisHover, &enumHover))
+                snprintf(statusText, sizeof(statusText), "Color selection cancelled.");
+                inputMode = IM_NORMAL;
+              break;
+            case SDL_MOUSEMOTION:
+              // Check if its hovering over a command.
+              enumHover = OverColorBox(displaySet ? alternateSet : currentSet, mouse, thisHover, &targets, &lastHover);
+              break;  // End case SDL_MOUSEMOTION.
+            case SDL_MOUSEBUTTONDOWN:
+              // Correct the error made by the common code.
+              if (event.button.button == SDL_BUTTON_LEFT) leftMouseDownOn = enumHover;
+              break;
+
+            case SDL_MOUSEBUTTONUP:
+              if (event.button.button == SDL_BUTTON_RIGHT) {
+                snprintf(statusText, sizeof(statusText), "Color selection cancelled.");
+                inputMode = IM_NORMAL;
+              } else if (event.button.button == SDL_BUTTON_LEFT) {
+                if ((enumHover != INVALID) && (enumHover == leftMouseDownOn)) {
+                  element = GetSelectElement(displaySet ? alternateSet : currentSet, displayCommand[thisHover].dataSource);
+                  SCOLOR(displaySet ? alternateSet : currentSet, element) = namedColors[enumHover].color;
+                  snprintf(statusText, sizeof(statusText), "Item %s set.",
+                    patternElements[element].name);
+                  inputMode = IM_NORMAL;
+                }
+              }
+              break;
+            default:
+              if (event.type == GUIEventType) {
+                // Handle drawing the input selection boxes.
+                DrawColorSelectBox(thisHover, enumHover, &targets);
+              }
+              break;
+          }  // End event processing switch for COLOR selection
+          break;  // End case IM_COLOR
 
         // Unhandled input modes
         default:
@@ -740,9 +818,9 @@ int main(int argc, char *argv[]) {
       }
       // Is one of the mouse buttons down?
       if (leftMouseDown) {
-        SetPixel(tpixel.x, tpixel.y, SCOLOR(currentSet, PE_FGC), SBUFFER(currentSet, PE_FRAMEBUFFER));
+        SetPixelA(tpixel.x, tpixel.y, fgOutput[A_LIGHTPEN][currentSet], SBUFFER(currentSet, PE_FRAMEBUFFER));
       } else if (rightMouseDown) {
-        SetPixel(tpixel.x, tpixel.y, SCOLOR(currentSet, PE_BGC), SBUFFER(currentSet, PE_FRAMEBUFFER));
+        SetPixelA(tpixel.x, tpixel.y, bgOutput[A_LIGHTPEN][currentSet], SBUFFER(currentSet, PE_FRAMEBUFFER));
       }
     } else if (IsInsideBox(mouse, altBox)) {
       // The alternate display.
@@ -759,9 +837,9 @@ int main(int argc, char *argv[]) {
         }
       }
       if (leftMouseDown) {
-        SetPixel(tpixel.x, tpixel.y, SCOLOR(alternateSet, PE_FGC), SBUFFER(alternateSet, PE_FRAMEBUFFER));
+        SetPixelA(tpixel.x, tpixel.y, fgOutput[A_LIGHTPEN][alternateSet], SBUFFER(alternateSet, PE_FRAMEBUFFER));
       } else if (rightMouseDown) {
-        SetPixel(tpixel.x, tpixel.y, SCOLOR(alternateSet, PE_BGC), SBUFFER(alternateSet, PE_FRAMEBUFFER));
+        SetPixelA(tpixel.x, tpixel.y, bgOutput[A_LIGHTPEN][alternateSet], SBUFFER(alternateSet, PE_FRAMEBUFFER));
       }
     }
 
@@ -892,6 +970,7 @@ void DrawNewFrame(int set, bool_t isPrimary) {
 // Time to make a mess of the array.
 void ProcessModes(int set) {
   int currentSet = set; // Overrides global used in D* macros.
+  int i;
 
   // Scroll direction randomizer
   if (DBOOL(PE_SCROLLRANDEN)) {
@@ -900,19 +979,28 @@ void ProcessModes(int set) {
     }
   }
 
-  // Foreground color cycle.
-  if (DENUM(PE_FGCYCLE)) {
-    DCOLOR(PE_FGC) = ColorCycle(currentSet, DENUM(PE_FGCYCLE), &DINT(PE_CYCLESAVEFG), DINT(PE_FGRAINBOW));
-  }
+  // Colors
+  for (i = 0; i < A_COUNT; i++) {
+    if (seedPalette[i].fgCycleMode > PE_INVALID && DENUM(seedPalette[i].fgCycleMode)) {
+      fgOutput[i][set] = ColorCycle(currentSet, DENUM(seedPalette[i].fgCycleMode),
+        &DINT(seedPalette[i].fgCyclePos), DINT(seedPalette[i].fgCycleRate));
+    } else if (seedPalette[i].fgColorA > PE_INVALID) {
+      fgOutput[i][set] = DCOLOR(seedPalette[i].fgColorA);
+    }
 
-  // Change background color.
-  if (DENUM(PE_BGCYCLE)) {
-    DCOLOR(PE_BGC) = ColorCycle(currentSet, DENUM(PE_BGCYCLE), &DINT(PE_CYCLESAVEBG), DINT(PE_BGRAINBOW));
-  }
+    if (seedPalette[i].bgCycleMode > PE_INVALID && DENUM(seedPalette[i].bgCycleMode)) {
+      bgOutput[i][set] = ColorCycle(currentSet, DENUM(seedPalette[i].bgCycleMode),
+        &DINT(seedPalette[i].bgCyclePos), DINT(seedPalette[i].bgCycleRate));
+    } else if (seedPalette[i].bgColorA > PE_INVALID) {
+      bgOutput[i][set] = DCOLOR(seedPalette[i].bgColorA);
+    }
 
-  // Adjust the fg and bg alpha channels - Must be after the cycles.
-  DCOLOR(PE_FGC).a = (unsigned char) (DFLOAT(PE_FGALPHA) * 255.0);
-  DCOLOR(PE_BGC).a = (unsigned char) (DFLOAT(PE_BGALPHA) * 255.0);
+    // Apply the alphas.
+    if (seedPalette[i].fgAlpha > PE_INVALID)
+      fgOutput[i][set].a = (unsigned char) (DFLOAT(seedPalette[i].fgAlpha) * 255.0);
+    if (seedPalette[i].bgAlpha > PE_INVALID)
+      bgOutput[i][set].a = (unsigned char) (DFLOAT(seedPalette[i].bgAlpha) * 255.0);
+  }
 
   // Slap an image down on the display (every frame).
   if (DBOOL(PE_POSTIMAGE)) {
@@ -921,10 +1009,10 @@ void ProcessModes(int set) {
     DFLOAT(PE_IMAGEANGLE) += DFLOAT(PE_IMAGEINC);
   }
 
-  // Image one-shot - We'll use the foreground alpha instead of image alpha.
+  // Image one-shot
   if (DBOOL(PE_IMAGEALL)) {
     DrawImage(imageSeed[currentSet], DFLOAT(PE_IMAGEANGLE), DFLOAT(PE_IMAGEXOFFSET), DFLOAT(PE_IMAGEYOFFSET),
-      DFLOAT(PE_IMAGEEXP), DBOOL(PE_IMAGEALIAS), DBUFFER(PE_FRAMEBUFFER), DFLOAT(PE_FGALPHA));
+      DFLOAT(PE_IMAGEEXP), DBOOL(PE_IMAGEALIAS), DBUFFER(PE_FRAMEBUFFER), DFLOAT(PE_IMAGEALPHA));
     DBOOL(PE_IMAGEALL) = NO;
   }
 
@@ -971,13 +1059,13 @@ void ProcessModes(int set) {
 
   // Bam!  Draw some horizontal bars.
   if (DBOOL(PE_HBARS)) {
-    HorizontalBars(DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
+    HorizontalBars(fgOutput[A_HBARS][set], bgOutput[A_HBARS][set], DBUFFER(PE_FRAMEBUFFER));
     DBOOL(PE_HBARS) = NO;
   }
 
   // Bam! Vertical bars.
   if (DBOOL(PE_VBARS)) {
-    VerticalBars(DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
+    VerticalBars(fgOutput[A_VBARS][set], bgOutput[A_VBARS][set], DBUFFER(PE_FRAMEBUFFER));
     DBOOL(PE_VBARS) = NO;
   }
 
@@ -987,8 +1075,8 @@ void ProcessModes(int set) {
   }
 
   // Random dots.  Most useful seed ever.
-  if (DBOOL(PE_RANDOMDOT)) {
-    RandomDots(DCOLOR(PE_FGC), DINT(PE_RANDOMDOTCOEF), DBUFFER(PE_FRAMEBUFFER));
+  if (DBOOL(PE_RDOT)) {
+    RandomDots(fgOutput[A_RDOT][set], DINT(PE_RDOTCOEF), DBUFFER(PE_FRAMEBUFFER));
   }
 
   // Snail seed.
@@ -1000,11 +1088,11 @@ void ProcessModes(int set) {
   }
 
   // Fast snail seed.
-  if (DBOOL(PE_FASTSNAIL)) {
-    FastSnailSeed(currentSet, DINT(PE_FASTSNAILP));
-    DINT(PE_FASTSNAILP)++;
+  if (DBOOL(PE_FSNAIL)) {
+    FastSnailSeed(currentSet, DINT(PE_FSNAILP));
+    DINT(PE_FSNAILP)++;
   } else {
-    DINT(PE_FASTSNAILP) = 0;
+    DINT(PE_FSNAILP) = 0;
   }
 
   // Fader
@@ -1057,15 +1145,15 @@ void ProcessModes(int set) {
   }
 
   // Seed the entire array with the foreground color.
-  if (DBOOL(PE_FGCOLORALL)) {
-    ColorAll(DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
-    DBOOL(PE_FGCOLORALL) = NO;
+  if (DBOOL(PE_CAA)) {
+    ColorAll(fgOutput[A_COLORALLA][set], DBUFFER(PE_FRAMEBUFFER));
+    DBOOL(PE_CAA) = NO;
   }
 
   // Clear screen.
-  if (DBOOL(PE_BGCOLORALL)) {
-    ColorAll(DCOLOR(PE_BGC), DBUFFER(PE_FRAMEBUFFER));
-    DBOOL(PE_BGCOLORALL) = NO;
+  if (DBOOL(PE_CAB)) {
+    ColorAll(fgOutput[A_COLORALLB][set], DBUFFER(PE_FRAMEBUFFER));
+    DBOOL(PE_CAB) = NO;
   }
 }
 
@@ -1115,6 +1203,7 @@ void SnailSeed(int set, int position) {
   int tp = 0;
   int dir = 0;
   int xh,xl,yh,yl;
+  color_t color = fgOutput[A_SMALLSNAIL][set];
   xh = TENSOR_WIDTH;
   xl = 0;
   yh = TENSOR_HEIGHT;
@@ -1122,7 +1211,7 @@ void SnailSeed(int set, int position) {
   for (i = 0; i < TENSOR_HEIGHT * TENSOR_WIDTH; i++) {
     if (position == tp) {
       //~ printf("tp: %i, (%i, %i)\n", tp, x, y);
-      SetPixelA(x, y, DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
+      SetPixelA(x, y, color, DBUFFER(PE_FRAMEBUFFER));
       break;
     }
     tp++;
@@ -1171,6 +1260,7 @@ void FastSnailSeed(int set, int position) {
   int tp = 0;
   int dir = 0;
   int xh,xl,yh,yl;
+  color_t color = fgOutput[A_LARGESNAIL][set];
   xh = TENSOR_WIDTH - 1;
   xl = 0;
   yh = TENSOR_HEIGHT - 1;
@@ -1178,15 +1268,15 @@ void FastSnailSeed(int set, int position) {
   for (i = 0; i < TENSOR_HEIGHT * TENSOR_WIDTH; i++) {
     if (position == tp) {
       //~ printf("tp: %i, (%i, %i)\n", tp, x, y);
-      SetPixelA(x, y, DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
-      SetPixelA(x, y + 1, DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
-      SetPixelA(x + 1, y + 1, DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
-      SetPixelA(x + 1, y, DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
+      SetPixelA(x, y, color, DBUFFER(PE_FRAMEBUFFER));
+      SetPixelA(x, y + 1, color, DBUFFER(PE_FRAMEBUFFER));
+      SetPixelA(x + 1, y + 1, color, DBUFFER(PE_FRAMEBUFFER));
+      SetPixelA(x + 1, y, color, DBUFFER(PE_FRAMEBUFFER));
       break;
     }
     tp++;
     if (tp >= TENSOR_HEIGHT * TENSOR_WIDTH / 4 + 5) {
-      DBOOL(PE_FASTSNAIL) = NO;
+      DBOOL(PE_FSNAIL) = NO;
       break;
     }
     switch(dir) {
@@ -1247,6 +1337,7 @@ void CrossBars(int set) {
   static cbars_t cbars[PATTERN_SET_COUNT][CBARSMAX];
   static bool_t initial = YES;
   int i, j;
+  color_t color = fgOutput[A_CROSSBARS][set];
 
   // Set up the initial structures
   if (initial) {
@@ -1304,7 +1395,7 @@ void CrossBars(int set) {
   // Process the array.
   for (i = 0; i < CBARSMAX; i++) {
     if (cbars[set][i].inProgress) {
-      SetPixelA(cbars[set][i].x, cbars[set][i].y, DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
+      SetPixelA(cbars[set][i].x, cbars[set][i].y, color, DBUFFER(PE_FRAMEBUFFER));
       switch(cbars[set][i].orient) {
         case DIR_UP:
           cbars[set][i].y--;
@@ -1374,8 +1465,11 @@ bool_t HandleConfirmation(SDL_Keycode key, unsigned char *selected) {
 // Key press processing for enumeration selection boxes.
 bool_t HandleEnumSelect(SDL_Keycode key, int set, int item, int *selected) {
   bool_t selectionDismissed = YES;
+  int boxCount;
   int source = displayCommand[item].dataSource;
-  int boxCount = enumerations[patternElements[source].etype].size;
+  if (source <= PE_INVALID) source = GetSelectElement(set, source);
+  boxCount = enumerations[patternElements[source].etype].size;
+
 
   switch (key) {
     case SDLK_ESCAPE:
@@ -1533,80 +1627,93 @@ bool_t HandleKey(int set, SDL_Keycode key, SDL_Keymod mod) {
 // Executes a user command - toggles flags, adjusts parameters, etc.
 bool_t HandleCommand(int set, command_e command, int selection) {
   int i;
+  patternElement_e element;
+
+  element = displayCommand[selection].dataSource;
+  if (element < PE_INVALID) element = GetSelectElement(set, element);
+
+  // To deal with disabled color selector elements:
+  if (element == PE_INVALID) {
+    switch(command) {
+      case COM_RST_FLOAT: case COM_INC_FLOAT: case COM_DEC_FLOAT: case COM_BOOL_FLIP:
+      case COM_BOOL_RST: case COM_ENUM_RST: case COM_ENUM_INC: case COM_ENUM_DEC:
+      case COM_INT_RST: case COM_INT_INC: case COM_INT_DEC: case COM_LINT_DEC:
+      case COM_LINT_INC:
+        return NO;
+      default:
+        break;
+    }
+  }
 
   switch(command) {
 
     // First the common cases - Uncomplicated increments, decrements, and resets.
-    case COM_RST_FLOAT:
-      SFLOAT(set, displayCommand[selection].dataSource) = patternElements[displayCommand[selection].dataSource].initial.f; break;
+    case COM_RST_FLOAT: SFLOAT(set, element) = patternElements[element].initial.f; break;
     case COM_INC_FLOAT:
-      SFLOAT(set, displayCommand[selection].dataSource) += SFLOAT(set, PE_FLOATINC);
-      if (SFLOAT(set, displayCommand[selection].dataSource) > patternElements[displayCommand[selection].dataSource].max.f)
-        SFLOAT(set, displayCommand[selection].dataSource) = patternElements[displayCommand[selection].dataSource].max.f;
+      SFLOAT(set, element) += SFLOAT(set, PE_FLOATINC);
+      if (SFLOAT(set, element) > patternElements[element].max.f)
+        SFLOAT(set, element) = patternElements[element].max.f;
       break;
     case COM_DEC_FLOAT:
-      SFLOAT(set, displayCommand[selection].dataSource) -= SFLOAT(set, PE_FLOATINC);
-      if (SFLOAT(set, displayCommand[selection].dataSource) < patternElements[displayCommand[selection].dataSource].min.f)
-        SFLOAT(set, displayCommand[selection].dataSource) = patternElements[displayCommand[selection].dataSource].min.f;
+      SFLOAT(set, element) -= SFLOAT(set, PE_FLOATINC);
+      if (SFLOAT(set, element) < patternElements[element].min.f)
+        SFLOAT(set, element) = patternElements[element].min.f;
       break;
-    case COM_BOOL_FLIP: SBOOL(set, displayCommand[selection].dataSource) = !SBOOL(set, displayCommand[selection].dataSource); break;
-    case COM_ENUM_RST: SENUM(set, displayCommand[selection].dataSource) = patternElements[displayCommand[selection].dataSource].initial.e; break;
+    case COM_BOOL_FLIP: SBOOL(set, element) = !SBOOL(set, element); break;
+    case COM_BOOL_RST: SBOOL(set, element) = patternElements[element].initial.b; break;
+    case COM_ENUM_RST: SENUM(set, element) = patternElements[element].initial.e; break;
     case COM_ENUM_INC:
-      SENUM(set, displayCommand[selection].dataSource) =
-        (SENUM(set, displayCommand[selection].dataSource) + 1) %
-        enumerations[patternElements[displayCommand[selection].dataSource].etype].size;
+      SENUM(set, element) = (SENUM(set, element) + 1) % enumerations[patternElements[element].etype].size;
       break;
     case COM_ENUM_DEC:
-      SENUM(set, displayCommand[selection].dataSource) =
-        (SENUM(set, displayCommand[selection].dataSource) - 1);
-      if (SENUM(set, displayCommand[selection].dataSource) < 0)
-        SENUM(set, displayCommand[selection].dataSource) =
-          enumerations[patternElements[displayCommand[selection].dataSource].etype].size - 1;
+      SENUM(set, element) = (SENUM(set, element) - 1);
+      if (SENUM(set, element) < 0)
+        SENUM(set, element) = enumerations[patternElements[element].etype].size - 1;
       break;
-    case COM_INT_RST: SINT(set, displayCommand[selection].dataSource) = patternElements[displayCommand[selection].dataSource].initial.i;  break;
+    case COM_INT_RST: SINT(set, element) = patternElements[element].initial.i;  break;
     case COM_INT_INC:
-      SINT(set, displayCommand[selection].dataSource)++;
-      if (SINT(set, displayCommand[selection].dataSource) > patternElements[displayCommand[selection].dataSource].max.i)
-        SINT(set, displayCommand[selection].dataSource) = patternElements[displayCommand[selection].dataSource].max.i;
+      SINT(set, element)++;
+      if (SINT(set, element) > patternElements[element].max.i)
+        SINT(set, element) = patternElements[element].max.i;
       break;
     case COM_INT_DEC:
-      SINT(set, displayCommand[selection].dataSource)--;
-      if (SINT(set, displayCommand[selection].dataSource) < patternElements[displayCommand[selection].dataSource].min.i)
-        SINT(set, displayCommand[selection].dataSource) = patternElements[displayCommand[selection].dataSource].min.i;
+      SINT(set, element)--;
+      if (SINT(set, element) < patternElements[element].min.i)
+        SINT(set, element) = patternElements[element].min.i;
       break;
     // The lints are for the randomness vars.  Makes it easier to get through them.
     case COM_LINT_DEC:
-      SINT(set, displayCommand[selection].dataSource) -= max(1, SINT(set, displayCommand[selection].dataSource) / 50);
-      if (SINT(set, displayCommand[selection].dataSource) < patternElements[displayCommand[selection].dataSource].min.i)
-        SINT(set, displayCommand[selection].dataSource) = patternElements[displayCommand[selection].dataSource].min.i;
+      SINT(set, element) -= max(1, SINT(set, element) / 50);
+      if (SINT(set, element) < patternElements[element].min.i)
+        SINT(set, element) = patternElements[element].min.i;
       break;
     case COM_LINT_INC:
-      SINT(set, displayCommand[selection].dataSource) += max(1, SINT(set, displayCommand[selection].dataSource) / 50);
-      if (SINT(set, displayCommand[selection].dataSource) > patternElements[displayCommand[selection].dataSource].max.i)
-        SINT(set, displayCommand[selection].dataSource) = patternElements[displayCommand[selection].dataSource].max.i;
+      SINT(set, element) += max(1, SINT(set, element) / 50);
+      if (SINT(set, element) > patternElements[element].max.i)
+        SINT(set, element) = patternElements[element].max.i;
       break;
 
     case COM_FG_WHEEL_UP:
-      SENUM(set, PE_FGCYCLE) = CM_NONE;
-      SENUM(set, PE_FGE) = (SENUM(set, PE_FGE) + 1) % CE_COUNT;
-      SCOLOR(set, PE_FGC) = namedColors[SENUM(set, PE_FGE)].color;
+      //~ SENUM(set, PE_FGCYCLE) = CM_NONE;
+      //~ SENUM(set, PE_FGE) = (SENUM(set, PE_FGE) + 1) % CE_COUNT;
+      //~ SCOLOR(set, PE_FGC) = namedColors[SENUM(set, PE_FGE)].color;
       break;
     case COM_FG_WHEEL_DOWN:
-      SENUM(set, PE_FGCYCLE) = CM_NONE;
-      SENUM(set, PE_FGE)--;
-      if (SENUM(set, PE_FGE) < CE_RED) SENUM(set, PE_FGE) = CE_COUNT - 1;
-      SCOLOR(set, PE_FGC) = namedColors[SENUM(set, PE_FGE)].color;
+      //~ SENUM(set, PE_FGCYCLE) = CM_NONE;
+      //~ SENUM(set, PE_FGE)--;
+      //~ if (SENUM(set, PE_FGE) < CE_RED) SENUM(set, PE_FGE) = CE_COUNT - 1;
+      //~ SCOLOR(set, PE_FGC) = namedColors[SENUM(set, PE_FGE)].color;
       break;
     case COM_BG_WHEEL_UP:
-      SENUM(set, PE_BGCYCLE) = CM_NONE;
-      SENUM(set, PE_BGE) = (SENUM(set, PE_BGE) + 1) % CE_COUNT;
-      SCOLOR(set, PE_BGC) = namedColors[SENUM(set, PE_BGE)].color;
+      //~ SENUM(set, PE_BGCYCLE) = CM_NONE;
+      //~ SENUM(set, PE_BGE) = (SENUM(set, PE_BGE) + 1) % CE_COUNT;
+      //~ SCOLOR(set, PE_BGC) = namedColors[SENUM(set, PE_BGE)].color;
       break;
     case COM_BG_WHEEL_DOWN:
-      SENUM(set, PE_BGCYCLE) = CM_NONE;
-      SENUM(set, PE_BGE)--;
-      if (SENUM(set, PE_BGE) < CE_RED) SENUM(set, PE_BGE) = CE_COUNT - 1;
-      SCOLOR(set, PE_BGC) = namedColors[SENUM(set, PE_BGE)].color;
+      //~ SENUM(set, PE_BGCYCLE) = CM_NONE;
+      //~ SENUM(set, PE_BGE)--;
+      //~ if (SENUM(set, PE_BGE) < CE_RED) SENUM(set, PE_BGE) = CE_COUNT - 1;
+      //~ SCOLOR(set, PE_BGC) = namedColors[SENUM(set, PE_BGE)].color;
       break;
     case COM_BLEND_RST: alternateBlend = 0; break;
     case COM_BLEND_INC:
@@ -1627,45 +1734,47 @@ bool_t HandleCommand(int set, command_e command, int selection) {
       if (alternateBlendRate < 0.0) alternateBlendRate = 0.0;
       break;
     case COM_BLENDSWITCH: autoBlend = !autoBlend; break;
+    case COM_BLENDSWITCH_RST: autoBlend = NO; break;
     case COM_EXCHANGE: i = currentSet; currentSet = alternateSet; alternateSet = i; break;
     case COM_OPERATE: displaySet = (displaySet + 1) % OO_COUNT; break;
+    case COM_OPERATE_RST: displaySet = OO_CURRENT; break;
     case COM_ALTERNATE_INC: alternateSet = (alternateSet + 1) % PATTERN_SET_COUNT; break;
     case COM_ALTERNATE_DEC: alternateSet--; if (alternateSet < 0) alternateSet = PATTERN_SET_COUNT - 1; break;
     case COM_LIVE_INC: currentSet = (currentSet + 1) % PATTERN_SET_COUNT; break;
     case COM_LIVE_DEC: currentSet--; if (currentSet < 0) currentSet = PATTERN_SET_COUNT - 1; break;
     case COM_FGCYCLE_RST:
-      SENUM(set, PE_FGCYCLE) = patternElements[PE_FGCYCLE].initial.e;
-      SCOLOR(set, PE_FGC) = namedColors[SENUM(set, PE_FGE)].color;
+      //~ SENUM(set, PE_FGCYCLE) = patternElements[PE_FGCYCLE].initial.e;
+      //~ SCOLOR(set, PE_FGC) = namedColors[SENUM(set, PE_FGE)].color;
       break;
     case COM_BGCYCLE_RST:
-      SENUM(set, PE_BGCYCLE) = patternElements[PE_BGCYCLE].initial.e;
-      SCOLOR(set, PE_BGC) = namedColors[SENUM(set, PE_BGE)].color;
+      //~ SENUM(set, PE_BGCYCLE) = patternElements[PE_BGCYCLE].initial.e;
+      //~ SCOLOR(set, PE_BGC) = namedColors[SENUM(set, PE_BGE)].color;
       break;
     case COM_FGCYCLE_UP:
-      SENUM(set, PE_FGCYCLE) = (SENUM(set, PE_FGCYCLE) + 1) % CM_COUNT;
-      if (SENUM(set, PE_FGCYCLE) == CM_NONE) {
-        SCOLOR(set, PE_FGC) = namedColors[SENUM(set, PE_FGE)].color;
-      }
+      //~ SENUM(set, PE_FGCYCLE) = (SENUM(set, PE_FGCYCLE) + 1) % CM_COUNT;
+      //~ if (SENUM(set, PE_FGCYCLE) == CM_NONE) {
+        //~ SCOLOR(set, PE_FGC) = namedColors[SENUM(set, PE_FGE)].color;
+      //~ }
       break;
     case COM_BGCYCLE_UP:
-      SENUM(set, PE_BGCYCLE) = (SENUM(set, PE_BGCYCLE) + 1) % CM_COUNT;
-      if (SENUM(set, PE_BGCYCLE) == CM_NONE) {
-        SCOLOR(set, PE_BGC) = namedColors[SENUM(set, PE_BGE)].color;
-      }
+      //~ SENUM(set, PE_BGCYCLE) = (SENUM(set, PE_BGCYCLE) + 1) % CM_COUNT;
+      //~ if (SENUM(set, PE_BGCYCLE) == CM_NONE) {
+        //~ SCOLOR(set, PE_BGC) = namedColors[SENUM(set, PE_BGE)].color;
+      //~ }
       break;
     case COM_FGCYCLE_DOWN:
-      SENUM(set, PE_FGCYCLE)--;
-      if (SENUM(set, PE_FGCYCLE) < 0) SENUM(set, PE_FGCYCLE) = CM_COUNT - 1;
-      if (SENUM(set, PE_FGCYCLE) == CM_NONE) {
-        SCOLOR(set, PE_FGC) = namedColors[SENUM(set, PE_FGE)].color;
-      }
+      //~ SENUM(set, PE_FGCYCLE)--;
+      //~ if (SENUM(set, PE_FGCYCLE) < 0) SENUM(set, PE_FGCYCLE) = CM_COUNT - 1;
+      //~ if (SENUM(set, PE_FGCYCLE) == CM_NONE) {
+        //~ SCOLOR(set, PE_FGC) = namedColors[SENUM(set, PE_FGE)].color;
+      //~ }
       break;
     case COM_BGCYCLE_DOWN:
-      SENUM(set, PE_BGCYCLE)--;
-      if (SENUM(set, PE_BGCYCLE) < 0) SENUM(set, PE_BGCYCLE) = CM_COUNT - 1;
-      if (SENUM(set, PE_BGCYCLE) == CM_NONE) {
-        SCOLOR(set, PE_BGC) = namedColors[SENUM(set, PE_BGE)].color;
-      }
+      //~ SENUM(set, PE_BGCYCLE)--;
+      //~ if (SENUM(set, PE_BGCYCLE) < 0) SENUM(set, PE_BGCYCLE) = CM_COUNT - 1;
+      //~ if (SENUM(set, PE_BGCYCLE) == CM_NONE) {
+        //~ SCOLOR(set, PE_BGC) = namedColors[SENUM(set, PE_BGE)].color;
+      //~ }
       break;
     case COM_CYCLESET:
       cyclePatternSets = !cyclePatternSets;
@@ -1684,6 +1793,7 @@ bool_t HandleCommand(int set, command_e command, int selection) {
       SENUM(set, PE_SHIFTYELLOW) = SM_HOLD;
       SENUM(set, PE_SHIFTRED) = SM_HOLD;
       SENUM(set, PE_CROSSBAR) = CB_NONE;
+      SINT(set, PE_BOUNCER) = 0;
       cyclePatternSets = NO;
       break;
     case COM_TEXTRESET: SINT(set, PE_PIXELINDEX) = INVALID; break;
@@ -1694,22 +1804,22 @@ bool_t HandleCommand(int set, command_e command, int selection) {
       DrawPreviewBorder(PREVIEW_ALT_POS_X, PREVIEW_ALT_POS_Y, tensorWidth, tensorHeight, displaySet == OO_ALTERNATE);
       break;
     case COM_FG_DEC:
-      SENUM(set, PE_FGE)--;
-      if (SENUM(set, PE_FGE) < CE_RED) SENUM(set, PE_FGE) = CE_COUNT - 1;
-      SCOLOR(set, PE_FGC) = namedColors[SENUM(set, PE_FGE)].color;
+      //~ SENUM(set, PE_FGE)--;
+      //~ if (SENUM(set, PE_FGE) < CE_RED) SENUM(set, PE_FGE) = CE_COUNT - 1;
+      //~ SCOLOR(set, PE_FGC) = namedColors[SENUM(set, PE_FGE)].color;
       break;
     case COM_FG_INC:
-      SENUM(set, PE_FGE) = (SENUM(set, PE_FGE) + 1) % CE_COUNT;
-      SCOLOR(set, PE_FGC) = namedColors[SENUM(set, PE_FGE)].color;
+      //~ SENUM(set, PE_FGE) = (SENUM(set, PE_FGE) + 1) % CE_COUNT;
+      //~ SCOLOR(set, PE_FGC) = namedColors[SENUM(set, PE_FGE)].color;
       break;
     case COM_BG_DEC:
-      SENUM(set, PE_BGE)--;
-      if (SENUM(set, PE_BGE) < 0) SENUM(set, PE_BGE) = CE_COUNT - 1;
-      SCOLOR(set, PE_BGC) = namedColors[SENUM(set, PE_BGE)].color;
+      //~ SENUM(set, PE_BGE)--;
+      //~ if (SENUM(set, PE_BGE) < 0) SENUM(set, PE_BGE) = CE_COUNT - 1;
+      //~ SCOLOR(set, PE_BGC) = namedColors[SENUM(set, PE_BGE)].color;
       break;
     case COM_BG_INC:
-      SENUM(set, PE_BGE) = (SENUM(set, PE_BGE) + 1) % CE_COUNT;
-      SCOLOR(set, PE_BGC) = namedColors[SENUM(set, PE_BGE)].color;
+      //~ SENUM(set, PE_BGE) = (SENUM(set, PE_BGE) + 1) % CE_COUNT;
+      //~ SCOLOR(set, PE_BGC) = namedColors[SENUM(set, PE_BGE)].color;
       break;
     case COM_LOADSET0: SwitchToSet(0); break;
     case COM_LOADSET1: SwitchToSet(1); break;
@@ -1757,6 +1867,13 @@ bool_t HandleCommand(int set, command_e command, int selection) {
         SINT(set, PE_TEXTOFFSET) %= tensorHeight;
       } else {
         SINT(set, PE_TEXTOFFSET) %= tensorWidth;
+      }
+      break;
+    case COM_TEXTO_RST:
+      if ((SENUM(set, PE_SCROLLDIR) == DIR_LEFT) || (SENUM(set, PE_SCROLLDIR) == DIR_RIGHT)) {
+        SINT(set, PE_TEXTOFFSET) = tensorHeight / 2 - FONT_HEIGHT / 2;
+      } else {
+        SINT(set, PE_TEXTOFFSET) = tensorWidth / 2 - FONT_HEIGHT / 2;
       }
       break;
     case COM_SCROLL_UPC:
@@ -2453,7 +2570,8 @@ void WriteSlice(int set) {
   unsigned char pixelOn;
   unsigned char textDirection;
   static unsigned char textStaggerFlag[TEXT_BUFFER_SIZE] = "a";
-  color_t bgColor;
+  color_t fgColor = fgOutput[A_TEXT][set];
+  color_t bgColor = bgOutput[A_TEXT][set];
 
   // Initialize textStaggerFlag, if necessary.  This is used for 9 row stagger,
   // which is meant for an 8 pixel font height on a 9 pixel high display.
@@ -2462,7 +2580,6 @@ void WriteSlice(int set) {
       textStaggerFlag[i] = rand() % 2;
     }
   }
-
 
   // Figure out which row or column to place the seed slice into depending on direction.
   horizontal = YES;
@@ -2504,20 +2621,11 @@ void WriteSlice(int set) {
   textDirection = DENUM(PE_SCROLLDIR);
   if (DBOOL(PE_FONTDIR) == BACKWARDS) {
     switch (textDirection) {
-      case DIR_LEFT:
-        textDirection = DIR_RIGHT;
-        break;
-      case DIR_RIGHT:
-        textDirection = DIR_LEFT;
-        break;
-      case DIR_DOWN:
-        textDirection = DIR_UP;
-        break;
-      case DIR_UP:
-        textDirection = DIR_DOWN;
-        break;
-      default:
-        break;
+      case DIR_LEFT: textDirection = DIR_RIGHT; break;
+      case DIR_RIGHT: textDirection = DIR_LEFT; break;
+      case DIR_DOWN: textDirection = DIR_UP; break;
+      case DIR_UP: textDirection = DIR_DOWN; break;
+      default: break;
     }
   }
   if (DENUM(PE_SCROLLDIRLAST) != DENUM(PE_SCROLLDIR)) {
@@ -2591,10 +2699,10 @@ void WriteSlice(int set) {
       if (!textStaggerFlag[bufferIndex]) sliceIndex += 8;
       if (horizontal) {
         sliceIndex = sliceIndex % tensorHeight;
-        SetPixelA(sliceColOrRow, sliceIndex, DCOLOR(PE_BGC), DBUFFER(PE_FRAMEBUFFER));
+        SetPixelA(sliceColOrRow, sliceIndex, bgColor, DBUFFER(PE_FRAMEBUFFER));
       } else {
         sliceIndex = sliceIndex % tensorWidth;
-        SetPixelA(sliceIndex, sliceColOrRow, DCOLOR(PE_BGC), DBUFFER(PE_FRAMEBUFFER));
+        SetPixelA(sliceIndex, sliceColOrRow, bgColor, DBUFFER(PE_FRAMEBUFFER));
       }
       useRand = textStaggerFlag[bufferIndex];
       break;
@@ -2605,19 +2713,19 @@ void WriteSlice(int set) {
       if (horizontal) {
         if (sliceIndex < 0) sliceIndex = tensorHeight - 1;
         sliceIndex %= tensorHeight;
-        SetPixelA(sliceColOrRow, sliceIndex, DCOLOR(PE_BGC), DBUFFER(PE_FRAMEBUFFER));
+        SetPixelA(sliceColOrRow, sliceIndex, bgColor, DBUFFER(PE_FRAMEBUFFER));
       } else {
         if (sliceIndex < 0) sliceIndex = tensorWidth - 1;
         sliceIndex %= tensorWidth;
-        SetPixelA(sliceIndex, sliceColOrRow, DCOLOR(PE_BGC), DBUFFER(PE_FRAMEBUFFER));
+        SetPixelA(sliceIndex, sliceColOrRow, bgColor, DBUFFER(PE_FRAMEBUFFER));
       }
       sliceIndex = DINT(PE_TEXTOFFSET) + 8;
       if (horizontal) {
         sliceIndex %= tensorHeight;
-        SetPixelA(sliceColOrRow, sliceIndex, DCOLOR(PE_BGC), DBUFFER(PE_FRAMEBUFFER));
+        SetPixelA(sliceColOrRow, sliceIndex, bgColor, DBUFFER(PE_FRAMEBUFFER));
       } else {
         sliceIndex %= tensorWidth;
-        SetPixelA(sliceIndex, sliceColOrRow, DCOLOR(PE_BGC), DBUFFER(PE_FRAMEBUFFER));
+        SetPixelA(sliceIndex, sliceColOrRow, bgColor, DBUFFER(PE_FRAMEBUFFER));
       }
       break;
 
@@ -2625,11 +2733,11 @@ void WriteSlice(int set) {
       // No stagger, but background on the whole image.
       if (horizontal) {
         for (i = 0; i < tensorHeight; i++) {
-          SetPixelA(sliceColOrRow, i, DCOLOR(PE_BGC), DBUFFER(PE_FRAMEBUFFER));
+          SetPixelA(sliceColOrRow, i, bgColor, DBUFFER(PE_FRAMEBUFFER));
         }
       } else {
         for (i = 0; i < tensorWidth; i++) {
-          SetPixelA(i, sliceColOrRow, DCOLOR(PE_BGC), DBUFFER(PE_FRAMEBUFFER));
+          SetPixelA(i, sliceColOrRow, bgColor, DBUFFER(PE_FRAMEBUFFER));
         }
       }
       break;
@@ -2642,7 +2750,6 @@ void WriteSlice(int set) {
   }
 
   // Will the text itself have a background?  If not, set the bg alpha channel.
-  bgColor = DCOLOR(PE_BGC);
   if (DENUM(PE_TEXTMODE) == TS_NOBG) bgColor.a = 0;
   if (DENUM(PE_TEXTMODE) == TS_BLACK) bgColor = cBlack;
 
@@ -2658,32 +2765,34 @@ void WriteSlice(int set) {
     pixelOn = myfont[fontPixelIndex] & charColMasks[charCol];
     if (horizontal) {
       sliceIndex = sliceIndex % tensorHeight;
-      SetPixelA(sliceColOrRow, sliceIndex, pixelOn ? DCOLOR(PE_FGC) : bgColor, DBUFFER(PE_FRAMEBUFFER));
+      SetPixelA(sliceColOrRow, sliceIndex, pixelOn ? fgColor : bgColor, DBUFFER(PE_FRAMEBUFFER));
     } else {
       sliceIndex = sliceIndex % tensorWidth;
-      SetPixelA(sliceIndex, sliceColOrRow, pixelOn ? DCOLOR(PE_FGC) : bgColor, DBUFFER(PE_FRAMEBUFFER));
+      SetPixelA(sliceIndex, sliceColOrRow, pixelOn ? fgColor : bgColor, DBUFFER(PE_FRAMEBUFFER));
     }
   }
 
   return;
 }
 
-
-void HorizontalBars(color_t color, unsigned char *buffer) {
+// Draw bars across the display.
+void HorizontalBars(color_t fg, color_t bg, unsigned char *buffer) {
   int i, j;
   for (i = 0; i < tensorWidth; i++) {
-    for (j = 0; j < tensorHeight; j += 2) {
-      SetPixelA(i, j, color, buffer);
+    for (j = 0; j < tensorHeight; j++) {
+      if (j % 2) SetPixelA(i, j, bg, buffer);
+      else SetPixelA(i, j, fg, buffer);
     }
   }
 }
 
 
-void VerticalBars(color_t color, unsigned char *buffer) {
+void VerticalBars(color_t fg, color_t bg, unsigned char *buffer) {
   int i, j;
-  for (i = 0; i < tensorWidth; i+=2) {
+  for (i = 0; i < tensorWidth; i++) {
     for (j = 0; j < tensorHeight; j++) {
-      SetPixelA(i,j, color, buffer);
+      if (i % 2) SetPixelA(i,j, bg, buffer);
+      else SetPixelA(i,j, fg, buffer);
     }
   }
 }
@@ -2794,15 +2903,15 @@ color_t ColorCycle(int set, colorCycleModes_e cycleMode, int *cycleSaver, int cy
       inposo = *cycleSaver % 256;
       switch(inpos) {
         case 0: // FG - BG
-          colorTemp.r = ((255.0 - inposo) / 255) * namedColors[DENUM(PE_FGE)].color.r + ((inposo / 255.0) * namedColors[DENUM(PE_BGE)].color.r);
-          colorTemp.g = ((255.0 - inposo) / 255) * namedColors[DENUM(PE_FGE)].color.g + ((inposo / 255.0) * namedColors[DENUM(PE_BGE)].color.g);
-          colorTemp.b = ((255.0 - inposo) / 255) * namedColors[DENUM(PE_FGE)].color.b + ((inposo / 255.0) * namedColors[DENUM(PE_BGE)].color.b);
+          //~ colorTemp.r = ((255.0 - inposo) / 255) * namedColors[DENUM(PE_FGE)].color.r + ((inposo / 255.0) * namedColors[DENUM(PE_BGE)].color.r);
+          //~ colorTemp.g = ((255.0 - inposo) / 255) * namedColors[DENUM(PE_FGE)].color.g + ((inposo / 255.0) * namedColors[DENUM(PE_BGE)].color.g);
+          //~ colorTemp.b = ((255.0 - inposo) / 255) * namedColors[DENUM(PE_FGE)].color.b + ((inposo / 255.0) * namedColors[DENUM(PE_BGE)].color.b);
           break;
 
         case 1: // FG - BG
-          colorTemp.r = ((inposo / 255.0) * namedColors[DENUM(PE_FGE)].color.r) + ((255.0 - inposo) / 255) * namedColors[DENUM(PE_BGE)].color.r;
-          colorTemp.g = ((inposo / 255.0) * namedColors[DENUM(PE_FGE)].color.g) + ((255.0 - inposo) / 255) * namedColors[DENUM(PE_BGE)].color.g;
-          colorTemp.b = ((inposo / 255.0) * namedColors[DENUM(PE_FGE)].color.b) + ((255.0 - inposo) / 255) * namedColors[DENUM(PE_BGE)].color.b;
+          //~ colorTemp.r = ((inposo / 255.0) * namedColors[DENUM(PE_FGE)].color.r) + ((255.0 - inposo) / 255) * namedColors[DENUM(PE_BGE)].color.r;
+          //~ colorTemp.g = ((inposo / 255.0) * namedColors[DENUM(PE_FGE)].color.g) + ((255.0 - inposo) / 255) * namedColors[DENUM(PE_BGE)].color.g;
+          //~ colorTemp.b = ((inposo / 255.0) * namedColors[DENUM(PE_FGE)].color.b) + ((255.0 - inposo) / 255) * namedColors[DENUM(PE_BGE)].color.b;
 
         default:
           break;
@@ -2823,15 +2932,15 @@ color_t ColorCycle(int set, colorCycleModes_e cycleMode, int *cycleSaver, int cy
       //~ printf("1: %i, 2: %i, 3: %i, cyc: %i\n", inpos, inposn, inposo, *cycleSaver);
       switch(inpos) {
         case 0: // blk - FG
-          colorTemp.r = ((255.0 - inposo) / 255) * namedColors[DENUM(PE_BGE)].color.r + ((inposo / 255.0) * namedColors[paletteTer.palette[inposn]].color.r);
-          colorTemp.g = ((255.0 - inposo) / 255) * namedColors[DENUM(PE_BGE)].color.g + ((inposo / 255.0) * namedColors[paletteTer.palette[inposn]].color.g);
-          colorTemp.b = ((255.0 - inposo) / 255) * namedColors[DENUM(PE_BGE)].color.b + ((inposo / 255.0) * namedColors[paletteTer.palette[inposn]].color.b);
+          //~ colorTemp.r = ((255.0 - inposo) / 255) * namedColors[DENUM(PE_BGE)].color.r + ((inposo / 255.0) * namedColors[paletteTer.palette[inposn]].color.r);
+          //~ colorTemp.g = ((255.0 - inposo) / 255) * namedColors[DENUM(PE_BGE)].color.g + ((inposo / 255.0) * namedColors[paletteTer.palette[inposn]].color.g);
+          //~ colorTemp.b = ((255.0 - inposo) / 255) * namedColors[DENUM(PE_BGE)].color.b + ((inposo / 255.0) * namedColors[paletteTer.palette[inposn]].color.b);
           break;
 
         case 1: // FG - blk
-          colorTemp.r = ((inposo / 255.0) * namedColors[DENUM(PE_BGE)].color.r) + ((255.0 - inposo) / 255) * namedColors[paletteTer.palette[inposn]].color.r;
-          colorTemp.g = ((inposo / 255.0) * namedColors[DENUM(PE_BGE)].color.g) + ((255.0 - inposo) / 255) * namedColors[paletteTer.palette[inposn]].color.g;
-          colorTemp.b = ((inposo / 255.0) * namedColors[DENUM(PE_BGE)].color.b) + ((255.0 - inposo) / 255) * namedColors[paletteTer.palette[inposn]].color.b;
+          //~ colorTemp.r = ((inposo / 255.0) * namedColors[DENUM(PE_BGE)].color.r) + ((255.0 - inposo) / 255) * namedColors[paletteTer.palette[inposn]].color.r;
+          //~ colorTemp.g = ((inposo / 255.0) * namedColors[DENUM(PE_BGE)].color.g) + ((255.0 - inposo) / 255) * namedColors[paletteTer.palette[inposn]].color.g;
+          //~ colorTemp.b = ((inposo / 255.0) * namedColors[DENUM(PE_BGE)].color.b) + ((255.0 - inposo) / 255) * namedColors[paletteTer.palette[inposn]].color.b;
 
         default:
           break;
@@ -2991,16 +3100,17 @@ void CellFun(int set) {
   int currentSet = set; // Override global for D*
   int x, y;
   color_t pixelColor, oldColor;
-
+  color_t fgColor = fgOutput[A_CELL][set];
+  color_t bgColor = bgOutput[A_CELL][set];
   DINT(PE_CELLFUNCOUNT)++;
 
   for(x = 0 ; x < tensorWidth ; x++) {
     for(y = 0 ; y < tensorHeight ; y++) {
       oldColor = GetPixel(x, y, DBUFFER(PE_FRAMEBUFFER));
-      pixelColor.r = ((x + 1) * (y + 1)) + (oldColor.r / 2);
-      pixelColor.g = oldColor.g + pixelColor.r;
-      pixelColor.b = DINT(PE_CELLFUNCOUNT);
-      pixelColor.a = (unsigned char) (DFLOAT(PE_FGALPHA) * 255.0);
+      pixelColor.r = ((x + 1) * (y + 1)) + (oldColor.r / 2) * bgColor.g;
+      pixelColor.g = oldColor.g + pixelColor.r + fgColor.b;
+      pixelColor.b = DINT(PE_CELLFUNCOUNT) + fgColor.r;
+      pixelColor.a = (unsigned char) (DFLOAT(PE_CF_ALPHA) * 255.0);
       SetPixelA(x, y, pixelColor,  DBUFFER(PE_FRAMEBUFFER));
     }
   }
@@ -3336,37 +3446,38 @@ void LoadPatternSet(char key, int set) {
 void DrawSideBar(int set) {
   int currentSet = set; // Override global for D*
   int i;
+  color_t color = fgOutput[A_SIDEBAR][set];
 
   switch (DSENUM(PE_SCROLLDIR, dir_e)) {
     case DIR_LEFT:
       for (i = 0; i < tensorHeight; i++) {
         if (DBOOL(PE_MIRROR_V)) {
-          SetPixelA((tensorWidth - 1) / 2, i, DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
+          SetPixelA((tensorWidth - 1) / 2, i, color, DBUFFER(PE_FRAMEBUFFER));
         } else {
-          SetPixelA(tensorWidth - 1, i, DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
+          SetPixelA(tensorWidth - 1, i, color, DBUFFER(PE_FRAMEBUFFER));
         }
       }
       break;
 
     case DIR_RIGHT:
       for (i = 0; i < tensorHeight; i++) {
-        SetPixelA(0, i, DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
+        SetPixelA(0, i, color, DBUFFER(PE_FRAMEBUFFER));
       }
       break;
 
     case DIR_UP:
       for (i = 0; i < tensorWidth; i++) {
         if (DBOOL(PE_MIRROR_H)) {
-          SetPixelA(i, (tensorHeight - 1) / 2, DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
+          SetPixelA(i, (tensorHeight - 1) / 2, color, DBUFFER(PE_FRAMEBUFFER));
         } else {
-          SetPixelA(i, tensorHeight - 1, DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
+          SetPixelA(i, tensorHeight - 1, color, DBUFFER(PE_FRAMEBUFFER));
         }
       }
       break;
 
     case DIR_DOWN:
       for (i = 0; i < tensorWidth; i++) {
-        SetPixelA(i, 0, DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
+        SetPixelA(i, 0, color, DBUFFER(PE_FRAMEBUFFER));
       }
       break;
     default:
@@ -3380,6 +3491,7 @@ void DrawSidePulse(int set) {
   static int dir[PATTERN_SET_COUNT];
   static int initial = YES;
   int i;
+  color_t color = fgOutput[A_SIDEPULSE][set];
 
   if (initial) {
     initial = NO;
@@ -3392,7 +3504,7 @@ void DrawSidePulse(int set) {
   switch (DSENUM(PE_SCROLLDIR, dir_e)) {
     case DIR_LEFT:
       if (DBOOL(PE_MIRROR_V)) {
-        SetPixelA((tensorWidth - 1) / 2, pos[set], DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
+        SetPixelA((tensorWidth - 1) / 2, pos[set], color, DBUFFER(PE_FRAMEBUFFER));
         pos[set] += dir[set];
         if (DBOOL(PE_MIRROR_H)) {
           if (pos[set] >= (tensorHeight - 1) / 2) dir[set] = -1;
@@ -3400,7 +3512,7 @@ void DrawSidePulse(int set) {
           if (pos[set] >= (tensorHeight - 1) ) dir[set] = -1;
         }
       } else {
-        SetPixelA(tensorWidth - 1, pos[set], DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
+        SetPixelA(tensorWidth - 1, pos[set], color, DBUFFER(PE_FRAMEBUFFER));
         pos[set] += dir[set];
         if (DBOOL(PE_MIRROR_H)) {
           if (pos[set] >= (tensorHeight - 1) / 2) dir[set] = -1;
@@ -3412,7 +3524,7 @@ void DrawSidePulse(int set) {
       break;
 
     case DIR_RIGHT:
-        SetPixelA(0, pos[set], DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
+        SetPixelA(0, pos[set], color, DBUFFER(PE_FRAMEBUFFER));
         pos[set] += dir[set];
         if (DBOOL(PE_MIRROR_H)) {
           if (pos[set] >= (tensorHeight - 1) / 2) dir[set] = -1;
@@ -3424,7 +3536,7 @@ void DrawSidePulse(int set) {
 
     case DIR_UP:
       if (DBOOL(PE_MIRROR_H)) {
-        SetPixelA(pos[set], (tensorHeight - 1) / 2, DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
+        SetPixelA(pos[set], (tensorHeight - 1) / 2, color, DBUFFER(PE_FRAMEBUFFER));
         pos[set] += dir[set];
         if (DBOOL(PE_MIRROR_V)) {
           if (pos[set] >= (tensorWidth - 1) / 2) dir[set] = -1;
@@ -3432,7 +3544,7 @@ void DrawSidePulse(int set) {
           if (pos[set] >= tensorWidth - 1) dir[set] = -1;
         }
       } else {
-        SetPixelA(pos[set], tensorHeight - 1, DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
+        SetPixelA(pos[set], tensorHeight - 1, color, DBUFFER(PE_FRAMEBUFFER));
         pos[set] += dir[set];
         if (DBOOL(PE_MIRROR_V)) {
           if (pos[set] >= (tensorWidth - 1) / 2) dir[set] = -1;
@@ -3444,7 +3556,7 @@ void DrawSidePulse(int set) {
       break;
 
     case DIR_DOWN:
-      SetPixelA(pos[set], 0, DCOLOR(PE_FGC), DBUFFER(PE_FRAMEBUFFER));
+      SetPixelA(pos[set], 0, color, DBUFFER(PE_FRAMEBUFFER));
       pos[set] += dir[set];
       if (DBOOL(PE_MIRROR_V)) {
         if (pos[set] >= (tensorWidth - 1) / 2) dir[set] = -1;
@@ -3906,11 +4018,12 @@ void LoadIPMap(void) {
 
 // Edit a value on the display by type.
 inputMode_e EditValue(int set, int commandToEdit) {
-  //~ int currentSet = set; // Global override.
+  patternElement_e element;
 
-  //~ printf("Edit value\n");
-  if (displayCommand[commandToEdit].dataSource == PE_INVALID) return IM_NORMAL;
-  switch(patternElements[displayCommand[commandToEdit].dataSource].type) {
+  element = displayCommand[commandToEdit].dataSource;
+  if (element < PE_INVALID) element = GetSelectElement(set, element);
+  if (element <= PE_INVALID) return IM_NORMAL;
+  switch(patternElements[element].type) {
     case ET_INT:
       snprintf(statusText, sizeof(statusText), "Editing \"%s\". ESC to cancel.", displayCommand[commandToEdit].text);
       return IM_INT;
@@ -3920,6 +4033,9 @@ inputMode_e EditValue(int set, int commandToEdit) {
     case ET_ENUM:
       snprintf(statusText, sizeof(statusText), "Select \"%s\". ESC to cancel.", displayCommand[commandToEdit].text);
       return IM_ENUM;
+    case ET_COLOR:
+      snprintf(statusText, sizeof(statusText), "Select color \"%s\". ESC to cancel.", displayCommand[commandToEdit].text);
+      return IM_COLOR;
     default:
       return IM_NORMAL;
   }
@@ -4076,7 +4192,7 @@ int OverCommand(point_t mouse, int *lastHover) {
 
         // Yeah, so draw the new highlight.
         drawBox = box;
-        drawBox.w = GetPixelofColumn(displayCommand[i].col + 1) - drawBox.x;
+        //~ drawBox.w = GetPixelofColumn(displayCommand[i].col + 1) - drawBox.x;
         DrawSBox(drawBox, DISPLAY_COLOR_TEXTSBG_HL);
         CreateTextureCommand(&commandTexture, i, DISPLAY_COLOR_TEXTS_HL, DISPLAY_COLOR_TEXTSBG_HL);
         DrawDisplayTexture(commandTexture);
@@ -4085,7 +4201,7 @@ int OverCommand(point_t mouse, int *lastHover) {
         // And if it came off a different command, remove that highlight.
         if (*lastHover != INVALID) {
           drawBox = boxOld;
-          drawBox.w = GetPixelofColumn(displayCommand[*lastHover].col + 1) - drawBox.x;
+          //~ drawBox.w = GetPixelofColumn(displayCommand[*lastHover].col + 1) - drawBox.x;
           DrawSBox(drawBox, DISPLAY_COLOR_TEXTSBG);
           CreateTextureCommand(&commandTexture, *lastHover, DISPLAY_COLOR_TEXTS, DISPLAY_COLOR_TEXTSBG);
           DrawDisplayTexture(commandTexture);
@@ -4104,7 +4220,7 @@ int OverCommand(point_t mouse, int *lastHover) {
 
   // Not over a new command? May have to clear the old highlight anyway.
   if (*lastHover != INVALID) {
-    boxOld.w = GetPixelofColumn(displayCommand[*lastHover].col + 1) - boxOld.x;
+    //~ boxOld.w = GetPixelofColumn(displayCommand[*lastHover].col + 1) - boxOld.x;
     DrawSBox(boxOld, DISPLAY_COLOR_TEXTSBG);
     CreateTextureCommand(&commandTexture, *lastHover, DISPLAY_COLOR_TEXTS, DISPLAY_COLOR_TEXTSBG);
     DrawDisplayTexture(commandTexture);
@@ -4115,11 +4231,15 @@ int OverCommand(point_t mouse, int *lastHover) {
   return INVALID;
 }
 
-int OverBox(point_t mouse, int item, SDL_Rect ** targets, int *lastHover) {
+int OverBox(int set, point_t mouse, int item, SDL_Rect ** targets, int *lastHover) {
   int i;
   SDL_Rect box, boxOld;
   const SDL_Rect invalidBox = {0, 0, 0, 0};
-  int boxCount = enumerations[patternElements[displayCommand[item].dataSource].etype].size;
+  int boxCount;
+  patternElement_e element;
+  element = displayCommand[item].dataSource;
+  if (element < PE_INVALID) element = GetSelectElement(set, element);
+  boxCount = enumerations[patternElements[element].etype].size;
   const color_t fg = DISPLAY_COLOR_PARMS;
   const color_t bg = DISPLAY_COLOR_PARMSBG;
   const color_t fgh = DISPLAY_COLOR_TEXTS_HL;
@@ -4142,13 +4262,13 @@ int OverBox(point_t mouse, int item, SDL_Rect ** targets, int *lastHover) {
 
         // Yeah, so draw the new highlight.
         DrawOutlineBox(box, fgh, bgh);
-        snprintf(text, sizeof(text), "%s", enumerations[patternElements[displayCommand[item].dataSource].etype].texts[i]);
+        snprintf(text, sizeof(text), "%s", enumerations[patternElements[element].etype].texts[i]);
         DrawCenteredText(box, text, fgh, bgh);
 
         // And if it came off a different command, remove that highlight.
         if (*lastHover != INVALID) {
           DrawOutlineBox(boxOld, fg, bg);
-          snprintf(text, sizeof(text), "%s", enumerations[patternElements[displayCommand[item].dataSource].etype].texts[*lastHover]);
+          snprintf(text, sizeof(text), "%s", enumerations[patternElements[element].etype].texts[*lastHover]);
           DrawCenteredText(boxOld, text, fg, bg);
         }
 
@@ -4165,8 +4285,47 @@ int OverBox(point_t mouse, int item, SDL_Rect ** targets, int *lastHover) {
   // Not over a new command? May have to clear the old highlight anyway.
   if (*lastHover != INVALID) {
     DrawOutlineBox(boxOld, fg, bg);
-    snprintf(text, sizeof(text), "%s", enumerations[patternElements[displayCommand[item].dataSource].etype].texts[*lastHover]);
+    snprintf(text, sizeof(text), "%s", enumerations[patternElements[element].etype].texts[*lastHover]);
     DrawCenteredText(boxOld, text, fg, bg);
+    *lastHover = INVALID;
+  }
+
+  return INVALID;
+}
+
+int OverColorBox(int set, point_t mouse, int item, SDL_Rect ** targets, int *lastHover) {
+  int i;
+  SDL_Rect box, boxOld;
+  const SDL_Rect invalidBox = {0, 0, 0, 0};
+  int boxCount;
+  boxCount = CE_COUNT;
+
+  if (*lastHover != INVALID) boxOld = (*targets)[*lastHover];
+  else boxOld = invalidBox;
+
+  for (i = 0; i < boxCount; i++) {
+    // box is the rectangle encompassing the command text.  We could
+    // precompute these if timing were important.
+    box = (*targets)[i];
+
+    // Is it in the rectangle of command i?
+    if (IsInsideBox(mouse, box)) {
+
+      // Is it hovering over a command is wasn't hovering over before?
+      if ((!IsSameBox(box, boxOld)) || (*lastHover == INVALID)) {
+
+        // New lastHover.
+        *lastHover = i;
+      }  // End new hover if
+
+      // This was our intersection.  Break the loop.  Can't be hovering over
+      // multiple commands.
+      return i;
+    }  // End intersected if
+  } // End for for hover check.
+
+  // Not over a new command? May have to clear the old highlight anyway.
+  if (*lastHover != INVALID) {
     *lastHover = INVALID;
   }
 
@@ -4191,62 +4350,86 @@ void UpdateInfoDisplay(int set) {
   char bufferTemp2[BUFFER_BAR_LENGTH + 10];
   static char *oldBuffer = NULL;
   static int oldBufferSize = 0;
+  patternElement_e element;
+  patternElement_e element_o;
+  SDL_Rect tempBox;
+  color_t color;
 
   // Initialize the texture cache.  All this crap actually lowers my CPU usage
   // from 25% to 12%.  Half of CPU time was dedicated to regenerating the text
   // textures 40x per second.
   if (!infoCount) {
     for (i = 0; i < displayCommandCount; i++) {
-      if (displayCommand[i].dataSource != PE_INVALID) {
-        switch(patternElements[displayCommand[i].dataSource].type) {
+      element_o = element = displayCommand[i].dataSource;
+
+      // Adjust for selected elements
+      if (element < PE_INVALID) element = GetSelectElement(set, element);
+      if (element > PE_INVALID) {
+        switch(patternElements[element].type) {
           case ET_BOOL:
-            CreateTextureBoolean(&tempTarget, SBOOL(set, displayCommand[i].dataSource),
+            CreateTextureBoolean(&tempTarget, SBOOL(set, element),
               displayCommand[i].line, displayCommand[i].col + 1, PARAMETER_WIDTH);
             if (tempTarget.texture != NULL) {
               infoCount++;
               infoCache = realloc(infoCache, infoCount * sizeof(infoCache_t));
-              infoCache[infoCount - 1].cacheValue.b = SBOOL(set, displayCommand[i].dataSource);
+              infoCache[infoCount - 1].cacheValue.b = SBOOL(set, element);
               infoCache[infoCount - 1].infoText = tempTarget;
             }
             break;
 
           case ET_FLOAT:
-            CreateTextureFloat(&tempTarget, SFLOAT(set, displayCommand[i].dataSource),
+            CreateTextureFloat(&tempTarget, SFLOAT(set, element),
               displayCommand[i].line, displayCommand[i].col + 1, PARAMETER_WIDTH, PARAMETER_WIDTH / 2);
             if (tempTarget.texture != NULL) {
               infoCount++;
               infoCache = realloc(infoCache, infoCount * sizeof(infoCache_t));
-              infoCache[infoCount - 1].cacheValue.f = SFLOAT(set, displayCommand[i].dataSource);
+              infoCache[infoCount - 1].cacheValue.f = SFLOAT(set, element);
               infoCache[infoCount - 1].infoText = tempTarget;
             }
             break;
 
           case ET_INT:
-            CreateTextureInt(&tempTarget, SINT(set, displayCommand[i].dataSource),
+            CreateTextureInt(&tempTarget, SINT(set, element),
               displayCommand[i].line, displayCommand[i].col + 1, PARAMETER_WIDTH);
             if (tempTarget.texture != NULL) {
               infoCount++;
               infoCache = realloc(infoCache, infoCount * sizeof(infoCache_t));
-              infoCache[infoCount - 1].cacheValue.i = SINT(set, displayCommand[i].dataSource);
+              infoCache[infoCount - 1].cacheValue.i = SINT(set, element);
               infoCache[infoCount - 1].infoText = tempTarget;
             }
             break;
 
           case ET_ENUM:
             CreateTextureString(&tempTarget,
-              enumerations[patternElements[displayCommand[i].dataSource].etype].texts[SENUM(set, displayCommand[i].dataSource)],
+              enumerations[patternElements[element].etype].texts[SENUM(set, element)],
               displayCommand[i].line, displayCommand[i].col + 1, PARAMETER_WIDTH);
             if (tempTarget.texture != NULL) {
               infoCount++;
               infoCache = realloc(infoCache, infoCount * sizeof(infoCache_t));
-              infoCache[infoCount - 1].cacheValue.e = SENUM(set, displayCommand[i].dataSource);
+              infoCache[infoCount - 1].cacheValue.e = SENUM(set, element);
               infoCache[infoCount - 1].infoText = tempTarget;
             }
             break;
 
+          case ET_COLOR:
+            infoCount++;
+            break;
+
           default:
             // Lazy
-            fprintf(stderr, "No data display driver for this type of information (%i).\n", patternElements[displayCommand[i].dataSource].type);
+            //~ fprintf(stderr, "No data display driver for element %i, type %i.\n", element, patternElements[element].type);
+            break;
+        }
+      } else if (element_o < PE_INVALID) {
+        // This is a place holder because these things come into and go out of
+        // existance sometimes.  Ugh.
+        CreateTextureInt(&tempTarget, INT_MIN,
+          displayCommand[i].line, displayCommand[i].col + 1, PARAMETER_WIDTH);
+        if (tempTarget.texture != NULL) {
+          infoCount++;
+          infoCache = realloc(infoCache, infoCount * sizeof(infoCache_t));
+          infoCache[infoCount - 1].cacheValue.i = INT_MIN;
+          infoCache[infoCount - 1].infoText = tempTarget;
         }
       }
     }
@@ -4255,11 +4438,15 @@ void UpdateInfoDisplay(int set) {
   // Draw the textures representing the values, or get new textures if the
   // values have changed.
   for (i = 0; i < displayCommandCount; i++) {
-    if (displayCommand[i].dataSource != PE_INVALID) {
-      switch(patternElements[displayCommand[i].dataSource].type) {
+    element_o = element = displayCommand[i].dataSource;
+
+    // Adjust for color selected elements
+    if (element < PE_INVALID) element = GetSelectElement(set, element);
+    if (element > PE_INVALID) {
+      switch(patternElements[element].type) {
         case ET_BOOL:
-          if (infoCache[thisInfo].cacheValue.b != SBOOL(set, displayCommand[i].dataSource)) {
-            infoCache[thisInfo].cacheValue.b = SBOOL(set, displayCommand[i].dataSource);
+          if (infoCache[thisInfo].cacheValue.b != SBOOL(set, element)) {
+            infoCache[thisInfo].cacheValue.b = SBOOL(set, element);
             SDL_DestroyTexture(infoCache[thisInfo].infoText.texture);
             CreateTextureBoolean(&(infoCache[thisInfo].infoText),
               infoCache[thisInfo].cacheValue.b, displayCommand[i].line,
@@ -4270,8 +4457,8 @@ void UpdateInfoDisplay(int set) {
           break;
 
         case ET_FLOAT:
-          if (infoCache[thisInfo].cacheValue.f != SFLOAT(set, displayCommand[i].dataSource)) {
-            infoCache[thisInfo].cacheValue.f = SFLOAT(set, displayCommand[i].dataSource);
+          if (infoCache[thisInfo].cacheValue.f != SFLOAT(set, element)) {
+            infoCache[thisInfo].cacheValue.f = SFLOAT(set, element);
             SDL_DestroyTexture(infoCache[thisInfo].infoText.texture);
             CreateTextureFloat(&(infoCache[thisInfo].infoText),
               infoCache[thisInfo].cacheValue.f, displayCommand[i].line,
@@ -4282,8 +4469,8 @@ void UpdateInfoDisplay(int set) {
           break;
 
         case ET_INT:
-          if (infoCache[thisInfo].cacheValue.i != SINT(set, displayCommand[i].dataSource)) {
-            infoCache[thisInfo].cacheValue.i = SINT(set, displayCommand[i].dataSource);
+          if (infoCache[thisInfo].cacheValue.i != SINT(set, element)) {
+            infoCache[thisInfo].cacheValue.i = SINT(set, element);
             SDL_DestroyTexture(infoCache[thisInfo].infoText.texture);
             CreateTextureInt(&(infoCache[thisInfo].infoText),
               infoCache[thisInfo].cacheValue.i, displayCommand[i].line,
@@ -4294,21 +4481,34 @@ void UpdateInfoDisplay(int set) {
           break;
 
         case ET_ENUM:
-          if (infoCache[thisInfo].cacheValue.e != SENUM(set, displayCommand[i].dataSource)) {
-            infoCache[thisInfo].cacheValue.e = SENUM(set, displayCommand[i].dataSource);
+          if (infoCache[thisInfo].cacheValue.e != SENUM(set, element)) {
+            infoCache[thisInfo].cacheValue.e = SENUM(set, element);
             SDL_DestroyTexture(infoCache[thisInfo].infoText.texture);
             CreateTextureString(&(infoCache[thisInfo].infoText),
-              enumerations[patternElements[displayCommand[i].dataSource].etype].texts[SENUM(set, displayCommand[i].dataSource)],
+              enumerations[patternElements[element].etype].texts[SENUM(set, element)],
               displayCommand[i].line, displayCommand[i].col + 1, PARAMETER_WIDTH);
           }
           DrawDisplayTexture(infoCache[thisInfo].infoText);
           thisInfo++;
           break;
 
+        case ET_COLOR:
+          tempBox = GetBoxofLine(displayCommand[i].line, displayCommand[i].col + 1, 0);
+          tempBox.w = PARAMETER_WIDTH * CHAR_W;
+          DrawOutlineBox(tempBox, DISPLAY_COLOR_PARMS, SCOLOR(set, element));
+          thisInfo++;
+          break;
+
         default:
           // Lazy
-          fprintf(stderr, "No data display driver for this type of information (%i).\n", patternElements[displayCommand[i].dataSource].type);
+          fprintf(stderr, "No data display driver for element %i, type %i.\n", element, patternElements[element].type);
       }
+    } else if (element_o < PE_INVALID) {
+      // Draw the disabled element boxes
+      tempBox = GetBoxofLine(displayCommand[i].line, displayCommand[i].col + 1, 0);
+      tempBox.w = PARAMETER_WIDTH * CHAR_W;
+      DrawXBox(tempBox, DISPLAY_COLOR_PARMS, DISPLAY_COLOR_PARMSBG);
+      thisInfo++;
     }
   }
 
@@ -4329,7 +4529,7 @@ void UpdateInfoDisplay(int set) {
       SDL_DestroyTexture(infoCache[thisInfo].infoText.texture);
     }
     infoCache[thisInfo].cacheValue.i = previewFPSA;
-    CreateTextureInt(&(infoCache[thisInfo].infoText), previewFPSA, 21, 1, PARAMETER_WIDTH);
+    CreateTextureInt(&(infoCache[thisInfo].infoText), previewFPSA, FPS_ROW, 1, PARAMETER_WIDTH);
   }
   DrawDisplayTexture(infoCache[thisInfo].infoText);
   thisInfo++;
@@ -4343,7 +4543,7 @@ void UpdateInfoDisplay(int set) {
       SDL_DestroyTexture(infoCache[thisInfo].infoText.texture);
     }
     infoCache[thisInfo].cacheValue.i = previewFPSB;
-    CreateTextureInt(&(infoCache[thisInfo].infoText), previewFPSB, 21, 5, PARAMETER_WIDTH);
+    CreateTextureInt(&(infoCache[thisInfo].infoText), previewFPSB, FPS_ROW, 5, PARAMETER_WIDTH);
   }
   DrawDisplayTexture(infoCache[thisInfo].infoText);
   thisInfo++;
@@ -4357,7 +4557,7 @@ void UpdateInfoDisplay(int set) {
       SDL_DestroyTexture(infoCache[thisInfo].infoText.texture);
     }
     infoCache[thisInfo].cacheValue.i = infoFPS;
-    CreateTextureInt(&(infoCache[thisInfo].infoText), infoFPS, 53, 5, PARAMETER_WIDTH);
+    CreateTextureInt(&(infoCache[thisInfo].infoText), infoFPS, ROW_COUNT - 1, 5, PARAMETER_WIDTH);
   }
   DrawDisplayTexture(infoCache[thisInfo].infoText);
   thisInfo++;
@@ -4484,7 +4684,7 @@ void UpdateInfoDisplay(int set) {
     }
     strncpy(oldStatus, statusText, sizeof(statusText));
     snprintf(statusTemp, sizeof(statusTemp) - 1, "%-*.*s", STATUS_BAR_LENGTH, STATUS_BAR_LENGTH, statusText);
-    CreateTextureLine(&(infoCache[thisInfo].infoText), statusTemp, 53, 1, cBlack, cRed);
+    CreateTextureLine(&(infoCache[thisInfo].infoText), statusTemp, ROW_COUNT - 1, 1, cBlack, cRed);
   }
   DrawDisplayTexture(infoCache[thisInfo].infoText);
   thisInfo++;
@@ -4499,7 +4699,7 @@ void UpdateInfoDisplay(int set) {
       SDL_DestroyTexture(infoCache[thisInfo].infoText.texture);
     }
     infoCache[thisInfo].cacheValue.i = length;
-    CreateTextureInt(&(infoCache[thisInfo].infoText), length, 51, 1, PARAMETER_WIDTH);
+    CreateTextureInt(&(infoCache[thisInfo].infoText), length, ROW_COUNT - 3, 1, PARAMETER_WIDTH);
   }
   DrawDisplayTexture(infoCache[thisInfo].infoText);
   thisInfo++;
@@ -4519,10 +4719,20 @@ void UpdateInfoDisplay(int set) {
     strncpy(oldBuffer, SSTRING(set, PE_TEXTBUFFER), length + 1);
     strncpy(bufferTemp1, SSTRING(set, PE_TEXTBUFFER) + (length > BUFFER_BAR_LENGTH ? length - BUFFER_BAR_LENGTH : 0), BUFFER_BAR_LENGTH + 1);
     snprintf(bufferTemp2, sizeof(bufferTemp2), " %-*s", BUFFER_BAR_LENGTH + 3, bufferTemp1);
-    CreateTextureLine(&(infoCache[thisInfo].infoText), bufferTemp2, 52, 0, DISPLAY_COLOR_TBUF, DISPLAY_COLOR_TBUFBG);
+    CreateTextureLine(&(infoCache[thisInfo].infoText), bufferTemp2, ROW_COUNT - 2, 0, DISPLAY_COLOR_TBUF, DISPLAY_COLOR_TBUFBG);
   }
   DrawDisplayTexture(infoCache[thisInfo].infoText);
   thisInfo++;
+
+  // Show the color selectors
+  for (i = 0; i < displayCommandCount; i++) {
+    if (displayCommand[i].colorSource != A_INVALID) {
+      color = fgOutput[displayCommand[i].colorSource][set];
+      color.a = 255;
+      DrawOutlineBox(GetBoxofLine(displayCommand[i].line, displayCommand[i].col + 7, 0),
+        DISPLAY_COLOR_PARMS, color);
+    }
+  }
 }
 
 void CopyBuffer(int dst, int src) {
@@ -4541,3 +4751,41 @@ void SwitchToSet(int set) {
     displaySet == OO_ALTERNATE ? "alternate" : "live", set);
 }
 
+int HandleColorSelection(point_t mouse, int thisHover, bool_t resetEvent, int set) {
+  int currentSet = set; // Override
+  patternElement_e cSource;
+
+  if (displayCommand[thisHover].colorSource != A_INVALID) {
+    if (IsInsideBox(mouse, GetBoxofLine(displayCommand[thisHover].line, displayCommand[thisHover].col + 7, 0))) {
+      if (resetEvent) {
+        cSource = displayCommand[thisHover].colorSource;
+        if (seedPalette[cSource].fgColorA != PE_INVALID)
+          DCOLOR(seedPalette[cSource].fgColorA) = patternElements[seedPalette[cSource].fgColorA].initial.c;
+        if (seedPalette[cSource].fgColorB != PE_INVALID)
+          DCOLOR(seedPalette[cSource].fgColorB) = patternElements[seedPalette[cSource].fgColorB].initial.c;
+        if (seedPalette[cSource].fgCycleMode != PE_INVALID)
+          DENUM(seedPalette[cSource].fgCycleMode) = patternElements[seedPalette[cSource].fgCycleMode].initial.e;
+        if (seedPalette[cSource].fgCycleRate != PE_INVALID)
+          DINT(seedPalette[cSource].fgCycleRate) = patternElements[seedPalette[cSource].fgCycleRate].initial.i;
+        if (seedPalette[cSource].fgCyclePos != PE_INVALID)
+          DINT(seedPalette[cSource].fgCyclePos) = patternElements[seedPalette[cSource].fgCyclePos].initial.i;
+        if (seedPalette[cSource].fgAlpha != PE_INVALID)
+          DFLOAT(seedPalette[cSource].fgAlpha) = patternElements[seedPalette[cSource].fgAlpha].initial.f;
+        if (seedPalette[cSource].bgColorA != PE_INVALID)
+          DCOLOR(seedPalette[cSource].bgColorA) = patternElements[seedPalette[cSource].bgColorA].initial.c;
+        if (seedPalette[cSource].bgColorB != PE_INVALID)
+          DCOLOR(seedPalette[cSource].bgColorB) = patternElements[seedPalette[cSource].bgColorB].initial.c;
+        if (seedPalette[cSource].bgCycleMode != PE_INVALID)
+          DENUM(seedPalette[cSource].bgCycleMode) = patternElements[seedPalette[cSource].bgCycleMode].initial.e;
+        if (seedPalette[cSource].bgCycleRate != PE_INVALID)
+          DINT(seedPalette[cSource].bgCycleRate) = patternElements[seedPalette[cSource].bgCycleRate].initial.i;
+        if (seedPalette[cSource].bgCyclePos != PE_INVALID)
+          DINT(seedPalette[cSource].bgCyclePos) = patternElements[seedPalette[cSource].bgCyclePos].initial.i;
+        if (seedPalette[cSource].bgAlpha != PE_INVALID)
+          DFLOAT(seedPalette[cSource].bgAlpha) = patternElements[seedPalette[cSource].bgAlpha].initial.f;
+      }
+      return YES;
+    }
+  }
+  return NO;
+}
