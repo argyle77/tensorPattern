@@ -238,6 +238,8 @@
   extern const namedPalette_t paletteTer;
   extern const namedPalette_t paletteGry;
 
+  extern const int colorTitlesCount;
+
   // Points
   typedef struct point_t {
     int x, y;

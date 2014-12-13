@@ -150,6 +150,7 @@ void DrawSidePulse(int set);
 int HandleColorSelection(point_t mouse, int thisHover, bool_t resetEvent, int set);
 void UpdateInfoDisplay(int set);
 int OverColorBox(int set, point_t mouse, int item, SDL_Rect ** targets, int *lastHover);
+bool_t HandleColorSelect(SDL_Keycode key, int set, int item, int *selected);
 
 // Main
 int main(int argc, char *argv[]) {
@@ -183,6 +184,7 @@ int main(int argc, char *argv[]) {
   operateOn_e displaySetOld = OO_INVALID;
   patternElement_e element;
   command_e command;
+  color_e wheelColorF = 0, wheelColorB = 0;
 
   // Unbuffer the console...
   setvbuf(stdout, (char *)NULL, _IONBF, 0);
@@ -485,38 +487,54 @@ int main(int argc, char *argv[]) {
 
               // Mouse wheel action over the live preview lets us change colors
               // without having to go to the command.
-              // TODO: This is obsolete.  Fix it.
               } else if (IsInsideBox(mouse, liveBox)) {
                 if (!rightMouseDown) {
                   if (event.wheel.y < 0) { // Wheel down
-                    //~ HandleCommand(currentSet, COM_FG_WHEEL_DOWN, PE_FGE);
+                    wheelColorF--;
+                    if (wheelColorF < 0) wheelColorF = CE_COUNT - 1;
+                    SCOLOR(currentSet, PE_LP_COLA) = namedColors[wheelColorF].color;
                   } else { // Wheel up
-                    //~ HandleCommand(currentSet, COM_FG_WHEEL_UP, PE_FGE);
+                    wheelColorF++;
+                    if (wheelColorF >= CE_COUNT) wheelColorF = 0;
+                    SCOLOR(currentSet, PE_LP_COLA) = namedColors[wheelColorF].color;
                   }
                 } else {
                   // Holding down the right mouse button while wheeling changes the
                   // background color instead.
                   if (event.wheel.y < 0) { // Wheel down
-                    //~ HandleCommand(currentSet, COM_BG_WHEEL_DOWN, PE_BGE);
+                    wheelColorB--;
+                    if (wheelColorB < 0) wheelColorB = CE_COUNT - 1;
+                    SCOLOR(currentSet, PE_LP_BGCOLA) = namedColors[wheelColorB].color;
                   } else { // Wheel up
-                    //~ HandleCommand(currentSet, COM_BG_WHEEL_UP, PE_BGE);
+                    wheelColorB++;
+                    if (wheelColorB >= CE_COUNT) wheelColorB = 0;
+                    SCOLOR(currentSet, PE_LP_BGCOLA) = namedColors[wheelColorB].color;
                   }
                 }
               // Same for the alternate preview, except we change the alternate
               // set values.
-              // TODO: This is obsolete.  Fix it.
               } else if (IsInsideBox(mouse, altBox)) {
                 if (!rightMouseDown) {
-                  if (event.wheel.y < 0) { // Wheel down
-                    //~ HandleCommand(alternateSet, COM_FG_WHEEL_DOWN, PE_FGE);
+                   if (event.wheel.y < 0) { // Wheel down
+                    wheelColorF--;
+                    if (wheelColorF < 0) wheelColorF = CE_COUNT - 1;
+                    SCOLOR(alternateSet, PE_LP_COLA) = namedColors[wheelColorF].color;
                   } else { // Wheel up
-                    //~ HandleCommand(alternateSet, COM_FG_WHEEL_UP, PE_FGE);
+                    wheelColorF++;
+                    if (wheelColorF >= CE_COUNT) wheelColorF = 0;
+                    SCOLOR(alternateSet, PE_LP_COLA) = namedColors[wheelColorF].color;
                   }
                 } else {
+                  // Holding down the right mouse button while wheeling changes the
+                  // background color instead.
                   if (event.wheel.y < 0) { // Wheel down
-                    //~ HandleCommand(alternateSet, COM_BG_WHEEL_DOWN, PE_BGE);
+                    wheelColorB--;
+                    if (wheelColorB < 0) wheelColorB = CE_COUNT - 1;
+                    SCOLOR(alternateSet, PE_LP_BGCOLA) = namedColors[wheelColorB].color;
                   } else { // Wheel up
-                    //~ HandleCommand(alternateSet, COM_BG_WHEEL_UP, PE_BGE);
+                    wheelColorB++;
+                    if (wheelColorB >= CE_COUNT) wheelColorB = 0;
+                    SCOLOR(alternateSet, PE_LP_BGCOLA) = namedColors[wheelColorB].color;
                   }
                 }
               }
@@ -725,9 +743,8 @@ int main(int argc, char *argv[]) {
           switch(event.type) {
             case SDL_KEYDOWN:
               // Put some stuff here.
-              //~ if (HandleColorSelect(event.key.keysym.sym,
-                //~ displaySet ? alternateSet : currentSet, thisHover, &enumHover))
-                snprintf(statusText, sizeof(statusText), "Color selection cancelled.");
+              if (HandleColorSelect(event.key.keysym.sym,
+                displaySet ? alternateSet : currentSet, thisHover, &enumHover))
                 inputMode = IM_NORMAL;
               break;
             case SDL_MOUSEMOTION:
@@ -849,6 +866,7 @@ int main(int argc, char *argv[]) {
       lastHover = INVALID;
       confirmed = NO;
       refreshAll = YES;
+      if (inputMode == IM_NORMAL) thisHover = INVALID;
     }
 
     // Check for whole gui refresh.
@@ -4751,6 +4769,7 @@ void SwitchToSet(int set) {
     displaySet == OO_ALTERNATE ? "alternate" : "live", set);
 }
 
+// This seems excessive.
 int HandleColorSelection(point_t mouse, int thisHover, bool_t resetEvent, int set) {
   int currentSet = set; // Override
   patternElement_e cSource;
@@ -4789,3 +4808,65 @@ int HandleColorSelection(point_t mouse, int thisHover, bool_t resetEvent, int se
   }
   return NO;
 }
+
+// Key press processing for enumeration selection boxes.
+bool_t HandleColorSelect(SDL_Keycode key, int set, int item, int *selected) {
+  bool_t selectionDismissed = YES;
+  int boxCount = CE_COUNT;
+  patternElement_e element;
+
+  switch (key) {
+    case SDLK_ESCAPE:
+      snprintf(statusText, sizeof(statusText), "Color selection cancelled.");
+      break;
+
+    case SDLK_RETURN:
+    case SDLK_SPACE:
+      element = GetSelectElement(set, displayCommand[item].dataSource);
+      SCOLOR(set, element) = namedColors[*selected].color;
+      snprintf(statusText, sizeof(statusText), "Item %s set.", patternElements[element].name);
+      break;
+
+    // They're laid out in a grid.
+    case SDLK_LEFT:
+      (*selected)--;
+      if (*selected >= boxCount) *selected = 0;
+      if (*selected < 0) {
+        (*selected)++;
+        if (*selected < 0) (*selected) = 0;
+      }
+      selectionDismissed = NO;
+      break;
+    case SDLK_UP:
+      *selected -= colorTitlesCount;
+      if (*selected >= boxCount) *selected = 0;
+      if (*selected < 0) {
+        *selected += colorTitlesCount;
+        if (*selected < 0) *selected = 0;
+      }
+      selectionDismissed = NO;
+      break;
+    case SDLK_DOWN:
+      *selected += colorTitlesCount;
+      if (*selected >= boxCount) {
+        *selected -= colorTitlesCount;
+        if (*selected >= boxCount) *selected = 0;
+      }
+      selectionDismissed = NO;
+      break;
+    case SDLK_RIGHT:
+      *selected += 1;
+      if (*selected >= boxCount) {
+        *selected -= 1;
+        if (*selected >= boxCount) *selected = 0;
+      }
+      selectionDismissed = NO;
+      break;
+
+    default:
+      selectionDismissed = NO;
+      break;
+  }
+  return selectionDismissed;
+}
+

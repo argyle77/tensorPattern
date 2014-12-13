@@ -116,6 +116,7 @@ const colorName_t namedColors[] = {
 const int namedColorsCount = sizeof(namedColors) / sizeof(colorName_t);
 
 
+// Old and not really necessary anymore now that we have a graphical color selector:
 //~ // This is separated from the namedColors because of the enumerations array.
 //~ const char *colorsText[] = { "red", "orange", "yellow", "chartreuse", "green",
   //~ "aqua", "cyan", "azure", "blue", "violet", "magenta", "rose", "white",
@@ -144,7 +145,15 @@ const int enumerationsCount = sizeof(enumerations) / sizeof(enums_t);
 
 // Palette alteration provides the connection between whose palette we are
 // altering and which pattern elements are involved.  PE_INVALID disables a
-// paletteitem for
+// specific palette item for a seed that doesn't use it.
+// Order here is important. seedPalette array index must correspond to
+// alterPalettes_e enumeration.  This is enforced by VerifyStructuralIntegrity.
+// The rest of the items are patternElement_e (patternElement) items.
+// The order or items from paletteConnect_t:
+// fgColorA, fgColorB, fgCycleMode, fgCycleRate, fgCyclePos, fgAlpha,
+// bgColorA, bgColorB, bgCycleMode, bgCycleRate, bgCyclePos, bgAlpha
+// Most things that have color also have alpha, 2nd color, and cycle mode / rate.
+// Not all seeds have a background color, which PE_INVALIDs below disable.
 const paletteConnect_t seedPalette[] = {
   {A_HBARS, PE_HBARS_COLA, PE_HBARS_COLB, PE_HBARS_CM, PE_HBARS_CMR, PE_HBARS_CMPOS, PE_HBARS_ALPHA,
             PE_HBARS_BGCOLA, PE_HBARS_BGCOLB, PE_HBARS_BGCM, PE_HBARS_BGCMR, PE_HBARS_BGCMPOS, PE_HBARS_BGALPHA},
@@ -625,6 +634,18 @@ bool_t VerifyStructuralIntegrity(void) {
     //~ fprintf(stderr, "Programmer error: Mismatched color_e(%i) != colorText(%i)!\n", CE_COUNT, colorsTextSize);
     //~ rc = NO;
   //~ }
+
+  for (i = 0; i < seedPaletteCount; i++) {
+    if (i != seedPalette[i].seed) {
+      fprintf(stderr, "Programmer error: alterPalettes_e does not match seedPalette array!\n");
+      fprintf(stderr, "Element %i has incorrect enumeration value %i\n", i, seedPalette[i].seed);
+      rc = NO;
+    }
+  }
+  if (A_COUNT != seedPaletteCount) {
+    fprintf(stderr, "Programmer error: Mismatched seedPalette(%i) != alterPalettes_e(%i)!\n", seedPaletteCount, A_COUNT);
+    rc = NO;
+  }
 
   // enums_e and enumerations array.
   for (i = 0; i < enumerationsCount; i++) {
