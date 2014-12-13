@@ -56,7 +56,7 @@ typedef enum textEntry_e {
 // sign of a weakly structured program.
 SDL_Surface *imageSeed[PATTERN_SET_COUNT];
 int tensorWidth, tensorHeight;
-bool_t cyclePatternSets = YES;  // cyclePatternSets mode is a global (for now).
+bool_t cyclePatternSets = NO;  // cyclePatternSets mode is a global (for now).
 int cycleFrameCount = INITIAL_FRAMECYCLECOUNT;    // Frame Count for cycling.
 bool_t enableTensor = YES;
 int currentSet = 0;
@@ -103,7 +103,7 @@ void VerticalBars(color_t fg, color_t bg, unsigned char *buffer);
 void SavePatternSet(char key, int set, bool_t overWrite, bool_t backup);
 void LoadPatternSet(char key, int set);
 void RandomDots(color_t color, unsigned int rFreq, unsigned char *buffer);
-color_t ColorCycle(int set, colorCycleModes_e cycleMode, int *cycleSaver, int cycleInc);
+color_t ColorCycle(colorCycleModes_e cycleMode, int *cycleSaver, int cycleInc, color_t a, color_t b);
 void ColorAll(color_t color, unsigned char *fb);
 void SetDims(void);
 void UpdateDisplays(int set, bool_t isPrimary, bool_t sendToTensor, float intensity_limit);
@@ -151,6 +151,7 @@ int HandleColorSelection(point_t mouse, int thisHover, bool_t resetEvent, int se
 void UpdateInfoDisplay(int set);
 int OverColorBox(int set, point_t mouse, int item, SDL_Rect ** targets, int *lastHover);
 bool_t HandleColorSelect(SDL_Keycode key, int set, int item, int *selected);
+color_t ColorCyclePalette(namedPalette_t palette, int *position, int wavelength);
 
 // Main
 int main(int argc, char *argv[]) {
@@ -1000,15 +1001,17 @@ void ProcessModes(int set) {
   // Colors
   for (i = 0; i < A_COUNT; i++) {
     if (seedPalette[i].fgCycleMode > PE_INVALID && DENUM(seedPalette[i].fgCycleMode)) {
-      fgOutput[i][set] = ColorCycle(currentSet, DENUM(seedPalette[i].fgCycleMode),
-        &DINT(seedPalette[i].fgCyclePos), DINT(seedPalette[i].fgCycleRate));
+      fgOutput[i][set] = ColorCycle(DENUM(seedPalette[i].fgCycleMode),
+        &DINT(seedPalette[i].fgCyclePos), DINT(seedPalette[i].fgCycleRate),
+        DCOLOR(seedPalette[i].fgColorA), DCOLOR(seedPalette[i].fgColorB));
     } else if (seedPalette[i].fgColorA > PE_INVALID) {
       fgOutput[i][set] = DCOLOR(seedPalette[i].fgColorA);
     }
 
     if (seedPalette[i].bgCycleMode > PE_INVALID && DENUM(seedPalette[i].bgCycleMode)) {
-      bgOutput[i][set] = ColorCycle(currentSet, DENUM(seedPalette[i].bgCycleMode),
-        &DINT(seedPalette[i].bgCyclePos), DINT(seedPalette[i].bgCycleRate));
+      bgOutput[i][set] = ColorCycle(DENUM(seedPalette[i].bgCycleMode),
+        &DINT(seedPalette[i].bgCyclePos), DINT(seedPalette[i].bgCycleRate),
+        DCOLOR(seedPalette[i].bgColorA), DCOLOR(seedPalette[i].bgColorB));
     } else if (seedPalette[i].bgColorA > PE_INVALID) {
       bgOutput[i][set] = DCOLOR(seedPalette[i].bgColorA);
     }
@@ -2828,54 +2831,82 @@ void RandomDots(color_t color, unsigned int rFreq, unsigned char *buffer) {
   }
 }
 
+color_t ColorCyclePalette(namedPalette_t palette, int *position, int wavelength) {
+  if (wavelength > 0) {
+    *position = (*position + 1) % (palette.size * wavelength);
+  } else if (wavelength < 0) {
+    *position = (*position - 1);
+    if (*position < 0) *position = (palette.size * abs(wavelength)) - 1;
+  } else {
+    // For 0, we'll do random color cycling.
+    *position = rand() % palette.size;
+    wavelength = 1;
+  }
+  return namedColors[palette.palette[*position / abs(wavelength)]].color;
+}
 
-
-color_t ColorCycle(int set, colorCycleModes_e cycleMode, int *cycleSaver, int cycleInc) {
+// Enacts the cycling of colors based on palette settings.
+color_t ColorCycle(colorCycleModes_e cycleMode, int *cycleSaver, int cycleSteps, color_t a, color_t b) {
   color_t colorTemp = cBlack;
-  int inpos, inposo, inposn;
-  int currentSet = set;
+  int inpos;
+  int transition, inTransition;
+  int toColor = 0;
+  static color_t lastColor = CD_BLACK;
 
   // If the mode changed, we should make sure our position in the cycle limits
   // to the mode.
   switch(cycleMode) {
     case CM_RGB:
-      *cycleSaver = (*cycleSaver + 1) % paletteRGB.size;
-      colorTemp = namedColors[paletteRGB.palette[*cycleSaver]].color;
+      colorTemp = ColorCyclePalette(paletteRGB, cycleSaver, cycleSteps);
       break;
 
     case CM_CMY:
-      *cycleSaver = (*cycleSaver + 1) % paletteCMY.size;
-      colorTemp = namedColors[paletteCMY.palette[*cycleSaver]].color;
+      colorTemp = ColorCyclePalette(paletteCMY, cycleSaver, cycleSteps);
       break;
 
     case CM_SECONDARY:
-      *cycleSaver = (*cycleSaver + 1) % paletteSec.size;
-      colorTemp = namedColors[paletteSec.palette[*cycleSaver]].color;
+      colorTemp = ColorCyclePalette(paletteSec, cycleSaver, cycleSteps);
       break;
 
     case CM_TERTIARY:
-      *cycleSaver = (*cycleSaver + 1) % paletteTer.size;
-      colorTemp = namedColors[paletteTer.palette[*cycleSaver]].color;
+      colorTemp = ColorCyclePalette(paletteTer, cycleSaver, cycleSteps);
       break;
 
     case CM_GRAY:
-      *cycleSaver = (*cycleSaver + 1) % paletteGry.size;
-      colorTemp = namedColors[paletteGry.palette[*cycleSaver]].color;
+      colorTemp = ColorCyclePalette(paletteGry, cycleSaver, cycleSteps);
+      break;
+
+    case CM_SYMGRAY:
+      colorTemp = ColorCyclePalette(paletteSymGry, cycleSaver, cycleSteps);
       break;
 
     case CM_RAINBOW:
-      *cycleSaver = (*cycleSaver + cycleInc) % (256 * 6);
-      inposo = *cycleSaver % 256;
-      inpos = *cycleSaver / 256;
-      switch(inpos) {
+      // Cycle steps says how man cycles it takes to transition to the next
+      // color.  In the case of rainbow, we consider 6 colors along the hue
+      // circle, so a cycle step of 1 will cycle through 6 colors, whereas a
+      // cycle step of 2 will hit the ones in between those 6 as well, etc.
+      // Cycle step of 0 will freeze our position in this case.  Negative will
+      // cycle backwards through these colors.
+      if (cycleSteps > 0) *cycleSaver = (*cycleSaver + 1) % (6 * cycleSteps);
+      else if (cycleSteps < 0) {
+        *cycleSaver = (*cycleSaver - 1);
+        cycleSteps = abs(cycleSteps);
+        if (*cycleSaver < 0) *cycleSaver = (6 * cycleSteps) - 1;
+      } else {
+        cycleSteps = 1;
+      }
+
+      transition = *cycleSaver / cycleSteps;
+      inTransition = *cycleSaver % cycleSteps;
+      switch(transition) {
         case 0: // R -> Y
           colorTemp.r = 255;
-          colorTemp.g = inposo;
+          colorTemp.g = (256.0 / cycleSteps) * inTransition;
           colorTemp.b = 0;
           break;
 
         case 1: // Y -> G
-          colorTemp.r = 255 - inposo;
+          colorTemp.r = 255 - (256.0 / cycleSteps) * inTransition;
           colorTemp.g = 255;
           colorTemp.b = 0;
           break;
@@ -2883,17 +2914,17 @@ color_t ColorCycle(int set, colorCycleModes_e cycleMode, int *cycleSaver, int cy
         case 2: // G -> C
           colorTemp.r = 0;
           colorTemp.g = 255;
-          colorTemp.b = inposo;
+          colorTemp.b = (256.0 / cycleSteps) * inTransition;
           break;
 
         case 3: // C -> B
           colorTemp.r = 0;
-          colorTemp.g = 255 - inposo;
+          colorTemp.g = 255 - (256.0 / cycleSteps) * inTransition;
           colorTemp.b = 255;
           break;
 
         case 4: // B -> M
-          colorTemp.r = inposo;
+          colorTemp.r = (256.0 / cycleSteps) * inTransition;
           colorTemp.g = 0;
           colorTemp.b = 255;
           break;
@@ -2901,7 +2932,7 @@ color_t ColorCycle(int set, colorCycleModes_e cycleMode, int *cycleSaver, int cy
         case 5: // M -> R
           colorTemp.r = 255;
           colorTemp.g = 0;
-          colorTemp.b = 255 - inposo;
+          colorTemp.b = 255 - (256.0 / cycleSteps) * inTransition;
           break;
 
         default:
@@ -2910,59 +2941,81 @@ color_t ColorCycle(int set, colorCycleModes_e cycleMode, int *cycleSaver, int cy
       break;
 
     case CM_RANDOM:
-      colorTemp.r = rand() % 256;
-      colorTemp.g = rand() % 256;
-      colorTemp.b = rand() % 256;
+      // Sign of the step rate is meaningless here.
+      cycleSteps = abs(cycleSteps);
+      if (cycleSteps == 0) {
+        *cycleSaver = 1;  // Stay on last color.  Doesn't work across program restart.
+      } else {
+        *cycleSaver = (*cycleSaver + 1) % cycleSteps;
+      }
+      if (!*cycleSaver) {
+        colorTemp.r = rand() % 256;
+        colorTemp.g = rand() % 256;
+        colorTemp.b = rand() % 256;
+        lastColor = colorTemp;
+      } else {
+        colorTemp = lastColor;
+      }
       break;
 
-    case CM_FGBGFADE:
-      *cycleSaver = (*cycleSaver + cycleInc) % (256 * 2);
-      inpos = *cycleSaver / 256;
-      inposo = *cycleSaver % 256;
-      switch(inpos) {
-        case 0: // FG - BG
-          //~ colorTemp.r = ((255.0 - inposo) / 255) * namedColors[DENUM(PE_FGE)].color.r + ((inposo / 255.0) * namedColors[DENUM(PE_BGE)].color.r);
-          //~ colorTemp.g = ((255.0 - inposo) / 255) * namedColors[DENUM(PE_FGE)].color.g + ((inposo / 255.0) * namedColors[DENUM(PE_BGE)].color.g);
-          //~ colorTemp.b = ((255.0 - inposo) / 255) * namedColors[DENUM(PE_FGE)].color.b + ((inposo / 255.0) * namedColors[DENUM(PE_BGE)].color.b);
+    case CM_ABFADE:
+      // Fade between colors A and B.
+      if (cycleSteps > 0) *cycleSaver = (*cycleSaver + 1) % (2 * cycleSteps);
+      else if (cycleSteps < 0) {
+        *cycleSaver = (*cycleSaver - 1);
+        cycleSteps = abs(cycleSteps);
+        if (*cycleSaver < 0) *cycleSaver = (2 * cycleSteps) - 1;
+      } else {
+        cycleSteps = 1;
+      }
+
+      transition = *cycleSaver / cycleSteps;
+      inTransition = *cycleSaver % cycleSteps;
+      switch(transition) {
+        case 0: // A - B
+          colorTemp.r = a.r - (((float)(a.r - b.r) / cycleSteps) * inTransition);
+          colorTemp.g = a.g - (((float)(a.g - b.g) / cycleSteps) * inTransition);
+          colorTemp.b = a.b - (((float)(a.b - b.b) / cycleSteps) * inTransition);
           break;
 
-        case 1: // FG - BG
-          //~ colorTemp.r = ((inposo / 255.0) * namedColors[DENUM(PE_FGE)].color.r) + ((255.0 - inposo) / 255) * namedColors[DENUM(PE_BGE)].color.r;
-          //~ colorTemp.g = ((inposo / 255.0) * namedColors[DENUM(PE_FGE)].color.g) + ((255.0 - inposo) / 255) * namedColors[DENUM(PE_BGE)].color.g;
-          //~ colorTemp.b = ((inposo / 255.0) * namedColors[DENUM(PE_FGE)].color.b) + ((255.0 - inposo) / 255) * namedColors[DENUM(PE_BGE)].color.b;
-
+        case 1: // B - A
+          colorTemp.r = b.r - (((float)(b.r - a.r) / cycleSteps) * inTransition);
+          colorTemp.g = b.g - (((float)(b.g - a.g) / cycleSteps) * inTransition);
+          colorTemp.b = b.b - (((float)(b.b - a.b) / cycleSteps) * inTransition);
         default:
           break;
       }
       break;
 
     case CM_TERTTOBLACK:
-      *cycleSaver = (*cycleSaver + cycleInc) % (256 * 24);
-      if (*cycleSaver < 0) {
-        *cycleSaver += (256 * 24);
-        if (*cycleSaver < 0) {
-          *cycleSaver = 256 * 24;  // Extra sanity.
-        }
-      }
-      inpos = (*cycleSaver / 256) % 2;
-      inposn = *cycleSaver / 256 / 2;
-      inposo = *cycleSaver % 256;
-      //~ printf("1: %i, 2: %i, 3: %i, cyc: %i\n", inpos, inposn, inposo, *cycleSaver);
-      switch(inpos) {
-        case 0: // blk - FG
-          //~ colorTemp.r = ((255.0 - inposo) / 255) * namedColors[DENUM(PE_BGE)].color.r + ((inposo / 255.0) * namedColors[paletteTer.palette[inposn]].color.r);
-          //~ colorTemp.g = ((255.0 - inposo) / 255) * namedColors[DENUM(PE_BGE)].color.g + ((inposo / 255.0) * namedColors[paletteTer.palette[inposn]].color.g);
-          //~ colorTemp.b = ((255.0 - inposo) / 255) * namedColors[DENUM(PE_BGE)].color.b + ((inposo / 255.0) * namedColors[paletteTer.palette[inposn]].color.b);
-          break;
-
-        case 1: // FG - blk
-          //~ colorTemp.r = ((inposo / 255.0) * namedColors[DENUM(PE_BGE)].color.r) + ((255.0 - inposo) / 255) * namedColors[paletteTer.palette[inposn]].color.r;
-          //~ colorTemp.g = ((inposo / 255.0) * namedColors[DENUM(PE_BGE)].color.g) + ((255.0 - inposo) / 255) * namedColors[paletteTer.palette[inposn]].color.g;
-          //~ colorTemp.b = ((inposo / 255.0) * namedColors[DENUM(PE_BGE)].color.b) + ((255.0 - inposo) / 255) * namedColors[paletteTer.palette[inposn]].color.b;
-
-        default:
-          break;
-      }
+      // Fade between colors Tertiaries and A.
+      //~ if (cycleSteps > 0) *cycleSaver = (*cycleSaver + 1) % (paletteTer * cycleSteps);
+      //~ else if (cycleSteps < 0) {
+        //~ *cycleSaver = (*cycleSaver - 1);
+        //~ cycleSteps = abs(cycleSteps);
+        //~ if (*cycleSaver < 0) *cycleSaver = (12 * cycleSteps) - 1;
+      //~ } else {
+        //~ cycleSteps = 1;
+      //~ }
+//~
+      //~ transition = *cycleSaver / cycleSteps;
+      //~ inTransition = *cycleSaver % cycleSteps;
+      //~ toColor =
+      //~ lastColor = namedColors[paletteTer[toColor]].color;
+      //~ switch(transition) {
+        //~ case 0: // A - B
+          //~ colorTemp.r = a.r - (((float)(a.r - lastColor.r) / cycleSteps) * inTransition);
+          //~ colorTemp.g = a.g - (((float)(a.g - lastColor.g) / cycleSteps) * inTransition);
+          //~ colorTemp.b = a.b - (((float)(a.b - lastColor.b) / cycleSteps) * inTransition);
+          //~ break;
+//~
+        //~ case 1: // B - A
+          //~ colorTemp.r = lastColor.r - (((float)(lastColor.r - a.r) / cycleSteps) * inTransition);
+          //~ colorTemp.g = lastColor.g - (((float)(lastColor.g - a.g) / cycleSteps) * inTransition);
+          //~ colorTemp.b = lastColor.b - (((float)(lastColor.b - a.b) / cycleSteps) * inTransition);
+        //~ default:
+          //~ break;
+      //~ }
       break;
 
     case CM_INVALID: case CM_NONE: case CM_COUNT:

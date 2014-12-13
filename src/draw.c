@@ -68,7 +68,9 @@ const namedPalette_t paletteTer = { (color_e[]) { CE_RED, CE_ORANGE, CE_YELLOW,
   CE_CHARTREUSE, CE_GREEN, CE_AQUA, CE_CYAN, CE_AZURE, CE_BLUE, CE_VIOLET,
   CE_MAGENTA, CE_ROSE }, 12 };
 const namedPalette_t paletteGry = { (color_e[]) { CE_WHITE, CE_LTGRAY, CE_GRAY,
-  CE_DKGRAY }, 4 };
+  CE_DKGRAY, CE_BLACK}, 5 };
+const namedPalette_t paletteSymGry = { (color_e[]) { CE_WHITE, CE_LTGRAY, CE_GRAY,
+  CE_DKGRAY, CE_BLACK, CE_DKGRAY, CE_GRAY, CE_LTGRAY}, 8 };
 
 // Global elements
 TTF_Font *screenFont;

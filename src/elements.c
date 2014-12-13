@@ -24,7 +24,7 @@ const char *dirText[] = { "Up", "Left", "Down", "Right" };
 const int dirTextCount = sizeof(dirText) / sizeof(const char *);
 
 // Color cycling modes
-const char *colorCycleText[] = { "None", "R-G-B", "C-M-Y", "Secondary", "Tertiary", "Graysteps", "Rainbow", "Random", "FG-BG Fade", "Tertiary-BG" };
+const char *colorCycleText[] = { "None", "R-G-B", "C-M-Y", "Secondary", "Tertiary", "Grays", "Sym Grays", "Rainbow", "Random", "A-B Fade", "Tertiary-BG" };
 const int colorCycleTextCount = sizeof(colorCycleText) / sizeof(const char *);
 
 // Text background modes

@@ -237,6 +237,7 @@
   extern const namedPalette_t paletteSec;
   extern const namedPalette_t paletteTer;
   extern const namedPalette_t paletteGry;
+  extern const namedPalette_t paletteSymGry;
 
   extern const int colorTitlesCount;
 

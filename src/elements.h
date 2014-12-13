@@ -62,8 +62,8 @@
   // Color cycle modes
   typedef enum colorCycleModes_e{
     CM_INVALID = -1,
-    CM_NONE = 0, CM_RGB, CM_CMY, CM_SECONDARY, CM_TERTIARY, CM_GRAY, CM_RAINBOW,
-    CM_RANDOM, CM_FGBGFADE, CM_TERTTOBLACK,
+    CM_NONE = 0, CM_RGB, CM_CMY, CM_SECONDARY, CM_TERTIARY, CM_GRAY, CM_SYMGRAY,
+    CM_RAINBOW, CM_RANDOM, CM_ABFADE, CM_TERTTOBLACK,
     CM_COUNT // Last.
   } colorCycleModes_e;
 
