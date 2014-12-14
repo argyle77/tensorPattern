@@ -62,6 +62,7 @@ const color_t cDkYellow = CD_DKYELLOW;
 // Named color palettes
 const namedPalette_t paletteRGB = { (color_e[]) { CE_RED, CE_GREEN, CE_BLUE }, 3 };
 const namedPalette_t paletteCMY = { (color_e[]) {CE_CYAN, CE_MAGENTA, CE_YELLOW }, 3};
+const namedPalette_t paletteRWB = { (color_e[]) {CE_RED, CE_WHITE, CE_BLUE }, 3};
 const namedPalette_t paletteSec = { (color_e[]) { CE_RED, CE_YELLOW, CE_GREEN,
   CE_CYAN, CE_BLUE, CE_MAGENTA }, 6 };
 const namedPalette_t paletteTer = { (color_e[]) { CE_RED, CE_ORANGE, CE_YELLOW,

@@ -234,6 +234,7 @@
   // Some color palettes
   extern const namedPalette_t paletteRGB;
   extern const namedPalette_t paletteCMY;
+  extern const namedPalette_t paletteRWB;
   extern const namedPalette_t paletteSec;
   extern const namedPalette_t paletteTer;
   extern const namedPalette_t paletteGry;

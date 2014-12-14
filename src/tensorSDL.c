@@ -2848,7 +2848,6 @@ color_t ColorCyclePalette(namedPalette_t palette, int *position, int wavelength)
 // Enacts the cycling of colors based on palette settings.
 color_t ColorCycle(colorCycleModes_e cycleMode, int *cycleSaver, int cycleSteps, color_t a, color_t b) {
   color_t colorTemp = cBlack;
-  int inpos;
   int transition, inTransition;
   int toColor = 0;
   static color_t lastColor = CD_BLACK;
@@ -2862,6 +2861,10 @@ color_t ColorCycle(colorCycleModes_e cycleMode, int *cycleSaver, int cycleSteps,
 
     case CM_CMY:
       colorTemp = ColorCyclePalette(paletteCMY, cycleSaver, cycleSteps);
+      break;
+
+    case CM_RWB:
+      colorTemp = ColorCyclePalette(paletteRWB, cycleSaver, cycleSteps);
       break;
 
     case CM_SECONDARY:
@@ -2987,35 +2990,34 @@ color_t ColorCycle(colorCycleModes_e cycleMode, int *cycleSaver, int cycleSteps,
       }
       break;
 
-    case CM_TERTTOBLACK:
-      // Fade between colors Tertiaries and A.
-      //~ if (cycleSteps > 0) *cycleSaver = (*cycleSaver + 1) % (paletteTer * cycleSteps);
-      //~ else if (cycleSteps < 0) {
-        //~ *cycleSaver = (*cycleSaver - 1);
-        //~ cycleSteps = abs(cycleSteps);
-        //~ if (*cycleSaver < 0) *cycleSaver = (12 * cycleSteps) - 1;
-      //~ } else {
-        //~ cycleSteps = 1;
-      //~ }
-//~
-      //~ transition = *cycleSaver / cycleSteps;
-      //~ inTransition = *cycleSaver % cycleSteps;
-      //~ toColor =
-      //~ lastColor = namedColors[paletteTer[toColor]].color;
-      //~ switch(transition) {
-        //~ case 0: // A - B
-          //~ colorTemp.r = a.r - (((float)(a.r - lastColor.r) / cycleSteps) * inTransition);
-          //~ colorTemp.g = a.g - (((float)(a.g - lastColor.g) / cycleSteps) * inTransition);
-          //~ colorTemp.b = a.b - (((float)(a.b - lastColor.b) / cycleSteps) * inTransition);
-          //~ break;
-//~
-        //~ case 1: // B - A
-          //~ colorTemp.r = lastColor.r - (((float)(lastColor.r - a.r) / cycleSteps) * inTransition);
-          //~ colorTemp.g = lastColor.g - (((float)(lastColor.g - a.g) / cycleSteps) * inTransition);
-          //~ colorTemp.b = lastColor.b - (((float)(lastColor.b - a.b) / cycleSteps) * inTransition);
-        //~ default:
-          //~ break;
-      //~ }
+    case CM_TERTOA:
+     // Fade between colors A and B.
+      if (cycleSteps > 0) *cycleSaver = (*cycleSaver + 1) % (2 * paletteTer.size * cycleSteps);
+      else if (cycleSteps < 0) {
+        *cycleSaver = (*cycleSaver - 1);
+        cycleSteps = abs(cycleSteps);
+        if (*cycleSaver < 0) *cycleSaver = (2 * paletteTer.size * cycleSteps) - 1;
+      } else {
+        cycleSteps = 1;
+      }
+
+      transition = *cycleSaver / cycleSteps;
+      inTransition = *cycleSaver % cycleSteps;
+      toColor = transition / 2;
+      switch(transition % 2) {
+        case 0: // A - B
+          colorTemp.r = a.r - (((float)(a.r - namedColors[paletteTer.palette[toColor]].color.r) / cycleSteps) * inTransition);
+          colorTemp.g = a.g - (((float)(a.g - namedColors[paletteTer.palette[toColor]].color.g) / cycleSteps) * inTransition);
+          colorTemp.b = a.b - (((float)(a.b - namedColors[paletteTer.palette[toColor]].color.b) / cycleSteps) * inTransition);
+          break;
+
+        case 1: // B - A
+          colorTemp.r = namedColors[paletteTer.palette[toColor]].color.r - (((float)(namedColors[paletteTer.palette[toColor]].color.r - a.r) / cycleSteps) * inTransition);
+          colorTemp.g = namedColors[paletteTer.palette[toColor]].color.g - (((float)(namedColors[paletteTer.palette[toColor]].color.g - a.g) / cycleSteps) * inTransition);
+          colorTemp.b = namedColors[paletteTer.palette[toColor]].color.b - (((float)(namedColors[paletteTer.palette[toColor]].color.b - a.b) / cycleSteps) * inTransition);
+        default:
+          break;
+      }
       break;
 
     case CM_INVALID: case CM_NONE: case CM_COUNT:
