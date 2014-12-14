@@ -17,7 +17,9 @@ dialogs, or permits keyboard editing of most parameters.  Right clicking resets
 parameters to default values.  Unmodified keys, backspace, and delete alter the 
 text buffer.  Clicking (left or right) directly on the preview draws with the
 pen foreground or background color.  Mouse wheel over the previews allows
-selection of the pen color.
+selection of the pen color.  Mouse wheel over floating point numbers causes them
+to be incremented or decremented by the "Float step," which can be adjusted
+under "Auxillary:" on the far lower right.
 
 There are 10 pattern sets in memory at all times which can be chose between by
 pressing <ctrl> 0-9.  The program can be made to automatically switch between
