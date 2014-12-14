@@ -19,10 +19,10 @@ text buffer.  Clicking (left or right) directly on the preview draws with the
 pen foreground or background color.  Mouse wheel over the previews allows
 selection of the pen color.  Mouse wheel over floating point numbers causes them
 to be incremented or decremented by the "Float step," which can be adjusted
-under "Auxillary:" on the far lower right.
+under "Auxillary" on the far lower right.
 
-There are 10 pattern sets in memory at all times which can be chose between by
-pressing <ctrl> 0-9.  The program can be made to automatically switch between
+There are 10 pattern sets in memory at all times which can be chosen between by
+pressing <ctrl> 0-9.  The program can be made to automatically cycle through
 them.  Pattern sets can be saved and loaded from disk.  Saved pattern sets 0-9 
 are automatically loaded at startup.  Images can be loaded by placing the image
 file in the build directory, editing the ImageName value in one of the *.now
