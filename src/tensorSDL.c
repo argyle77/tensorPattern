@@ -152,6 +152,7 @@ void UpdateInfoDisplay(int set);
 int OverColorBox(int set, point_t mouse, int item, SDL_Rect ** targets, int *lastHover);
 bool_t HandleColorSelect(SDL_Keycode key, int set, int item, int *selected);
 color_t ColorCyclePalette(namedPalette_t palette, int *position, int wavelength);
+color_t ColorCyclePaletteSmooth(namedPalette_t palette, int *position, int wavelength);
 
 // Main
 int main(int argc, char *argv[]) {
@@ -974,12 +975,12 @@ void DrawNewFrame(int set, bool_t isPrimary) {
   // Cycles through the pattern sets.  Allows you to set up a bunch of pattern
   // sets and switch between them one at a time at some interval.
   if (isPrimary) {
-    ProcessModes(set);
+    if (!SBOOL(set, PE_PAUSE)) ProcessModes(set);
 
     UpdateDisplays(set, YES, YES, global_intensity_limit);
   } else {
     if (currentSet != alternateSet) {
-      ProcessModes(set);
+      if (!SBOOL(set, PE_PAUSE)) ProcessModes(set);
     }
     UpdateDisplays(set, NO, NO, global_intensity_limit);
   }
@@ -1714,28 +1715,8 @@ bool_t HandleCommand(int set, command_e command, int selection) {
         SINT(set, element) = patternElements[element].max.i;
       break;
 
-    case COM_FG_WHEEL_UP:
-      //~ SENUM(set, PE_FGCYCLE) = CM_NONE;
-      //~ SENUM(set, PE_FGE) = (SENUM(set, PE_FGE) + 1) % CE_COUNT;
-      //~ SCOLOR(set, PE_FGC) = namedColors[SENUM(set, PE_FGE)].color;
-      break;
-    case COM_FG_WHEEL_DOWN:
-      //~ SENUM(set, PE_FGCYCLE) = CM_NONE;
-      //~ SENUM(set, PE_FGE)--;
-      //~ if (SENUM(set, PE_FGE) < CE_RED) SENUM(set, PE_FGE) = CE_COUNT - 1;
-      //~ SCOLOR(set, PE_FGC) = namedColors[SENUM(set, PE_FGE)].color;
-      break;
-    case COM_BG_WHEEL_UP:
-      //~ SENUM(set, PE_BGCYCLE) = CM_NONE;
-      //~ SENUM(set, PE_BGE) = (SENUM(set, PE_BGE) + 1) % CE_COUNT;
-      //~ SCOLOR(set, PE_BGC) = namedColors[SENUM(set, PE_BGE)].color;
-      break;
-    case COM_BG_WHEEL_DOWN:
-      //~ SENUM(set, PE_BGCYCLE) = CM_NONE;
-      //~ SENUM(set, PE_BGE)--;
-      //~ if (SENUM(set, PE_BGE) < CE_RED) SENUM(set, PE_BGE) = CE_COUNT - 1;
-      //~ SCOLOR(set, PE_BGC) = namedColors[SENUM(set, PE_BGE)].color;
-      break;
+    case COM_BROAD_FLIP: enableTensor = !enableTensor; break;
+    case COM_BROAD_RST: enableTensor = YES; break;
     case COM_BLEND_RST: alternateBlend = 0; break;
     case COM_BLEND_INC:
       alternateBlend += SFLOAT(set, PE_FLOATINC);
@@ -1763,40 +1744,6 @@ bool_t HandleCommand(int set, command_e command, int selection) {
     case COM_ALTERNATE_DEC: alternateSet--; if (alternateSet < 0) alternateSet = PATTERN_SET_COUNT - 1; break;
     case COM_LIVE_INC: currentSet = (currentSet + 1) % PATTERN_SET_COUNT; break;
     case COM_LIVE_DEC: currentSet--; if (currentSet < 0) currentSet = PATTERN_SET_COUNT - 1; break;
-    case COM_FGCYCLE_RST:
-      //~ SENUM(set, PE_FGCYCLE) = patternElements[PE_FGCYCLE].initial.e;
-      //~ SCOLOR(set, PE_FGC) = namedColors[SENUM(set, PE_FGE)].color;
-      break;
-    case COM_BGCYCLE_RST:
-      //~ SENUM(set, PE_BGCYCLE) = patternElements[PE_BGCYCLE].initial.e;
-      //~ SCOLOR(set, PE_BGC) = namedColors[SENUM(set, PE_BGE)].color;
-      break;
-    case COM_FGCYCLE_UP:
-      //~ SENUM(set, PE_FGCYCLE) = (SENUM(set, PE_FGCYCLE) + 1) % CM_COUNT;
-      //~ if (SENUM(set, PE_FGCYCLE) == CM_NONE) {
-        //~ SCOLOR(set, PE_FGC) = namedColors[SENUM(set, PE_FGE)].color;
-      //~ }
-      break;
-    case COM_BGCYCLE_UP:
-      //~ SENUM(set, PE_BGCYCLE) = (SENUM(set, PE_BGCYCLE) + 1) % CM_COUNT;
-      //~ if (SENUM(set, PE_BGCYCLE) == CM_NONE) {
-        //~ SCOLOR(set, PE_BGC) = namedColors[SENUM(set, PE_BGE)].color;
-      //~ }
-      break;
-    case COM_FGCYCLE_DOWN:
-      //~ SENUM(set, PE_FGCYCLE)--;
-      //~ if (SENUM(set, PE_FGCYCLE) < 0) SENUM(set, PE_FGCYCLE) = CM_COUNT - 1;
-      //~ if (SENUM(set, PE_FGCYCLE) == CM_NONE) {
-        //~ SCOLOR(set, PE_FGC) = namedColors[SENUM(set, PE_FGE)].color;
-      //~ }
-      break;
-    case COM_BGCYCLE_DOWN:
-      //~ SENUM(set, PE_BGCYCLE)--;
-      //~ if (SENUM(set, PE_BGCYCLE) < 0) SENUM(set, PE_BGCYCLE) = CM_COUNT - 1;
-      //~ if (SENUM(set, PE_BGCYCLE) == CM_NONE) {
-        //~ SCOLOR(set, PE_BGC) = namedColors[SENUM(set, PE_BGE)].color;
-      //~ }
-      break;
     case COM_CYCLESET:
       cyclePatternSets = !cyclePatternSets;
       cycleFrameCount = SINT(set, PE_FRAMECOUNT);
@@ -1823,24 +1770,6 @@ bool_t HandleCommand(int set, command_e command, int selection) {
       SetDims();
       DrawPreviewBorder(PREVIEW_LIVE_POS_X, PREVIEW_LIVE_POS_Y,  tensorWidth, tensorHeight,displaySet == OO_CURRENT);
       DrawPreviewBorder(PREVIEW_ALT_POS_X, PREVIEW_ALT_POS_Y, tensorWidth, tensorHeight, displaySet == OO_ALTERNATE);
-      break;
-    case COM_FG_DEC:
-      //~ SENUM(set, PE_FGE)--;
-      //~ if (SENUM(set, PE_FGE) < CE_RED) SENUM(set, PE_FGE) = CE_COUNT - 1;
-      //~ SCOLOR(set, PE_FGC) = namedColors[SENUM(set, PE_FGE)].color;
-      break;
-    case COM_FG_INC:
-      //~ SENUM(set, PE_FGE) = (SENUM(set, PE_FGE) + 1) % CE_COUNT;
-      //~ SCOLOR(set, PE_FGC) = namedColors[SENUM(set, PE_FGE)].color;
-      break;
-    case COM_BG_DEC:
-      //~ SENUM(set, PE_BGE)--;
-      //~ if (SENUM(set, PE_BGE) < 0) SENUM(set, PE_BGE) = CE_COUNT - 1;
-      //~ SCOLOR(set, PE_BGC) = namedColors[SENUM(set, PE_BGE)].color;
-      break;
-    case COM_BG_INC:
-      //~ SENUM(set, PE_BGE) = (SENUM(set, PE_BGE) + 1) % CE_COUNT;
-      //~ SCOLOR(set, PE_BGC) = namedColors[SENUM(set, PE_BGE)].color;
       break;
     case COM_LOADSET0: SwitchToSet(0); break;
     case COM_LOADSET1: SwitchToSet(1); break;
@@ -2845,12 +2774,41 @@ color_t ColorCyclePalette(namedPalette_t palette, int *position, int wavelength)
   return namedColors[palette.palette[*position / abs(wavelength)]].color;
 }
 
+// Smooth fade palette colors.
+color_t ColorCyclePaletteSmooth(namedPalette_t palette, int *position, int wavelength) {
+  int startColor, inTransition;
+  int endColor;
+  color_t c, d, rc;
+
+  if (wavelength > 0) {
+    *position = (*position + 1) % (palette.size * wavelength);
+  } else if (wavelength < 0) {
+    *position = (*position - 1);
+    wavelength = abs(wavelength);
+    if (*position < 0) *position = (palette.size * wavelength) - 1;
+  } else {
+    wavelength = 1;
+  }
+
+  startColor = *position / wavelength;
+  endColor = (startColor + 1) % palette.size;
+  inTransition = *position % wavelength;
+  c = namedColors[palette.palette[startColor]].color;
+  d = namedColors[palette.palette[endColor]].color;
+  rc.r = c.r - (((float)(c.r - d.r) / wavelength) * inTransition);
+  rc.g = c.g - (((float)(c.g - d.g) / wavelength) * inTransition);
+  rc.b = c.b - (((float)(c.b - d.b) / wavelength) * inTransition);
+
+  return rc;
+}
+
 // Enacts the cycling of colors based on palette settings.
 color_t ColorCycle(colorCycleModes_e cycleMode, int *cycleSaver, int cycleSteps, color_t a, color_t b) {
   color_t colorTemp = cBlack;
   int transition, inTransition;
   int toColor = 0;
   static color_t lastColor = CD_BLACK;
+  color_t c;
 
   // If the mode changed, we should make sure our position in the cycle limits
   // to the mode.
@@ -2859,12 +2817,24 @@ color_t ColorCycle(colorCycleModes_e cycleMode, int *cycleSaver, int cycleSteps,
       colorTemp = ColorCyclePalette(paletteRGB, cycleSaver, cycleSteps);
       break;
 
+    case CM_RGBSM:
+      colorTemp = ColorCyclePaletteSmooth(paletteRGB, cycleSaver, cycleSteps);
+      break;
+
     case CM_CMY:
       colorTemp = ColorCyclePalette(paletteCMY, cycleSaver, cycleSteps);
       break;
 
+    case CM_CMYSM:
+      colorTemp = ColorCyclePaletteSmooth(paletteCMY, cycleSaver, cycleSteps);
+      break;
+
     case CM_RWB:
       colorTemp = ColorCyclePalette(paletteRWB, cycleSaver, cycleSteps);
+      break;
+
+    case CM_RWBSM:
+      colorTemp = ColorCyclePaletteSmooth(paletteRWB, cycleSaver, cycleSteps);
       break;
 
     case CM_SECONDARY:
@@ -2879,8 +2849,16 @@ color_t ColorCycle(colorCycleModes_e cycleMode, int *cycleSaver, int cycleSteps,
       colorTemp = ColorCyclePalette(paletteGry, cycleSaver, cycleSteps);
       break;
 
+    case CM_GRAYSM:
+      colorTemp = ColorCyclePaletteSmooth(paletteGry, cycleSaver, cycleSteps);
+      break;
+
     case CM_SYMGRAY:
       colorTemp = ColorCyclePalette(paletteSymGry, cycleSaver, cycleSteps);
+      break;
+
+    case CM_SYMGRAYSM:
+      colorTemp = ColorCyclePaletteSmooth(paletteSymGry, cycleSaver, cycleSteps);
       break;
 
     case CM_RAINBOW:
@@ -3004,17 +2982,18 @@ color_t ColorCycle(colorCycleModes_e cycleMode, int *cycleSaver, int cycleSteps,
       transition = *cycleSaver / cycleSteps;
       inTransition = *cycleSaver % cycleSteps;
       toColor = transition / 2;
+      c = namedColors[paletteTer.palette[toColor]].color;
       switch(transition % 2) {
         case 0: // A - B
-          colorTemp.r = a.r - (((float)(a.r - namedColors[paletteTer.palette[toColor]].color.r) / cycleSteps) * inTransition);
-          colorTemp.g = a.g - (((float)(a.g - namedColors[paletteTer.palette[toColor]].color.g) / cycleSteps) * inTransition);
-          colorTemp.b = a.b - (((float)(a.b - namedColors[paletteTer.palette[toColor]].color.b) / cycleSteps) * inTransition);
+          colorTemp.r = a.r - (((float)(a.r - c.r) / cycleSteps) * inTransition);
+          colorTemp.g = a.g - (((float)(a.g - c.g) / cycleSteps) * inTransition);
+          colorTemp.b = a.b - (((float)(a.b - c.b) / cycleSteps) * inTransition);
           break;
 
         case 1: // B - A
-          colorTemp.r = namedColors[paletteTer.palette[toColor]].color.r - (((float)(namedColors[paletteTer.palette[toColor]].color.r - a.r) / cycleSteps) * inTransition);
-          colorTemp.g = namedColors[paletteTer.palette[toColor]].color.g - (((float)(namedColors[paletteTer.palette[toColor]].color.g - a.g) / cycleSteps) * inTransition);
-          colorTemp.b = namedColors[paletteTer.palette[toColor]].color.b - (((float)(namedColors[paletteTer.palette[toColor]].color.b - a.b) / cycleSteps) * inTransition);
+          colorTemp.r = c.r - (((float)(c.r - a.r) / cycleSteps) * inTransition);
+          colorTemp.g = c.g - (((float)(c.g - a.g) / cycleSteps) * inTransition);
+          colorTemp.b = c.b - (((float)(c.b - a.b) / cycleSteps) * inTransition);
         default:
           break;
       }
@@ -4408,7 +4387,7 @@ int OverColorBox(int set, point_t mouse, int item, SDL_Rect ** targets, int *las
 // Update the values of the text on the display window.
 // TODO: Shorten this function.  Lots of repetition.
 #define STATUS_BAR_LENGTH 75
-#define BUFFER_BAR_LENGTH 87
+#define BUFFER_BAR_LENGTH 94
 void UpdateInfoDisplay(int set) {
   int length;
   int i;
@@ -4729,6 +4708,20 @@ void UpdateInfoDisplay(int set) {
     }
     infoCache[thisInfo].cacheValue.b = autoBlend;
     CreateTextureBoolean(&(infoCache[thisInfo].infoText), autoBlend, ROW_PA + 13, COL_PA + 1, PARAMETER_WIDTH);
+  }
+  DrawDisplayTexture(infoCache[thisInfo].infoText);
+  thisInfo++;
+
+  // Tensor broadcast
+  if (initial || infoCache[thisInfo].cacheValue.b != enableTensor) {
+    if (initial) {
+      infoCount++;
+      infoCache = realloc(infoCache, infoCount * sizeof(infoCache_t));
+    } else {
+      SDL_DestroyTexture(infoCache[thisInfo].infoText.texture);
+    }
+    infoCache[thisInfo].cacheValue.b = enableTensor;
+    CreateTextureBoolean(&(infoCache[thisInfo].infoText), enableTensor, ROW_A + 1, COL_A + 1, PARAMETER_WIDTH);
   }
   DrawDisplayTexture(infoCache[thisInfo].infoText);
   thisInfo++;

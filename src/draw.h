@@ -11,7 +11,7 @@
   //~ #define WINDOW_WIDTH 1024
   //~ #define WINDOW_HEIGHT 768
   #define WINDOW_WIDTH 1126
-  #define WINDOW_HEIGHT 900
+  #define WINDOW_HEIGHT 854
   #define DISPLAY_TEXT_HEIGHT 14
   #define ROW_COUNT (WINDOW_HEIGHT / DISPLAY_TEXT_HEIGHT)
   #define CHAR_W 8
@@ -50,6 +50,8 @@
   #define COL_S COL_P
   #define ROW_T (ROW_S + 14)
   #define COL_T COL_S
+  #define ROW_ME (ROW_T + 10)
+  #define COL_ME COL_T
 
   #define ROW_MIR 27
   #define COL_MIR 4
@@ -76,6 +78,19 @@
 
   // Colors
   // Named color definitions - shoulda done this algorithmically.
+  #define CD_SDKRED        {.r = 42, .g = 0,   .b = 0,   .a = 255}
+  #define CD_SDKORANGE     {.r = 42, .g = 21, .b = 0,   .a = 255}
+  #define CD_SDKYELLOW     {.r = 42, .g = 42, .b = 0,   .a = 255}
+  #define CD_SDKCHARTREUSE {.r = 21, .g = 42, .b = 0,   .a = 255}
+  #define CD_SDKGREEN      {.r = 0,   .g = 42, .b = 0,   .a = 255}
+  #define CD_SDKAQUA       {.r = 0,   .g = 42, .b = 21, .a = 255}
+  #define CD_SDKCYAN       {.r = 0,   .g = 42, .b = 42, .a = 255}
+  #define CD_SDKAZURE      {.r = 0  , .g = 21, .b = 42, .a = 255}
+  #define CD_SDKBLUE       {.r = 0,   .g = 0,   .b = 42, .a = 255}
+  #define CD_SDKVIOLET     {.r = 21, .g = 0,   .b = 42, .a = 255}
+  #define CD_SDKMAGENTA    {.r = 42, .g = 0,   .b = 42, .a = 255}
+  #define CD_SDKROSE       {.r = 21, .g = 0,   .b = 21, .a = 255}
+
   #define CD_DKRED        {.r = 85, .g = 0,   .b = 0,   .a = 255}
   #define CD_DKORANGE     {.r = 85, .g = 42, .b = 0,   .a = 255}
   #define CD_DKYELLOW     {.r = 85, .g = 85, .b = 0,   .a = 255}
@@ -168,9 +183,10 @@
   #define CD_HALFLT_ROSE       {.r = 255, .g = 127,   .b = 191, .a = 255}
 
   #define CD_WHITE      {.r = 255, .g = 255, .b = 255, .a = 255}
-  #define CD_LTGRAY     {.r = 191, .g = 191, .b = 191, .a = 255}
-  #define CD_GRAY       {.r = 127, .g = 127, .b = 127, .a = 255}
-  #define CD_DKGRAY     {.r = 63,  .g = 63,  .b = 63,  .a = 255}
+  #define CD_LTGRAY     {.r = 205, .g = 205, .b = 205, .a = 255}
+  #define CD_GRAY       {.r = 154, .g = 154, .b = 154, .a = 255}
+  #define CD_DKGRAY     {.r = 102,  .g = 102,  .b = 102,  .a = 255}
+  #define CD_SDKGRAY    {.r = 51,  .g = 51,  .b = 51,  .a = 255}
   #define CD_BLACK      {.r = 0,   .g = 0,   .b = 0,   .a = 255}
   //~ #define CD_DKYELLOW   {.r = 192, .g = 192, .b = 0,   .a = 255}
   //~ #define CD_LTBLUE     {.r = 127,   .g = 192,   .b = 255, .a = 255}
@@ -199,22 +215,19 @@
   // If you change color_e, change namedColors and colorsText too.
   typedef enum color_e {
     CE_INVALID = -1,
-
-    CE_DKRED, CE_DKORANGE, CE_DKYELLOW, CE_DKCHARTREUSE, CE_DKGREEN, CE_DKAQUA, CE_DKCYAN,
-    CE_DKAZURE, CE_DKBLUE, CE_DKVIOLET, CE_DKMAGENTA, CE_DKROSE, CE_BLACK,
-
-    CE_MDRED, CE_MDORANGE, CE_MDYELLOW, CE_MDCHARTREUSE, CE_MDGREEN, CE_MDAQUA, CE_MDCYAN,
-    CE_MDAZURE, CE_MDBLUE, CE_MDVIOLET, CE_MDMAGENTA, CE_MDROSE, CE_DKGRAY,
-
-    CE_RED, CE_ORANGE, CE_YELLOW, CE_CHARTREUSE, CE_GREEN, CE_AQUA, CE_CYAN,
-    CE_AZURE, CE_BLUE, CE_VIOLET, CE_MAGENTA, CE_ROSE, CE_GRAY,
-
-    CE_MLRED, CE_MLORANGE, CE_MLYELLOW, CE_MLCHARTREUSE, CE_MLGREEN, CE_MLAQUA, CE_MLCYAN,
-    CE_MLAZURE, CE_MLBLUE, CE_MLVIOLET, CE_MLMAGENTA, CE_MLROSE, CE_LTGRAY,
-
-    CE_LTRED, CE_LTORANGE, CE_LTYELLOW, CE_LTCHARTREUSE, CE_LTGREEN, CE_LTAQUA,
-    CE_LTCYAN, CE_LTAZURE, CE_LTBLUE, CE_LTVIOLET, CE_LTMAGENTA, CE_LTROSE, CE_WHITE,
-
+    CE_SDKRED,        CE_DKRED,        CE_MDRED,        CE_RED,        CE_MLRED,        CE_LTRED,
+    CE_SDKORANGE,     CE_DKORANGE,     CE_MDORANGE,     CE_ORANGE,     CE_MLORANGE,     CE_LTORANGE,
+    CE_SDKYELLOW,     CE_DKYELLOW,     CE_MDYELLOW,     CE_YELLOW,     CE_MLYELLOW,     CE_LTYELLOW,
+    CE_SDKCHARTREUSE, CE_DKCHARTREUSE, CE_MDCHARTREUSE, CE_CHARTREUSE, CE_MLCHARTREUSE, CE_LTCHARTREUSE,
+    CE_SDKGREEN,      CE_DKGREEN,      CE_MDGREEN,      CE_GREEN,      CE_MLGREEN,      CE_LTGREEN,
+    CE_SDKAQUA,       CE_DKAQUA,       CE_MDAQUA,       CE_AQUA,       CE_MLAQUA,       CE_LTAQUA,
+    CE_SDKCYAN,       CE_DKCYAN,       CE_MDCYAN,       CE_CYAN,       CE_MLCYAN,       CE_LTCYAN,
+    CE_SDKAZURE,      CE_DKAZURE,      CE_MDAZURE,      CE_AZURE,      CE_MLAZURE,      CE_LTAZURE,
+    CE_SDKBLUE,       CE_DKBLUE,       CE_MDBLUE,       CE_BLUE,       CE_MLBLUE,       CE_LTBLUE,
+    CE_SDKVIOLET,     CE_DKVIOLET,     CE_MDVIOLET,     CE_VIOLET,     CE_MLVIOLET,     CE_LTVIOLET,
+    CE_SDKMAGENTA,    CE_DKMAGENTA,    CE_MDMAGENTA,    CE_MAGENTA,    CE_MLMAGENTA,    CE_LTMAGENTA,
+    CE_SDKROSE,       CE_DKROSE,       CE_MDROSE,       CE_ROSE,       CE_MLROSE,       CE_LTROSE,
+    CE_BLACK,         CE_SDKGRAY,      CE_DKGRAY,       CE_GRAY,       CE_LTGRAY,       CE_WHITE,
     CE_COUNT // Last.
   } color_e;
 

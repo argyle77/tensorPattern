@@ -1,4 +1,4 @@
-Tensor pattern generation - Version 7.2.0
+Tensor pattern generation - Version 8.0.0
 http://core9.org/tensor
 http://wiki.artisansasylum.com/index.php/Tensor
 http://wiki.artisansasylum.com/index.php/Tensor_2011
@@ -12,20 +12,21 @@ shows the pattern to be sent and the interface for altering the pattern using
 SDL2.
 
 Controls are listed next to the previews.  Modes and parameters can be adjusted
-with the mouse and mouse wheel.  Right clicking on most numerical parameters
-will allow you to edit them with the keyboard.  Unmodified keys, backspace, and
-esc alter the text buffer.  Clicking directly on the preview draws with the
-foreground color.
+with the mouse and mouse wheel.  Left clicking toggles modes, opens selection
+dialogs, or permits keyboard editing of most parameters.  Right clicking resets
+parameters to default values.  Unmodified keys, backspace, and delete alter the 
+text buffer.  Clicking (left or right) directly on the preview draws with the
+pen foreground or background color.  Mouse wheel over the previews allows
+selection of the pen color.
 
 There are 10 pattern sets in memory at all times which can be chose between by
-pressing <ctrl> 0-9. By default the program automatically switches between them
-(about every minute or so).  This can be disabled if desired.  Pattern sets can
-be saved and loaded from disk.  Saved pattern sets 0-9 are automatically loaded
-at startup.  Images can be loaded by placing the image file in the build
-directory, editing the ImageName value in one of the *.now save files, and then 
-loading that pattern into memory using <ctrl> <shift> 0-9 a-z.  Pattern sets 
-can be edited live or in the alternate preview window.  The control set
-corresponds to the (green) highlighted preview.
+pressing <ctrl> 0-9.  The program can be made to automatically switch between
+them.  Pattern sets can be saved and loaded from disk.  Saved pattern sets 0-9 
+are automatically loaded at startup.  Images can be loaded by placing the image
+file in the build directory, editing the ImageName value in one of the *.now
+save files, and then loading that pattern into memory using <ctrl> <shift> 0-9
+a-z.  Pattern sets can be edited live or in the alternate preview window.  The
+controls operate on the currently (green) highlighted preview.
 
 If Tensor topology has changed, the IP addresses for the sections can be edited
 in tensorIP.map, and if necessary, the pixels themselves can be remapped using

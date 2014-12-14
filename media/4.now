@@ -1,23 +1,77 @@
 Tensor pattern parameter set file
-Version 7.0.0.
+Version 7.2.0.
 CellFun NO
+CFColorA 0 255 127 255
+CFColorB 0 0 0 255
+CFCMode 0
+CFCMRate 8
+CFCMPos 0
+CFAlpha 1.000000
 CycleScroll 0
 Fader YES
 Diffuse NO
 RollOver NO
 Scroll NO
 Hbars NO
+HbarsColorA 255 0 0 255
+HbarsColorB 0 0 0 255
+HbarsCMode 0
+HbarsCMRate 8
+HbarsCMPos 0
+HbarsAlpha 1.000000
+HbarsBGColorA 0 0 255 255
+HbarsBGColorB 0 0 0 255
+HbarsBGCMode 0
+HbarsBGCMRate 8
+HbarsBGCMPos 0
+HbarsBGAlpha 0.000000
 Vbars NO
-FGColorAll NO
-BGColorAll NO
+VbarsColorA 255 127 0 255
+VbarsColorB 0 0 0 255
+VbarsCMode 0
+VbarsCMRate 8
+VbarsCMPos 0
+VbarsAlpha 1.000000
+VbarsBGColorA 0 255 127 255
+VbarsBGColorB 0 0 0 255
+VbarsBGCMode 0
+VbarsBGCMRate 8
+VbarsBGCMPos 0
+VbarsBGAlpha 0.000000
+ColorAllA NO
+CAAColorA 255 255 0 255
+CAAColorB 0 0 0 255
+CAACMode 0
+CAACMRate 8
+CAACMPos 0
+CAAAlpha 1.000000
+ColorAllB NO
+CABColorA 0 0 0 255
+CABColorB 255 0 0 255
+CABCMode 0
+CABCMRate 8
+CABCMPos 0
+CABAlpha 1.000000
 ImageAll NO
 RandomDots NO
+RDOTColorA 255 0 255 255
+RDOTColorB 0 0 0 255
+RDOTCMode 0
+RDOTCMRate 8
+RDOTCMPos 0
+RDOTAlpha 1.000000
 FadeMode 1
 PostRotZoom NO
 PreRotZoom YES
 AntiAlias NO
 Multiply NO
 SideBar NO
+SBColorA 0 255 255 255
+SBColorB 0 0 0 255
+SBCMode 0
+SBCMRate 8
+SBCMPos 0
+SBAlpha 1.000000
 NoRed NO
 NoGreen NO
 NoBlue NO
@@ -28,16 +82,10 @@ ShiftCyan 4
 ShiftYellow 4
 ShiftMagenta 4
 PostImage NO
-FGColorE 0
-BGColorE 16
 FadeIncr -1
 DiffuseCoef 0.002000
 ScrollDir 1
 DotCoef 100
-FGCycleMode 0
-BGCycleMode 0
-RainbowFG 8
-RainbowBG 8
 Expansion 1.000000
 FloatInc 0.100000
 PostRotAngle 0.000000
@@ -46,8 +94,6 @@ MultiplyBy 1.000000
 Delay 61
 FGCyclePos 0
 BGCyclePos 0
-FGColorC 255 0 0 255
-BGColorC 0 0 0 255
 CellFunCt 0
 TextBuffer Frostbyte was an engineer. 
 TextMode 3
@@ -58,8 +104,20 @@ TextIndex 27
 PixelIndex 189
 ScrollDirLast 1
 TextSeed NO
-FrameBuffer 47 47 33 4b 4b 36 4b 4b 36 49 49 34 49 49 34 49 49 34 49 49 34 58 58 43 59 59 44 63 63 4d 64 64 4e 71 71 5d 51 51 3c 51 51 3c 51 51 3c 51 51 3c 67 67 52 57 57 47 5b 5b 46 57 57 47 4b 4b 36 4d 4d 38 4d 4d 38 4d 4d 38 49 49 34 49 49 34 49 49 34 49 49 34 4b 4b 36 49 49 34 49 49 34 49 49 34 49 49 34 49 49 34 59 59 44 55 55 45 33 33 17 57 57 41 0b 09 b8 0b 09 b8 0b 09 b8 32 0e 77 33 09 93 47 0f af 47 0f af 33 33 18 33 33 18 57 57 47 4b 4b 36 51 51 3c 4d 4d 38 51 51 3b 49 49 34 49 49 34 4b 4b 36 4b 4b 36 49 49 34 49 49 34 49 49 34 4b 4b 36 49 49 34 65 65 50 31 31 30 31 31 30 ba ba ba ba ba ba 0b 09 b8 0b 0b 06 0b 0b 06 43 0a b3 33 09 93 47 0f af 59 59 43 59 59 43 71 71 5d 63 63 4d 4d 4d 38 51 51 3c 51 51 3c 49 49 34 49 49 34 4b 4b 36 49 49 34 4b 4b 36 4b 4b 36 4b 4b 36 4b 4b 36 0b 09 b2 bd bc ba 31 31 30 0b 09 a3 78 78 6e 78 78 6e 3d 04 ba 0b 0b 06 45 0d b3 41 0a b6 41 0a b6 17 17 17 83 83 75 0b 0b 0b 73 73 5f 73 73 5f 4f 4f 39 51 51 3c 59 59 43 49 49 34 49 49 34 4b 4b 36 4b 4b 36 4b 4b 36 4e 4e 39 4f 4f 3a 4f 4f 3a 05 05 01 bd bc ba bd bc ba bd bc ba 79 79 71 76 76 6d 85 85 7c 85 85 7c 41 0a b3 41 0a b6 3b 03 b9 17 17 17 17 17 17 0b 0b 0b 0b 0b 0b 53 53 3e 53 53 3e 51 51 3c 59 59 44 4d 4d 38 49 49 34 4b 4b 36 4b 4b 36 4b 4b 36 4f 4f 3a 4f 4f 3a 0b 09 90 05 05 04 05 05 04 bd bc ba bd bc ba bf bf ba 41 0a ba 85 85 7c 85 85 7c 17 17 17 17 17 17 17 17 17 17 17 17 43 0a ba 7d 7d 68 7d 7d 68 33 0f 77 53 53 3e 4f 4f 39 67 67 51 4d 4d 38 49 49 34 4b 4b 36 4b 4b 36 4f 4f 3a 63 63 4d 6f 6f 5b 0b 08 b8 05 05 04 05 05 04 5f 5f 60 41 09 b3 3f 07 ba 3f 07 ba 3f 07 ba 3f 07 ba 3f 07 ba 0b 0b 0a 3b 03 b9 3b 03 b9 3b 03 b9 0b 0b 0b 7d 7d 68 7d 7d 68 7d 7d 68 33 0f 69 4d 4d 3d 4d 4d 38 49 49 34 4b 4b 36 4b 4b 36 57 57 42 63 63 4d 55 55 3f 0b 09 ba 05 05 04 5f 5f 60 5f 5f 60 3b 03 b3 05 05 05 3f 06 ba 11 d1 a9 11 d1 a9 12 d1 a9 0b 0a 0a 0b 0b 0a 3b 02 b3 cf d0 ba 0b 0b 0b 0b 0b 0b 7d 7d 68 6f 6f 5b 6f 6f 5b 33 0e 67 4d 4d 38 49 49 34 4b 4b 36 4f 4f 3a 57 57 42 33 33 16 0b 08 ba 0b 09 ba 05 05 04 05 05 04 5f 5f 60 3b 03 b2 05 05 05 3b 03 aa 05 05 05 0d d5 ad 3f 07 ba 11 0f 10 11 0f 10 cd ce ba cf d0 ba 0b 0b 0b bb bc ba 0b 0b 0b 29 29 29 6f 6f 5b 5d 5d 48 59 59 49 49 49 34 47 47 33 57 57 42 57 57 42 53 53 43 05 05 04 0b 08 a3 05 05 04 05 05 04 c1 c1 ba 3b 03 ac 3b 03 aa 05 05 05 05 05 05 05 05 05 3f 07 ba 0d d5 ae 13 11 12 0b 0b 0b d1 d2 ba bb bc ba bb bc ba ba ba ba 29 29 29 5b 5b 45 5d 5d 48 59 59 49 47 47 33 47 47 33 47 47 33 53 53 43 63 63 4e 05 05 04 05 05 04 c1 c1 ba 05 05 04 3b 01 ba 3b 03 ac 17 d5 ae 07 cf a8 07 cf a8 06 cf a8 06 cf a8 1b d6 af 0b 0b 0b 0b 0b 0b bd be ba bb bc ba bc bc ba bc bc ba 29 29 29 5b 5b 45 71 71 5d 59 59 49 4f 4f 3a 47 47 33 47 47 33 47 47 33 0b 09 af 0b 09 a2 c1 c1 ba c1 c1 ba c1 c1 ba 05 05 05 07 cf a8 05 05 04 07 cf a8 07 cf a8 06 cf a8 06 cf a8 0f d6 ae 3b 03 aa 0b 0b 0b 3b 03 b2 bb bc ba 7d 7d 71 7f 7f 73 7f 7f 73 73 73 5f 71 71 5d 4d 4d 38 53 53 3e 47 47 33 47 47 33 49 49 34 0b 09 af 08 05 c1 6a 6a 56 05 05 05 c1 c1 ba 05 05 05 05 05 04 05 05 04 0f d3 aa 05 05 04 05 05 04 37 03 ae 1b d5 af 3b 03 a9 0b 0b 0b 3b 03 b2 3b 03 b2 7f 7f 73 7f 7f 73 69 69 55 55 55 40 73 73 5f 4f 4f 3a 53 53 3e 47 47 33 47 47 33 49 49 34 4d 4d 38 07 05 c1 6a 6a 56 05 04 c1 81 81 76 41 09 b5 05 05 04 05 05 04 c9 c9 ba 0f d3 aa 0f d3 aa 3b 05 aa 3b 05 aa 37 03 ae 2a e2 ba 3b 03 b2 3b 03 b4 49 11 b0 a9 a9 aa 61 61 4c 55 55 40 51 51 3b 53 53 3e 53 53 3e 47 47 33 49 49 34 4d 4d 38 4d 4d 38 0b 09 8d 09 06 c1 05 05 03 81 81 76 81 81 76 05 05 02 05 05 04 05 05 04 05 05 04 05 05 03 37 03 ba 37 03 ae 2a e2 ba 2a e2 ba 3b 01 b5 0b 0b 08 49 11 b0 a6 a6 a6 a6 a6 a6 55 55 40 53 53 3e 53 53 3e 5a 5a 44 47 47 33 49 49 34 49 49 34 4d 4d 38 6d 6d 59 61 61 4d 0b 09 b9 3b 04 b3 3b 04 b3 3b 04 b3 b9 b9 ba b9 b9 ba 05 05 03 05 05 03 05 05 03 3b 01 b7 3b 01 ba 3b 01 ba 0b 0b 08 0b 0b 08 3b 05 b4 a6 a6 a6 a6 a6 a6 51 51 3b 69 69 53 5b 5b 46 4b 4b 36 49 49 34 49 49 34 49 49 34 4d 4d 38 61 61 4b 53 53 3d 0b 09 b9 0a 07 b1 05 05 02 9f 9f 9c bb bb ba bb bb ba 37 03 ac 37 03 ac 3b 01 b5 3b 01 b9 3b 01 b9 0b 0b 08 0b 0b 08 0b 0b 08 47 11 b4 0b 09 ce 0b 09 ce 4f 4f 3f 69 69 53 4f 4f 3a 4b 4b 36 49 49 34 49 49 34 49 49 34 4d 4d 38 55 55 40 33 33 15 33 09 7f 06 04 9c 06 04 9c ad ad ac b1 b1 b3 b7 b7 b9 98 98 99 98 98 99 ab ab ac a8 a8 a9 31 31 31 0b 0b 08 0b 0b 08 47 11 bb 47 11 b4 0b 09 ce 59 59 49 4f 4f 3a 4f 4f 3a 4b 4b 36 4b 4b 36 49 49 34 49 49 34 49 49 34 49 49 34 55 55 3f 55 55 40 51 51 41 61 61 4c 0b 09 a1 6a 6a 56 6a 6a 56 b3 b3 b5 a0 a0 a0 a1 a1 a2 a8 a8 a9 a8 a8 a9 3f 08 ae 6a 6a 56 0b 0b 08 33 09 8e 33 09 8e 5e 5e 49 59 59 49 4f 4f 3a 4b 4b 36 4b 4b 36 4b 4b 36 47 47 33 49 49 34 49 49 34 49 49 34 4d 4d 38 55 55 40 51 51 41 33 0f 60 0b 09 ab 9d 9d 9e 08 05 c1 09 05 c1 09 05 c1 9f 9f a1 9f 9f a0 0a 08 9c 0b 09 9d 0b 09 9d 0b 09 9d 5a 5a 44 5d 5d 46 5b 5b 4b 49 49 34 4b 4b 36 4b 4b 36 4b 4b 36 4b 4b 36 
-PreRotAngle 669.000061
+TSColorA 255 0 127 255
+TSColorB 0 0 0 255
+TSCMode 0
+TSCMRate 8
+TSCMPos 0
+TSAlpha 1.000000
+TSBGColorA 0 0 0 255
+TSBGColorB 0 0 0 255
+TSBGCMode 0
+TSBGCMRate 8
+TSBGCMPos 0
+TSBGAlpha 1.000000
+FrameBuffer 2f 27 69 2f 27 6c 2f 1b 8a 33 15 2c 33 15 2c 2b 23 4c 27 1f 8a 29 1f b9 25 1d 16 29 21 b9 1d 0b 73 25 17 39 25 17 39 25 17 39 25 1b 32 21 15 2a 25 1b 2d 27 1d 20 23 1d 12 27 1f 5f 29 21 5a 27 1d a9 17 05 a1 27 1f 81 33 15 2b 33 1f 8d 25 1b 8a 2f 27 6c 23 19 8a 33 15 2c 33 15 2c 29 21 50 2b 23 4c 29 21 60 24 1c 5a 21 0f 54 21 0f 54 21 0f 54 25 17 39 23 19 40 25 1b 32 21 0f 61 23 17 28 23 17 28 23 17 26 21 15 39 1b 11 60 25 1d 06 29 21 5a 29 1f ad 29 1d a9 2f 27 81 33 15 2b 31 1d 8a 25 1b 8d 31 1d 8d 33 15 2c 33 2f e7 29 1f ad 29 21 60 29 21 60 24 1c 5a 23 1d 07 83 4b 21 1d 0b 73 23 19 40 21 0f 61 21 0f 61 21 0f 61 23 17 2b 1d 0c 73 27 1f 2a 29 23 0f 29 23 0f 29 23 0f 23 1d 04 27 1f 57 25 1d 13 17 2b 2c 33 15 2b 33 15 2b 31 1d 8d 33 15 2c 33 2f e7 27 1f 78 19 07 a7 27 1f 64 1a 10 65 83 4b 21 83 4b 21 83 4b 21 83 4b 21 23 19 40 1f 0e 61 21 0f 61 21 0f 61 0f 9f 78 0f 9f 78 21 17 0e 29 23 0f 29 23 0f 29 23 0f 29 23 0f 23 19 20 29 21 ad 29 21 56 2b 21 7e 33 15 2b 31 1d 8d 33 15 2c 29 21 50 29 1d a9 1b 15 2a 23 1d 15 7d 45 1c 1a 10 65 83 4b 21 7d 45 1c 1f 0e 61 1d 0b 73 21 0f 62 21 0f 61 21 0f 61 0f 9f 78 0f 9f 78 21 17 0e 1f 15 38 1f 15 38 1f 15 38 1b 14 51 1b 12 4d 1b 13 48 27 1f 6f 2b 23 4e 33 15 2b 33 15 2c 33 15 2c 2f 27 8d 27 1f 90 27 1f 90 7d 45 1c 7d 45 1c 83 4b 21 7d 45 1c 83 4b 21 1f 0e 61 83 4b 21 17 0f 70 17 0f 70 0f 9f 78 0f 9f 78 1f 15 27 1f 15 26 0f 9f 78 1f 15 38 1b 13 5b 23 17 0f 23 17 0f 1b 13 48 21 17 14 29 1f 4e 33 2f e2 33 15 2c 33 2f e7 2e 26 8c 29 21 56 22 1a 1f 7d 45 1c 83 4b 21 83 4b 21 83 4b 21 83 4b 21 17 0d 5e 17 0d 5e 01 9f 78 01 9f 78 17 0f 70 01 9f 78 0f 9f 78 0f 9f 78 0f 9f 78 1f 15 38 1f 15 38 23 17 0f 23 17 0f 23 17 0f 21 17 11 29 1f 54 2e 26 89 33 15 2c 33 2f e7 28 1e 55 21 17 12 7b 43 1a 7d 45 1c 7d 45 1c 7d 45 1c 7d 45 1c 02 9f 78 17 0d 5e 17 0d 5e 17 0d 5e 01 9f 78 01 9f 78 0f 9f 78 0f 9f 78 0f 9f 78 1b 0b 63 21 15 54 21 15 53 1b 14 51 1b 14 51 27 1d 20 27 1d 20 29 21 54 27 1f 75 33 15 2c 33 15 2c 29 1f 50 21 17 15 23 1d 17 23 1b 31 7d 45 1c 19 0c 73 17 0d 63 02 9f 78 02 9f 78 17 09 78 17 09 78 01 9f 78 01 9f 78 01 9f 78 1f 0d 68 1b 0b 63 1b 0b 62 1b 0b 62 1b 13 52 1b 14 51 1f 15 49 1b 14 51 26 1c 20 27 1f 8d 28 20 83 33 15 2c 2b 21 81 27 1f 72 1b 13 49 1b 13 49 23 1b 31 19 0c 73 19 0c 73 02 9f 78 02 9f 78 10 9f 78 17 09 78 17 09 78 d7 9f 78 d6 9f 78 1f 0d 68 1f 0d 68 1f 0d 68 1f 0d 68 1b 0b 62 1b 14 51 1b 14 51 27 1d 20 27 1d 20 27 1d 20 23 1d 14 29 1d a5 33 15 2c 2b 21 80 29 21 58 1b 13 48 1b 13 4d 23 1b 31 19 0c 73 19 0c 73 19 0c 73 02 9f 78 10 9f 78 02 9f 78 17 0c 73 d6 9f 78 d6 9f 78 d6 9f 78 1f 0d 68 1f 0d 68 d6 9f 78 1e 0c 73 1f 15 49 1f 15 49 27 1d 20 27 1d 20 23 1d 14 27 1f 63 19 07 a5 33 15 2c 17 2b 2d 25 1d 14 23 19 21 21 15 2d 23 1b 31 1b 13 72 19 0c 73 10 9f 78 10 9f 78 10 9f 78 10 9f 78 17 0c 73 17 0c 73 d8 9f 78 fd 9f 78 d6 9f 78 d6 9f 78 d6 9f 78 d6 9f 78 21 0e 73 27 1d 20 21 0f 71 21 15 3d 25 1d 08 25 1d 08 29 1f a9 33 15 2c 29 1d ad 29 1d ad 27 1f 59 21 15 2d 1b 13 6d 1d 0d 73 1d 0e 73 10 9f 78 77 3f 16 10 9f 78 17 0c 73 17 0c 73 17 0c 73 fd 9f 78 fd 9f 78 d6 9f 78 d6 9f 78 1f 0f 6f 19 0d 67 19 0d 66 27 1d 20 21 0f 71 21 15 3c 21 15 3c 27 1d af 27 1d af 33 15 2c 27 1f 84 28 1e b0 29 21 5c 1b 15 32 1b 15 32 1b 12 71 1b 12 6d 1f 13 4d 1f 13 4d 17 0a 73 17 0a 73 17 0a 73 17 0d 5f 17 0d 5f 17 0d 5f d6 9f 78 d6 9f 78 d6 9f 78 19 0d 68 19 0d 66 21 0f 72 23 1d 1e 23 1d 06 26 1e 5a 29 21 5e 17 05 a8 2f 27 75 2f 27 78 17 05 a5 27 1d ad 25 1d 07 1b 11 62 1b 12 6d 1b 12 6d 17 0d 73 17 0d 73 17 0a 73 17 0a 73 17 0a 73 17 0d 5f 17 0d 5f 17 0d 5f 17 0d 5f d6 9f 78 19 0d 66 19 0d 66 25 1d 28 25 1d 28 25 1d 27 23 1d 1e 23 19 22 29 1f b5 29 1d b0 2f 27 72 2d 25 75 29 21 7b 29 1f a5 27 1f 61 23 1d 13 1b 12 6d 1b 12 6d 17 0d 73 17 0d 73 1f 15 4d 1f 15 52 1f 15 52 17 0a 73 21 14 4d 17 0d 5f 1f 15 45 1f 13 48 1f 13 48 19 0d 66 1f 13 47 25 1d 28 25 1d 28 27 1d 19 25 1d 15 25 1d 15 29 1d b1 2d 25 6f 2d 25 72 2f 27 78 19 07 a1 2b 23 5e 23 1d 13 26 1c 20 1b 12 6d 1b 12 6d 1b 12 6d 1f 13 50 1f 14 4d 1f 14 4d 21 15 58 21 14 4d 1f 15 45 1f 15 45 1f 15 45 1f 13 48 19 0d 66 25 1d 28 27 1f 29 25 1d 28 27 1d 19 29 21 5a 17 2b 2e 33 15 2d 2f 27 6f 2f 27 72 2d 25 75 29 21 7b 29 1d a1 27 1f 8a 23 1b 1e 23 1d 12 1b 12 6d 1f 13 4b 1b 12 6d 21 15 56 1f 14 4b 1f 14 4b 21 14 4d 1f 14 4a 1f 15 45 1f 15 3c 19 0d 66 19 0d 66 27 1f 29 21 17 13 21 17 16 29 1f 52 2b 21 84 33 15 2d 33 15 2d 2d 25 6c 2d 25 6f 2d 25 72 2d 25 75 29 21 81 27 1f 72 29 21 52 21 17 10 1b 12 6d 1b 12 6d 1b 12 6d 22 14 51 1f 14 54 21 13 51 1f 15 3a 21 15 29 1f 14 4a 1b 11 65 1f 15 3c 1f 14 3c 21 17 13 28 20 57 29 1f 52 29 1f 52 2b 23 52 33 15 2d 2f 27 78 2f 27 6c 2f 27 6f 2f 27 72 2f 27 75 31 2d ec 2f 27 87 29 1f 52 2b 21 54 21 17 13 1b 13 46 1b 11 4d 1b 13 4d 1f 15 3a 1f 15 3a 1f 15 3a 23 1d 08 1f 15 3a 1b 11 65 23 1d 16 24 1c 90 24 1c 90 29 21 58 29 21 52 33 2f ec 33 15 2d 2f 27 78 2f 27 75 
+PreRotAngle 1229.000000
 PreRotAlias NO
 PreRotInc 1.000000
 PreRotExp 1.000000
@@ -72,14 +130,54 @@ ImageXOffset 0.400000
 ImageYOffset 0.500000
 ImageName Fbyte-01.jpg
 SnailShot NO
+SnailColorA 127 255 0 255
+SnailColorB 0 0 0 255
+SnailCMode 0
+SnailCMRate 8
+SnailCMPos 0
+SnailAlpha 1.000000
 SnailPos 0
 FastSnail NO
+FSNAILColorA 0 255 0 255
+FSNAILColorB 0 0 0 255
+FSNAILCMode 0
+FSNAILCMRate 8
+FSNAILCMPos 0
+FSNAILAlpha 1.000000
 FastSnailP 0
 Crossbar 0
+CBColorA 127 0 255 255
+CBColorB 0 0 0 255
+CBCMode 0
+CBCMRate 8
+CBCMPos 0
+CBAlpha 1.000000
 CrossLikely 1002
 MirrorV NO
 MirrorH NO
 ScrollRandE NO
 ScrollRand 50
 SidePulse NO
+SPColorA 0 127 255 255
+SPColorB 0 0 0 255
+SPCMode 0
+SPCMRate 8
+SPCMPos 0
+SPAlpha 1.000000
 Intensity 1.000000
+ScrollAlpha 1.000000
+ImageAlpha 1.000000
+PaletteSelct 0
+LPColorA 0 0 255 255
+LPColorB 0 0 0 255
+LPCMode 0
+LPCMRate 8
+LPCMPos 0
+LPAlpha 1.000000
+LPBGColorA 255 0 0 255
+LPBGColorB 0 0 0 255
+LPBGCMode 0
+LPBGCMRate 8
+LPBGCMPos 0
+LPBGAlpha 1.000000
+Pause NO

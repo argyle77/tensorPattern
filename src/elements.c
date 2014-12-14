@@ -24,7 +24,9 @@ const char *dirText[] = { "Up", "Left", "Down", "Right" };
 const int dirTextCount = sizeof(dirText) / sizeof(const char *);
 
 // Color cycling modes
-const char *colorCycleText[] = { "None", "R-G-B", "C-M-Y", "R-W-B", "Secondary", "Tertiary", "Grays", "Sym Grays", "Rainbow", "Random", "A-B Fade", "Tertiary-A" };
+const char *colorCycleText[] = { "None", "A-B Fade", "R-G-B", "R-G-B SM", "C-M-Y",
+  "C-M-Y SM", "R-W-B", "R-W-B SM", "Gray Ramp", "Gry Rmp SM", "Gray Sym", "Gry Sym SM",
+  "Secondary", "Tertiary", "Rainbow", "Random", "Tertiary-A"};
 const int colorCycleTextCount = sizeof(colorCycleText) / sizeof(const char *);
 
 // Text background modes
@@ -47,70 +49,95 @@ const int alterTextCount = sizeof(alterText) / sizeof(const char *);
 
 // This palette order should line up with color_e enumeration values and colorsText.
 const colorName_t namedColors[] = {
+  { CE_SDKRED,       CD_SDKRED},
   { CE_DKRED,        CD_DKRED},
-  { CE_DKORANGE,     CD_DKORANGE},
-  { CE_DKYELLOW,     CD_DKYELLOW},
-  { CE_DKCHARTREUSE, CD_DKCHARTREUSE},
-  { CE_DKGREEN,      CD_DKGREEN},
-  { CE_DKAQUA,       CD_DKAQUA},
-  { CE_DKCYAN,       CD_DKCYAN},
-  { CE_DKAZURE,      CD_DKAZURE},
-  { CE_DKBLUE,       CD_DKBLUE},
-  { CE_DKVIOLET,     CD_DKVIOLET},
-  { CE_DKMAGENTA,    CD_DKMAGENTA},
-  { CE_DKROSE,       CD_DKROSE},
-  { CE_BLACK,        CD_BLACK},
   { CE_MDRED,        CD_MDRED},
-  { CE_MDORANGE,     CD_MDORANGE},
-  { CE_MDYELLOW,     CD_MDYELLOW},
-  { CE_MDCHARTREUSE, CD_MDCHARTREUSE},
-  { CE_MDGREEN,      CD_MDGREEN},
-  { CE_MDAQUA,       CD_MDAQUA},
-  { CE_MDCYAN,       CD_MDCYAN},
-  { CE_MDAZURE,      CD_MDAZURE},
-  { CE_MDBLUE,       CD_MDBLUE},
-  { CE_MDVIOLET,     CD_MDVIOLET},
-  { CE_MDMAGENTA,    CD_MDMAGENTA},
-  { CE_MDROSE,       CD_MDROSE},
-  { CE_DKGRAY,       CD_DKGRAY},
   { CE_RED,          CD_RED},
-  { CE_ORANGE,       CD_ORANGE},
-  { CE_YELLOW,       CD_YELLOW},
-  { CE_CHARTREUSE,   CD_CHARTREUSE},
-  { CE_GREEN,        CD_GREEN},
-  { CE_AQUA,         CD_AQUA},
-  { CE_CYAN,         CD_CYAN},
-  { CE_AZURE,        CD_AZURE},
-  { CE_BLUE,         CD_BLUE},
-  { CE_VIOLET,       CD_VIOLET},
-  { CE_MAGENTA,      CD_MAGENTA},
-  { CE_ROSE,         CD_ROSE},
-  { CE_GRAY,         CD_GRAY},
   { CE_MLRED,        CD_MLRED},
-  { CE_MLORANGE,     CD_MLORANGE},
-  { CE_MLYELLOW,     CD_MLYELLOW},
-  { CE_MLCHARTREUSE, CD_MLCHARTREUSE},
-  { CE_MLGREEN,      CD_MLGREEN},
-  { CE_MLAQUA,       CD_MLAQUA},
-  { CE_MLCYAN,       CD_MLCYAN},
-  { CE_MLAZURE,      CD_MLAZURE},
-  { CE_MLBLUE,       CD_MLBLUE},
-  { CE_MLVIOLET,     CD_MLVIOLET},
-  { CE_MLMAGENTA,    CD_MLMAGENTA},
-  { CE_MLROSE,       CD_MLROSE},
-  { CE_LTGRAY,       CD_LTGRAY},
   { CE_LTRED,        CD_LTRED},
+
+  { CE_SDKORANGE,    CD_SDKORANGE},
+  { CE_DKORANGE,     CD_DKORANGE},
+  { CE_MDORANGE,     CD_MDORANGE},
+  { CE_ORANGE,       CD_ORANGE},
+  { CE_MLORANGE,     CD_MLORANGE},
   { CE_LTORANGE,     CD_LTORANGE},
+
+  { CE_SDKYELLOW,    CD_SDKYELLOW},
+  { CE_DKYELLOW,     CD_DKYELLOW},
+  { CE_MDYELLOW,     CD_MDYELLOW},
+  { CE_YELLOW,       CD_YELLOW},
+  { CE_MLYELLOW,     CD_MLYELLOW},
   { CE_LTYELLOW,     CD_LTYELLOW},
+
+  { CE_SDKCHARTREUSE,CD_SDKCHARTREUSE},
+  { CE_DKCHARTREUSE, CD_DKCHARTREUSE},
+  { CE_MDCHARTREUSE, CD_MDCHARTREUSE},
+  { CE_CHARTREUSE,   CD_CHARTREUSE},
+  { CE_MLCHARTREUSE, CD_MLCHARTREUSE},
   { CE_LTCHARTREUSE, CD_LTCHARTREUSE},
+
+  { CE_SDKGREEN,     CD_SDKGREEN},
+  { CE_DKGREEN,      CD_DKGREEN},
+  { CE_MDGREEN,      CD_MDGREEN},
+  { CE_GREEN,        CD_GREEN},
+  { CE_MLGREEN,      CD_MLGREEN},
   { CE_LTGREEN,      CD_LTGREEN},
+
+  { CE_SDKAQUA,      CD_SDKAQUA},
+  { CE_DKAQUA,       CD_DKAQUA},
+  { CE_MDAQUA,       CD_MDAQUA},
+  { CE_AQUA,         CD_AQUA},
+  { CE_MLAQUA,       CD_MLAQUA},
   { CE_LTAQUA,       CD_LTAQUA},
+
+  { CE_SDKCYAN,      CD_SDKCYAN},
+  { CE_DKCYAN,       CD_DKCYAN},
+  { CE_MDCYAN,       CD_MDCYAN},
+  { CE_CYAN,         CD_CYAN},
+  { CE_MLCYAN,       CD_MLCYAN},
   { CE_LTCYAN,       CD_LTCYAN},
+
+  { CE_SDKAZURE,     CD_SDKAZURE},
+  { CE_DKAZURE,      CD_DKAZURE},
+  { CE_MDAZURE,      CD_MDAZURE},
+  { CE_AZURE,        CD_AZURE},
+  { CE_MLAZURE,      CD_MLAZURE},
   { CE_LTAZURE,      CD_LTAZURE},
+
+  { CE_SDKBLUE,      CD_SDKBLUE},
+  { CE_DKBLUE,       CD_DKBLUE},
+  { CE_MDBLUE,       CD_MDBLUE},
+  { CE_BLUE,         CD_BLUE},
+  { CE_MLBLUE,       CD_MLBLUE},
   { CE_LTBLUE,       CD_LTBLUE},
+
+  { CE_SDKVIOLET,    CD_SDKVIOLET},
+  { CE_DKVIOLET,     CD_DKVIOLET},
+  { CE_MDVIOLET,     CD_MDVIOLET},
+  { CE_VIOLET,       CD_VIOLET},
+  { CE_MLVIOLET,     CD_MLVIOLET},
   { CE_LTVIOLET,     CD_LTVIOLET},
+
+  { CE_SDKMAGENTA,   CD_SDKMAGENTA},
+  { CE_DKMAGENTA,    CD_DKMAGENTA},
+  { CE_MDMAGENTA,    CD_MDMAGENTA},
+  { CE_MAGENTA,      CD_MAGENTA},
+  { CE_MLMAGENTA,    CD_MLMAGENTA},
   { CE_LTMAGENTA,    CD_LTMAGENTA},
+
+  { CE_SDKROSE,      CD_SDKROSE},
+  { CE_DKROSE,       CD_DKROSE},
+  { CE_MDROSE,       CD_MDROSE},
+  { CE_ROSE,         CD_ROSE},
+  { CE_MLROSE,       CD_MLROSE},
   { CE_LTROSE,       CD_LTROSE},
+
+  { CE_BLACK,        CD_BLACK},
+  { CE_SDKGRAY,      CD_SDKGRAY},
+  { CE_DKGRAY,       CD_DKGRAY},
+  { CE_GRAY,         CD_GRAY},
+  { CE_LTGRAY,       CD_LTGRAY},
   { CE_WHITE,        CD_WHITE},
 };
 const int namedColorsCount = sizeof(namedColors) / sizeof(colorName_t);
@@ -190,7 +217,7 @@ const int seedPaletteCount = sizeof(seedPalette) / sizeof(paletteConnect_t);
 const patternElement_t patternElements[] = {
 //  Access enum,    "Name",        TYPE,      initial,     min,      max,      size,     etype
   { PE_CELLFUN,     "CellFun",     ET_BOOL,   {.b = NO} },
-  { PE_CF_COLA,     "CFColorA",    ET_COLOR,  {.c = CD_GREEN} },
+  { PE_CF_COLA,     "CFColorA",    ET_COLOR,  {.c = CD_AQUA} },
   { PE_CF_COLB,     "CFColorB",    ET_COLOR,  {.c = CD_BLACK} },
   { PE_CF_CM,       "CFCMode",     ET_ENUM,   {.e = CM_NONE}, .etype = E_COLORCYCLES },
   { PE_CF_CMR,      "CFCMRate",    ET_INT,    {.i = INITIAL_RAINBOW_INC}, {.i = INT_MIN}, {.i = INT_MAX} },
@@ -215,20 +242,20 @@ const patternElement_t patternElements[] = {
   { PE_HBARS_BGCMPOS,"HbarsBGCMPos",ET_INT,   {.i = 0} },  // Not user
   { PE_HBARS_BGALPHA,"HbarsBGAlpha",ET_FLOAT, {.f = 0}, {.f = 0}, {.f = 1} },
   { PE_VBARS,       "Vbars",       ET_BOOL,   {.b = NO} },
-  { PE_VBARS_COLA,  "VbarsColorA", ET_COLOR,  {.c = CD_GREEN} },
+  { PE_VBARS_COLA,  "VbarsColorA", ET_COLOR,  {.c = CD_ORANGE} },
   { PE_VBARS_COLB,  "VbarsColorB", ET_COLOR,  {.c = CD_BLACK} },
   { PE_VBARS_CM,    "VbarsCMode",  ET_ENUM,   {.e = CM_NONE}, .etype = E_COLORCYCLES },
   { PE_VBARS_CMR,   "VbarsCMRate", ET_INT,    {.i = INITIAL_RAINBOW_INC}, {.i = INT_MIN}, {.i = INT_MAX} },
   { PE_VBARS_CMPOS, "VbarsCMPos",  ET_INT,    {.i = 0} },  // Not user
   { PE_VBARS_ALPHA, "VbarsAlpha",  ET_FLOAT,  {.f = 1}, {.f = 0}, {.f = 1} },
-  { PE_VBARS_BGCOLA,  "VbarsBGColorA", ET_COLOR,  {.c = CD_ORANGE} },
+  { PE_VBARS_BGCOLA,  "VbarsBGColorA", ET_COLOR,  {.c = CD_AQUA} },
   { PE_VBARS_BGCOLB,  "VbarsBGColorB", ET_COLOR,  {.c = CD_BLACK} },
   { PE_VBARS_BGCM,    "VbarsBGCMode",  ET_ENUM,   {.e = CM_NONE}, .etype = E_COLORCYCLES },
   { PE_VBARS_BGCMR,   "VbarsBGCMRate", ET_INT,    {.i = INITIAL_RAINBOW_INC}, {.i = INT_MIN}, {.i = INT_MAX} },
   { PE_VBARS_BGCMPOS, "VbarsBGCMPos",  ET_INT,    {.i = 0} },  // Not user
   { PE_VBARS_BGALPHA, "VbarsBGAlpha",  ET_FLOAT,  {.f = 0}, {.f = 0}, {.f = 1} },
   { PE_CAA,         "ColorAllA",   ET_BOOL,   {.b = NO} },
-  { PE_CAA_COLA,    "CAAColorA",   ET_COLOR,  {.c = CD_BLUE} },
+  { PE_CAA_COLA,    "CAAColorA",   ET_COLOR,  {.c = CD_YELLOW} },
   { PE_CAA_COLB,    "CAAColorB",   ET_COLOR,  {.c = CD_BLACK} },
   { PE_CAA_CM,      "CAACMode",    ET_ENUM,   {.e = CM_NONE}, .etype = E_COLORCYCLES },
   { PE_CAA_CMR,     "CAACMRate",   ET_INT,    {.i = INITIAL_RAINBOW_INC}, {.i = INT_MIN}, {.i = INT_MAX} },
@@ -236,14 +263,14 @@ const patternElement_t patternElements[] = {
   { PE_CAA_ALPHA,   "CAAAlpha",    ET_FLOAT,  {.f = 1}, {.f = 0}, {.f = 1} },
   { PE_CAB,         "ColorAllB",   ET_BOOL,   {.b = NO} },
   { PE_CAB_COLA,    "CABColorA",   ET_COLOR,  {.c = CD_BLACK} },
-  { PE_CAB_COLB,    "CABColorB",   ET_COLOR,  {.c = CD_BLACK} },
+  { PE_CAB_COLB,    "CABColorB",   ET_COLOR,  {.c = CD_RED} },
   { PE_CAB_CM,      "CABCMode",    ET_ENUM,   {.e = CM_NONE}, .etype = E_COLORCYCLES },
   { PE_CAB_CMR,     "CABCMRate",   ET_INT,    {.i = INITIAL_RAINBOW_INC}, {.i = INT_MIN}, {.i = INT_MAX} },
   { PE_CAB_CMPOS,   "CABCMPos",    ET_INT,    {.i = 0} },  // Not user
   { PE_CAB_ALPHA,   "CABAlpha",    ET_FLOAT,  {.f = 1}, {.f = 0}, {.f = 1} },
   { PE_IMAGEALL,    "ImageAll",    ET_BOOL,   {.b = NO} },
   { PE_RDOT,        "RandomDots",  ET_BOOL,   {.b = NO} },
-  { PE_RDOT_COLA,   "RDOTColorA",  ET_COLOR,  {.c = CD_AZURE} },
+  { PE_RDOT_COLA,   "RDOTColorA",  ET_COLOR,  {.c = CD_MAGENTA} },
   { PE_RDOT_COLB,   "RDOTColorB",  ET_COLOR,  {.c = CD_BLACK} },
   { PE_RDOT_CM,     "RDOTCMode",   ET_ENUM,   {.e = CM_NONE}, .etype = E_COLORCYCLES },
   { PE_RDOT_CMR,    "RDOTCMRate",  ET_INT,    {.i = INITIAL_RAINBOW_INC}, {.i = INT_MIN}, {.i = INT_MAX} },
@@ -255,7 +282,7 @@ const patternElement_t patternElements[] = {
   { PE_ALIAS,       "AntiAlias",   ET_BOOL,   {.b = NO} },
   { PE_MULTIPLY,    "Multiply",    ET_BOOL,   {.b = NO} },
   { PE_BARSEED,     "SideBar",     ET_BOOL,   {.b = NO} },
-  { PE_BS_COLA,     "SBColorA",    ET_COLOR,  {.c = CD_RED} },
+  { PE_BS_COLA,     "SBColorA",    ET_COLOR,  {.c = CD_CYAN} },
   { PE_BS_COLB,     "SBColorB",    ET_COLOR,  {.c = CD_BLACK} },
   { PE_BS_CM,       "SBCMode",     ET_ENUM,   {.e = CM_NONE}, .etype = E_COLORCYCLES },
   { PE_BS_CMR,      "SBCMRate",    ET_INT,    {.i = INITIAL_RAINBOW_INC}, {.i = INT_MIN}, {.i = INT_MAX} },
@@ -293,7 +320,7 @@ const patternElement_t patternElements[] = {
   { PE_PIXELINDEX,  "PixelIndex",  ET_INT,    {.i = INVALID} }, // Not user
   { PE_SCROLLDIRLAST,"ScrollDirLast",ET_ENUM, {.e = INITIAL_DIR}, .etype = E_DIRECTIONS },
   { PE_TEXTSEED,    "TextSeed",    ET_BOOL,   {.b = YES} },
-  { PE_TS_COLA,     "TSColorA",    ET_COLOR,  {.c = CD_RED} },
+  { PE_TS_COLA,     "TSColorA",    ET_COLOR,  {.c = CD_ROSE} },
   { PE_TS_COLB,     "TSColorB",    ET_COLOR,  {.c = CD_BLACK} },
   { PE_TS_CM,       "TSCMode",     ET_ENUM,   {.e = CM_NONE}, .etype = E_COLORCYCLES },
   { PE_TS_CMR,      "TSCMRate",    ET_INT,    {.i = INITIAL_RAINBOW_INC}, {.i = INT_MIN}, {.i = INT_MAX} },
@@ -319,7 +346,7 @@ const patternElement_t patternElements[] = {
   { PE_IMAGEYOFFSET,"ImageYOffset",ET_FLOAT,  {.f = INITIAL_IMAGE_YOFFSET}, {.f = 0}, {.f = 1} },
   { PE_IMAGENAME,   "ImageName",   ET_STRING, {.s = INITIAL_IMAGE}, .size = 1024},
   { PE_SNAIL,       "SnailShot",   ET_BOOL,   {.b = NO} },
-  { PE_SNAIL_COLA,  "SnailColorA", ET_COLOR,  {.c = CD_LTROSE} },
+  { PE_SNAIL_COLA,  "SnailColorA", ET_COLOR,  {.c = CD_CHARTREUSE} },
   { PE_SNAIL_COLB,  "SnailColorB", ET_COLOR,  {.c = CD_BLACK} },
   { PE_SNAIL_CM,    "SnailCMode",  ET_ENUM,   {.e = CM_NONE}, .etype = E_COLORCYCLES },
   { PE_SNAIL_CMR,   "SnailCMRate", ET_INT,    {.i = INITIAL_RAINBOW_INC}, {.i = INT_MIN}, {.i = INT_MAX} },
@@ -327,7 +354,7 @@ const patternElement_t patternElements[] = {
   { PE_SNAIL_ALPHA, "SnailAlpha",  ET_FLOAT,  {.f = 1}, {.f = 0}, {.f = 1} },
   { PE_SNAIL_POS,   "SnailPos",    ET_INT,    {.i = 0} }, // Not user
   { PE_FSNAIL,      "FastSnail",   ET_BOOL,   {.b = NO} },
-  { PE_FSNAIL_COLA, "FSNAILColorA",ET_COLOR,  {.c = CD_LTORANGE} },
+  { PE_FSNAIL_COLA, "FSNAILColorA",ET_COLOR,  {.c = CD_GREEN} },
   { PE_FSNAIL_COLB, "FSNAILColorB",ET_COLOR,  {.c = CD_BLACK} },
   { PE_FSNAIL_CM,   "FSNAILCMode", ET_ENUM,   {.e = CM_NONE}, .etype = E_COLORCYCLES },
   { PE_FSNAIL_CMR,  "FSNAILCMRate",ET_INT,    {.i = INITIAL_RAINBOW_INC}, {.i = INT_MIN}, {.i = INT_MAX} },
@@ -335,7 +362,7 @@ const patternElement_t patternElements[] = {
   { PE_FSNAIL_ALPHA,"FSNAILAlpha", ET_FLOAT,  {.f = 1}, {.f = 0}, {.f = 1} },
   { PE_FSNAILP,     "FastSnailP",  ET_INT,    {.i = 0} }, // Not user
   { PE_CROSSBAR,    "Crossbar",    ET_ENUM,   {.e = CB_NONE}, .etype = E_CROSSBAR },
-  { PE_CB_COLA,     "CBColorA",    ET_COLOR,  {.c = CD_RED} },
+  { PE_CB_COLA,     "CBColorA",    ET_COLOR,  {.c = CD_VIOLET} },
   { PE_CB_COLB,     "CBColorB",    ET_COLOR,  {.c = CD_BLACK} },
   { PE_CB_CM,       "CBCMode",     ET_ENUM,   {.e = CM_NONE}, .etype = E_COLORCYCLES },
   { PE_CB_CMR,      "CBCMRate",    ET_INT,    {.i = INITIAL_RAINBOW_INC}, {.i = INT_MIN}, {.i = INT_MAX} },
@@ -347,7 +374,7 @@ const patternElement_t patternElements[] = {
   { PE_SCROLLRANDEN,"ScrollRandE", ET_BOOL,   {.b = NO } },
   { PE_SCROLLRANDOM,"ScrollRand",  ET_INT,    {.i = 50 }, {.i = 1}, {.i = INT_MAX} },
   { PE_SIDEPULSE,   "SidePulse",   ET_BOOL,   {.b = NO } },
-  { PE_SP_COLA,     "SPColorA",    ET_COLOR,  {.c = CD_RED} },
+  { PE_SP_COLA,     "SPColorA",    ET_COLOR,  {.c = CD_AZURE} },
   { PE_SP_COLB,     "SPColorB",    ET_COLOR,  {.c = CD_BLACK} },
   { PE_SP_CM,       "SPCMode",     ET_ENUM,   {.e = CM_NONE}, .etype = E_COLORCYCLES },
   { PE_SP_CMR,      "SPCMRate",    ET_INT,    {.i = INITIAL_RAINBOW_INC}, {.i = INT_MIN}, {.i = INT_MAX} },
@@ -357,18 +384,19 @@ const patternElement_t patternElements[] = {
   { PE_SCROLLALPHA, "ScrollAlpha", ET_FLOAT,  {.f = 1.0}, {.f = 0}, {.f = 1.0} },
   { PE_IMAGEALPHA,  "ImageAlpha",  ET_FLOAT,  {.f = 1.0}, {.f = 0}, {.f = 1.0} },
   { PE_PALETTEALTER,"PaletteSelct",ET_ENUM,   {.e = A_HBARS}, .etype = E_ALTERPALETTES },
-  { PE_LP_COLA,     "LPColorA",    ET_COLOR,  {.c = CD_RED} },
+  { PE_LP_COLA,     "LPColorA",    ET_COLOR,  {.c = CD_BLUE} },
   { PE_LP_COLB,     "LPColorB",    ET_COLOR,  {.c = CD_BLACK} },
   { PE_LP_CM,       "LPCMode",     ET_ENUM,   {.e = CM_NONE}, .etype = E_COLORCYCLES },
   { PE_LP_CMR,      "LPCMRate",    ET_INT,    {.i = INITIAL_RAINBOW_INC}, {.i = INT_MIN}, {.i = INT_MAX} },
   { PE_LP_CMPOS,    "LPCMPos",     ET_INT,    {.i = 0} },  // Not user
   { PE_LP_ALPHA,    "LPAlpha",     ET_FLOAT,  {.f = 1}, {.f = 0}, {.f = 1} },
-  { PE_LP_BGCOLA,   "LPBGColorA",  ET_COLOR,  {.c = CD_CYAN} },
+  { PE_LP_BGCOLA,   "LPBGColorA",  ET_COLOR,  {.c = CD_RED} },
   { PE_LP_BGCOLB,   "LPBGColorB",  ET_COLOR,  {.c = CD_BLACK} },
   { PE_LP_BGCM,     "LPBGCMode",   ET_ENUM,   {.e = CM_NONE}, .etype = E_COLORCYCLES },
   { PE_LP_BGCMR,    "LPBGCMRate",  ET_INT,    {.i = INITIAL_RAINBOW_INC}, {.i = INT_MIN}, {.i = INT_MAX} },
   { PE_LP_BGCMPOS,  "LPBGCMPos",   ET_INT,    {.i = 0} },  // Not user
   { PE_LP_BGALPHA,  "LPBGAlpha",   ET_FLOAT,  {.f = 1}, {.f = 0}, {.f = 1} },
+  { PE_PAUSE,       "Pause",       ET_BOOL,   {.b = NO } },
 };
 #define PATTERN_ELEMENT_COUNT ( sizeof(patternElements) / sizeof(patternElement_t) )
 const int patternElementCount = PATTERN_ELEMENT_COUNT;
@@ -407,7 +435,6 @@ const command_t displayCommand[] = {
   {ROW_T + 7, COL_T, "Background mode",    PE_TEXTMODE,   {{}, {KMOD_CTRL, SDLK_b, COM_ENUM_RST}, {0, 0, COM_ENUM_INC}, {0, 0, COM_ENUM_DEC}}, A_INVALID},
   {ROW_T + 8, COL_T, "Edge Offset",        PE_TEXTOFFSET, {{}, {0, 0, COM_TEXTO_RST}, {KMOD_ALT | KMOD_CTRL, SDLK_z, COM_TEXTO_INC}, {KMOD_ALT | KMOD_CTRL, SDLK_x, COM_TEXTO_DEC}}, A_INVALID},
   {ROW_T + 9, COL_T, "Restart text",       PE_INVALID,    {{KMOD_CTRL, SDLK_j, COM_TEXTRESET}, {0, 0, COM_TEXTRESET}}, A_INVALID},
-
 
   // Pattern sets
   {ROW_PA + 1, COL_PA, "Cycle through pattern sets",       PE_INVALID,    {{KMOD_CTRL, SDLK_g, COM_CYCLESET}, {0, 0, COM_CYCLESET}}, A_INVALID},
@@ -466,7 +493,6 @@ const command_t displayCommand[] = {
   {ROW_S + 12, COL_S, "Toroidal",      PE_ROLLOVER, {{KMOD_CTRL, SDLK_y, COM_BOOL_FLIP}, {0, 0, COM_BOOL_RST}}, A_INVALID},
   {ROW_S + 13, COL_S, "Scroll alpha", PE_SCROLLALPHA, {{}, {0, 0, COM_RST_FLOAT}, {0, 0, COM_INC_FLOAT}, {0, 0, COM_DEC_FLOAT}}, A_INVALID},
 
-
   // Mirrors
   {ROW_MIR + 1, COL_MIR, "Vertical Mirror", PE_MIRROR_V, {{0, 0, COM_BOOL_FLIP}, {0, 0, COM_BOOL_RST}}, A_INVALID},
   {ROW_MIR + 2, COL_MIR, "Horizontal Mirror", PE_MIRROR_H, {{0, 0, COM_BOOL_FLIP}, {0, 0, COM_BOOL_RST}}, A_INVALID},
@@ -496,11 +522,12 @@ const command_t displayCommand[] = {
   {ROW_I + 8, COL_I, "Image alpha", PE_IMAGEALPHA,     {{}, {0, 0, COM_RST_FLOAT}, {0, 0, COM_INC_FLOAT}, {0,0,COM_DEC_FLOAT}}, A_INVALID},
 
   // Auxillary
-  {ROW_A + 1, COL_A, "Set output intensity", PE_INTENSITY, {{}, {0, 0, COM_RST_FLOAT}, {0, 0, COM_INC_FLOAT}, {0, 0, COM_DEC_FLOAT}}, A_INVALID},
-  {ROW_A + 2, COL_A, "Frame delay(ms)",      PE_DELAY,     {{}, {0, 0, COM_INT_RST}, {0, 0, COM_INT_INC}, {0, 0, COM_INT_DEC}}, A_INVALID},
-  {ROW_A + 3, COL_A, "Float step",           PE_FLOATINC,  {{}, {KMOD_ALT, SDLK_COMMA, COM_RST_FLOAT}, {KMOD_ALT, SDLK_m, COM_STEP_INC}, {KMOD_ALT, SDLK_PERIOD, COM_STEP_DEC}}, A_INVALID},
-  {ROW_A + 4, COL_A, "All modes off",        PE_INVALID,   {{KMOD_CTRL, SDLK_l, COM_MODEOFF}, {KMOD_CTRL, SDLK_l, COM_MODEOFF}}, A_INVALID},
-
+  {ROW_A + 1, COL_A, "Tensor Broadcast",     PE_INVALID,   {{0, 0, COM_BROAD_FLIP}, {0, 0, COM_BROAD_RST}}, A_INVALID},
+  {ROW_A + 2, COL_A, "Pause",                PE_PAUSE,     {{0, 0, COM_BOOL_FLIP}, {0, 0, COM_BOOL_RST}}, A_INVALID},
+  {ROW_A + 3, COL_A, "Set output intensity", PE_INTENSITY, {{}, {0, 0, COM_RST_FLOAT}, {0, 0, COM_INC_FLOAT}, {0, 0, COM_DEC_FLOAT}}, A_INVALID},
+  {ROW_A + 4, COL_A, "Frame delay(ms)",      PE_DELAY,     {{}, {0, 0, COM_INT_RST}, {0, 0, COM_INT_INC}, {0, 0, COM_INT_DEC}}, A_INVALID},
+  {ROW_A + 5, COL_A, "Float step",           PE_FLOATINC,  {{}, {KMOD_ALT, SDLK_COMMA, COM_RST_FLOAT}, {KMOD_ALT, SDLK_m, COM_STEP_INC}, {KMOD_ALT, SDLK_PERIOD, COM_STEP_DEC}}, A_INVALID},
+  {ROW_A + 6, COL_A, "All modes off",        PE_INVALID,   {{KMOD_CTRL, SDLK_l, COM_MODEOFF}, {KMOD_CTRL, SDLK_l, COM_MODEOFF}}, A_INVALID},
 
   // Quit
   {ROW_COUNT - 2, 4, "Quit",           PE_INVALID,  {{KMOD_NONE, SDLK_ESCAPE, COM_EXIT}, {KMOD_NONE, SDLK_ESCAPE, COM_EXIT}}, A_INVALID},
@@ -515,6 +542,10 @@ const guiText_t displayText[] = {
   {ROW_PA + 5, COL_PA, " Load buffer from set # - <a> 0-9"},
   {ROW_PA + 6, COL_PA, " Save to disk - <a> <s> 0-9, a-z"},
   {ROW_PA + 7, COL_PA, " Load saved set - <c> <s> 0-9, a-z"},
+  {ROW_ME + 1, COL_ME, "Left button: Edit / toggle item"},
+  {ROW_ME + 2, COL_ME, "Right button: Reset item / cancel selection"},
+  {ROW_ME + 3, COL_ME, "Mouse wheel: Increment / decrement item"},
+  {ROW_ME + 4, COL_ME, "Left click color swatch to edit item palette"},
 };
 const int displayTextCount = sizeof(displayText) / sizeof(guiText_t);
 
@@ -536,7 +567,7 @@ const guiText_t headerText[] = {
   {ROW_CB,  COL_CB, "Crossbar seeds:"},
   {ROW_I,   COL_I,  "Image overlay:"},
   {ROW_R,   COL_R,  "Random dot seeds:"},
-  {ROW_C,   COL_C,  "Color selection:"},
+  {ROW_C,   COL_C,  "Item palette editor:"},
   {ROW_D,   COL_D,  "Averager:"},
   {ROW_O,   COL_O,  "One-shot seeds:"},
   {ROW_F,   COL_F,  "Adder (fader):"},
@@ -546,6 +577,7 @@ const guiText_t headerText[] = {
   {ROW_PR,  COL_PR, "Post rotation:"},
   {ROW_PE,  COL_PE, "Pre rotation:"},
   {ROW_MIR, COL_MIR,"Mirrors:"},
+  {ROW_ME,  COL_ME, "Mouse controls:"},
 };
 const int headerTextCount = sizeof(headerText) / sizeof(guiText_t);
 

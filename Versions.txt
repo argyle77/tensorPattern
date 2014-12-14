@@ -88,3 +88,8 @@ Version 7.1.1:
 Version 7.2
   Added alpha channels for scrolling, fg, bg, and image overlay.
   Automatic set switching enabled by default. 
+
+Version 8.0
+  Automatic set switching disabled by default.  Added palettes
+  for all seeds.  Added pause, tensor broadcast enable, sorted
+  out the controls.  Fixed the color cyclers.

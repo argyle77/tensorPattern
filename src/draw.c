@@ -695,11 +695,12 @@ void DrawColorSelectBox(int item, int selected, SDL_Rect ** targets) {
       }
     }
 
+    // Layout the target boxes.  Top to bottom, Left to right.
     for (i = 0; i < CE_COUNT; i++) {
-        (*targets)[i].x = boxOrigin.x + ((boxWidth + 1) * (i % colorTitlesCount));
-        (*targets)[i].y = boxOrigin.y + (h * 2 * ((i / colorTitlesCount) + 1));
-        (*targets)[i].w = boxWidth + 1;
-        (*targets)[i].h = h * 2;
+      (*targets)[i].x = boxOrigin.x + ((boxWidth + 1) * (i / (CE_COUNT / colorTitlesCount)) + 1);
+      (*targets)[i].y = boxOrigin.y + (h * 2 * ((i % (CE_COUNT / colorTitlesCount)) + 1));
+      (*targets)[i].w = boxWidth + 1;
+      (*targets)[i].h = h * 2;
     }
   }
 
@@ -730,7 +731,7 @@ void DrawColorSelectBox(int item, int selected, SDL_Rect ** targets) {
     }
   }
 
-  // Draw the whole box
+  // Draw the outline box
   DrawRectangle(boxOrigin.x, boxOrigin.y, totalWidth + 1, h * 2 * ((CE_COUNT / colorTitlesCount) + 1), DISPLAY_COLOR_PARMS);
   DrawRectangle(boxOrigin.x - 1, boxOrigin.y - 1, totalWidth + 3, h * 2 * ((CE_COUNT / colorTitlesCount) + 1) + 2, DISPLAY_COLOR_PARMS);
 }
