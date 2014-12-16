@@ -100,8 +100,8 @@ void DrawSideBar(int set);
 void Diffuse(float diffusionCoeff, bool_t isToroid, unsigned char *buffer);
 void HorizontalBars(color_t fg, color_t bg, unsigned char *buffer);
 void VerticalBars(color_t fg, color_t bg, unsigned char *buffer);
-void SavePatternSet(char key, int set, bool_t overWrite, bool_t backup);
-void LoadPatternSet(char key, int set);
+void SavePatternSet(char key, int set, bool_t overWrite, const char *backupName);
+void LoadPatternSet(char key, int set, bool_t backup);
 void RandomDots(color_t color, unsigned int rFreq, unsigned char *buffer);
 color_t ColorCycle(colorCycleModes_e cycleMode, int *cycleSaver, int cycleInc, color_t a, color_t b);
 void ColorAll(color_t color, unsigned char *fb);
@@ -254,7 +254,7 @@ int main(int argc, char *argv[]) {
   // files.  Its okay if they don't exist.  Otherwise, default will be loaded
   // into those pattern sets.
   for (i = 0; i < PATTERN_SET_COUNT; i++) {
-    LoadPatternSet(i + '0', i);
+    LoadPatternSet(i + '0', i, NO);
     // Load the remaining image sets (in cases of pattern set load failure).
     if (!imageSeed[i]) {
       imageSeed[i] = IMG_Load(SSTRING(i, PE_IMAGENAME));
@@ -430,7 +430,7 @@ int main(int argc, char *argv[]) {
               if (event.button.button == SDL_BUTTON_LEFT) {
                 if ((thisHover != INVALID) && (thisHover == leftMouseDownOn)) {
                   if (thisHover == YES) {
-                    SavePatternSet(keySave, setSave, YES, NO);
+                    SavePatternSet(keySave, setSave, YES, "");
                   } else {
                     snprintf(statusText, sizeof(statusText), "Save action cancelled.");
                   }
@@ -898,7 +898,7 @@ int main(int argc, char *argv[]) {
 
   // Backup the pattern sets in case we didnt mean to do this.
   for (i = 0; i < PATTERN_SET_COUNT; i++) {
-    SavePatternSet('0' + i, i, YES, YES);
+    SavePatternSet('0' + i, i, YES, "closebak");
   }
 
   // Clean up and exit.
@@ -1479,7 +1479,7 @@ bool_t HandleConfirmation(SDL_Keycode key, unsigned char *selected) {
 
   switch (key) {
     case SDLK_y:
-      SavePatternSet(keySave, setSave, YES, NO);
+      SavePatternSet(keySave, setSave, YES, "");
       break;
 
     case SDLK_n:
@@ -1490,7 +1490,7 @@ bool_t HandleConfirmation(SDL_Keycode key, unsigned char *selected) {
     case SDLK_RETURN:
     case SDLK_SPACE:
       if (*selected == YES) {
-        SavePatternSet(keySave, setSave, YES, NO);
+        SavePatternSet(keySave, setSave, YES, "");
       } else {
         snprintf(statusText, sizeof(statusText), "Save action cancelled.");
       }
@@ -1608,7 +1608,7 @@ bool_t HandleKey(int set, SDL_Keycode key, SDL_Keymod mod) {
   // Save the current pattern set as <key>.now (for 0-9, a-z, only)
   if (mod == (KMOD_ALT | KMOD_SHIFT)) {
     if ((key >= 'a' && key <= 'z') || (key >= '0' && key <= '9')) {
-      SavePatternSet(key, set, NO, NO);
+      SavePatternSet(key, set, NO, "");
       return NO;  // NO = Don't exit the program
     }
   }
@@ -1616,7 +1616,7 @@ bool_t HandleKey(int set, SDL_Keycode key, SDL_Keymod mod) {
   // Load a pattern set from <key>.now into the current set.
   if (mod == (KMOD_CTRL | KMOD_SHIFT)) {
     if ((key >= 'a' && key <= 'z') || (key >= '0' && key <= '9')) {
-      LoadPatternSet(key, set);
+      LoadPatternSet(key, set, YES);
       return NO;  // NO = Don't exit the program
     }
   }
@@ -3259,14 +3259,14 @@ void CellFun(int set) {
 
 // Saves a pattern set to a file.
 // Return value indicates if the action requires confirmation.
-void SavePatternSet(char key, int set, bool_t overWrite, bool_t backup) {
+void SavePatternSet(char key, int set, bool_t overWrite, const char *backupName) {
   char filename[20] = "";
   FILE *fp;
   int i,j;
 
   // Filename
-  if (backup) {
-    snprintf(filename, sizeof(filename), "%c.now.bak", key);
+  if (strlen(backupName) != 0) {
+    snprintf(filename, sizeof(filename), "%c.now.%s", key, backupName);
     overWrite = YES;
   } else {
     snprintf(filename, sizeof(filename), "%c.now", key);
@@ -3346,7 +3346,7 @@ void SavePatternSet(char key, int set, bool_t overWrite, bool_t backup) {
 }
 
 // Loads a pattern set from a file.
-void LoadPatternSet(char key, int set) {
+void LoadPatternSet(char key, int set, bool_t backup) {
   int currentSet = set; // Override global for D*.
   char filename[8] = "";
   FILE *fp;
@@ -3369,6 +3369,9 @@ void LoadPatternSet(char key, int set) {
   char *token;
   unsigned char * bufferData;
   bool_t gotIt = NO;
+
+  // First, create a backup.
+  if (backup) SavePatternSet(key, set, YES, "loadbak");
 
   // Filename
   snprintf(filename, sizeof(filename), "%c.now", key);
@@ -3824,6 +3827,10 @@ void ClearBlue(int set) {
 void CopyPatternSet(int dst, int src) {
   int i;
   if (src == dst) return;
+
+  // First create a backup of the destination.
+  SavePatternSet('0' + dst, dst, YES, "copybak");
+
   for (i = 0; i < patternElementCount; i++) {
     switch(patternElements[i].type) {
       case ET_BOOL: SBOOL(dst, i) = SBOOL(src, i); break;
