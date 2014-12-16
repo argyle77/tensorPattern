@@ -93,3 +93,7 @@ Version 8.0
   Automatic set switching disabled by default.  Added palettes
   for all seeds.  Added pause, tensor broadcast enable, sorted
   out the controls.  Fixed the color cyclers.
+
+Version 8.1
+  Bug fixes for key presses.  Added one-shot and persistent
+  options to most seeds and modes.  Added some fade modes.

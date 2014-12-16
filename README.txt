@@ -1,4 +1,4 @@
-Tensor pattern generation - Version 8.0.0
+Tensor pattern generation - Version 8.1.0
 http://core9.org/tensor
 http://wiki.artisansasylum.com/index.php/Tensor
 http://wiki.artisansasylum.com/index.php/Tensor_2011
@@ -12,14 +12,19 @@ shows the pattern to be sent and the interface for altering the pattern using
 SDL2.
 
 Controls are listed next to the previews.  Modes and parameters can be adjusted
-with the mouse and mouse wheel.  Left clicking toggles modes, opens selection
-dialogs, or permits keyboard editing of most parameters.  Right clicking resets
-parameters to default values.  Unmodified keys, backspace, and delete alter the 
-text buffer.  Clicking (left or right) directly on the preview draws with the
-pen foreground or background color.  Mouse wheel over the previews allows
-selection of the pen color.  Mouse wheel over floating point numbers causes them
-to be incremented or decremented by the "Float step," which can be adjusted
-under "Auxillary" on the far lower right.
+with the mouse and mouse wheel.  Left clicking toggles some modes, opens
+selection dialogs, or permits keyboard editing of most parameters.  Right
+clicking resets parameters to default values.  Unmodified keys, backspace, and
+delete alter the text buffer.  Clicking (left or right) directly on the preview
+draws with the pen foreground or background color.  Mouse wheel over the
+previews allows selection of the pen color.  Mouse wheel over floating point
+numbers causes them to be incremented or decremented by the "Float step," which
+can be adjusted under "Auxillary" on the far lower right.  Most seeds (anything
+that draws) and most modes (anything that alters the next frame) can be either
+turned on to persist, or activated briefly (one-shot).  The effects of 
+persistent seeds can be lessened by adjusting the seed's alpha value.  Mouse
+wheel down over most seeds activates one-shot, whereas mouse up activates 
+persistent.
 
 There are 10 pattern sets in memory at all times which can be chosen between by
 pressing <ctrl> 0-9.  The program can be made to automatically cycle through
