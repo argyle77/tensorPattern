@@ -1,4 +1,4 @@
-Tensor pattern generation - Version 8.1.0
+Tensor pattern generation - Version 8.1.1
 http://core9.org/tensor
 http://wiki.artisansasylum.com/index.php/Tensor
 http://wiki.artisansasylum.com/index.php/Tensor_2011
@@ -33,7 +33,9 @@ are automatically loaded at startup.  Images can be loaded by placing the image
 file in the build directory, editing the ImageName value in one of the *.now
 save files, and then loading that pattern into memory using <ctrl> <shift> 0-9
 a-z.  Pattern sets can be edited live or in the alternate preview window.  The
-controls operate on the currently (green) highlighted preview.
+controls operate on the currently (green) highlighted preview.  Pattern load,
+copy, and program exit operations cause overwritten pattern sets to be auto-
+saved to backup files.
 
 If Tensor topology has changed, the IP addresses for the sections can be edited
 in tensorIP.map, and if necessary, the pixels themselves can be remapped using
