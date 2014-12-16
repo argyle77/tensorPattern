@@ -130,8 +130,8 @@ void SwitchToSet(int set);
 
 void BlendAlternate(unsigned char *fba, unsigned char *fbb);
 void CenterText(SDL_Rect box, char * text, color_t fg, color_t bg);
-void SnailSeed(int set, int position);
-void FastSnailSeed(int set, int position);
+void SnailSeed(int set);
+void FastSnailSeed(int set);
 void CrossBars(int set);
 point_t GetDisplayPixel(point_t mouse, SDL_Rect box);
 void LoadTensorMaps(void);
@@ -153,6 +153,7 @@ int OverColorBox(int set, point_t mouse, int item, SDL_Rect ** targets, int *las
 bool_t HandleColorSelect(SDL_Keycode key, int set, int item, int *selected);
 color_t ColorCyclePalette(namedPalette_t palette, int *position, int wavelength);
 color_t ColorCyclePaletteSmooth(namedPalette_t palette, int *position, int wavelength);
+void ResetOneShots(int set);
 
 // Main
 int main(int argc, char *argv[]) {
@@ -868,6 +869,7 @@ int main(int argc, char *argv[]) {
       lastHover = INVALID;
       confirmed = NO;
       refreshAll = YES;
+      enumHover = INVALID;
       if (inputMode == IM_NORMAL) thisHover = INVALID;
     }
 
@@ -1024,26 +1026,19 @@ void ProcessModes(int set) {
       bgOutput[i][set].a = (unsigned char) (DFLOAT(seedPalette[i].bgAlpha) * 255.0);
   }
 
-  // Slap an image down on the display (every frame).
-  if (DBOOL(PE_POSTIMAGE)) {
+  // Slap an image down on the display.
+  if (DENUM(PE_POSTIMAGE)) {
     DrawImage(imageSeed[currentSet], DFLOAT(PE_IMAGEANGLE), DFLOAT(PE_IMAGEXOFFSET), DFLOAT(PE_IMAGEYOFFSET),
-      DFLOAT(PE_IMAGEEXP), DBOOL(PE_IMAGEALIAS), DBUFFER(PE_FRAMEBUFFER), DFLOAT(PE_IMAGEALPHA));
+      DFLOAT(PE_IMAGEEXP), DENUM(PE_IMAGEALIAS) != OS_NO, DBUFFER(PE_FRAMEBUFFER), DFLOAT(PE_IMAGEALPHA));
     DFLOAT(PE_IMAGEANGLE) += DFLOAT(PE_IMAGEINC);
   }
 
-  // Image one-shot
-  if (DBOOL(PE_IMAGEALL)) {
-    DrawImage(imageSeed[currentSet], DFLOAT(PE_IMAGEANGLE), DFLOAT(PE_IMAGEXOFFSET), DFLOAT(PE_IMAGEYOFFSET),
-      DFLOAT(PE_IMAGEEXP), DBOOL(PE_IMAGEALIAS), DBUFFER(PE_FRAMEBUFFER), DFLOAT(PE_IMAGEALPHA));
-    DBOOL(PE_IMAGEALL) = NO;
-  }
-
   // Scroller.
-  if (DBOOL(PE_SCROLL)) {
+  if (DENUM(PE_SCROLL)) {
     Scroll(set, DENUM(PE_SCROLLDIR), DBOOL(PE_ROLLOVER), DBUFFER(PE_FRAMEBUFFER), PLANE_ALL);
   }
 
-  // Planar scrollers.  The enables are build into the enumeration.  Scroll()
+  // Planar scrollers.  The enables are built into the enumerations.  Scroll()
   // will ignore them if they are SM_HOLD.
   Scroll(set, DENUM(PE_SHIFTRED), DBOOL(PE_ROLLOVER), DBUFFER(PE_FRAMEBUFFER), PLANE_RED);
   Scroll(set, DENUM(PE_SHIFTGREEN), DBOOL(PE_ROLLOVER), DBUFFER(PE_FRAMEBUFFER), PLANE_GREEN);
@@ -1053,12 +1048,12 @@ void ProcessModes(int set) {
   Scroll(set, DENUM(PE_SHIFTYELLOW), DBOOL(PE_ROLLOVER), DBUFFER(PE_FRAMEBUFFER), PLANE_YELLOW);
 
   // Draw a solid bar up the side we are scrolling from.
-  if (DBOOL(PE_BARSEED)) {
+  if (DENUM(PE_BARSEED)) {
     DrawSideBar(currentSet);
   }
 
   // Draw a pulse up the side we are scrolling from.
-  if (DBOOL(PE_SIDEPULSE)) {
+  if (DENUM(PE_SIDEPULSE)) {
     DrawSidePulse(currentSet);
   }
 
@@ -1069,95 +1064,91 @@ void ProcessModes(int set) {
   }
 
   // Cellular automata manips?  Not actually cellular auto.  Never finished this.
-  if (DBOOL(PE_CELLFUN)) {
+  if (DENUM(PE_CELLFUN)) {
     // Give each pixel a color value.
     CellFun(currentSet);
   }
 
   // Bouncy bouncy (ick).
-  if (DINT(PE_BOUNCER) != 0) {
+  if (DINT(PE_BOUNCER)) {
     ScrollCycle(currentSet);
   }
 
   // Bam!  Draw some horizontal bars.
-  if (DBOOL(PE_HBARS)) {
+  if (DENUM(PE_HBARS)) {
     HorizontalBars(fgOutput[A_HBARS][set], bgOutput[A_HBARS][set], DBUFFER(PE_FRAMEBUFFER));
-    DBOOL(PE_HBARS) = NO;
   }
 
   // Bam! Vertical bars.
-  if (DBOOL(PE_VBARS)) {
+  if (DENUM(PE_VBARS)) {
     VerticalBars(fgOutput[A_VBARS][set], bgOutput[A_VBARS][set], DBUFFER(PE_FRAMEBUFFER));
-    DBOOL(PE_VBARS) = NO;
   }
 
   // Crossbar seeds
-  if (DENUM(PE_CROSSBAR) != CB_NONE) {
+  if (DENUM(PE_CROSSBAR)) {
     CrossBars(currentSet);
   }
 
   // Random dots.  Most useful seed ever.
-  if (DBOOL(PE_RDOT)) {
+  if (DENUM(PE_RDOT)) {
     RandomDots(fgOutput[A_RDOT][set], DINT(PE_RDOTCOEF), DBUFFER(PE_FRAMEBUFFER));
   }
 
   // Snail seed.
-  if (DBOOL(PE_SNAIL)) {
-    SnailSeed(currentSet, DINT(PE_SNAIL_POS));
-    DINT(PE_SNAIL_POS)++;
+  if (DENUM(PE_SNAIL)) {
+    SnailSeed(currentSet);
   } else {
     DINT(PE_SNAIL_POS) = 0;
   }
 
   // Fast snail seed.
-  if (DBOOL(PE_FSNAIL)) {
-    FastSnailSeed(currentSet, DINT(PE_FSNAILP));
-    DINT(PE_FSNAILP)++;
+  if (DENUM(PE_FSNAIL)) {
+    FastSnailSeed(currentSet);
   } else {
     DINT(PE_FSNAILP) = 0;
   }
 
   // Fader
-  if (DBOOL(PE_FADE)) {
+  if (DENUM(PE_FADE)) {
     FadeAll(DINT(PE_FADEINC), DENUM(PE_FADEMODE), DBUFFER(PE_FRAMEBUFFER));
   }
 
   // Averager
-  if (DBOOL(PE_DIFFUSE)) {
+  if (DENUM(PE_DIFFUSE)) {
     Diffuse(DFLOAT(PE_DIFFUSECOEF), DBOOL(PE_ROLLOVER), DBUFFER(PE_FRAMEBUFFER));
   }
 
   // Multiplier
-  if (DBOOL(PE_MULTIPLY)) {
+  if (DENUM(PE_MULTIPLY)) {
     Multiply(DFLOAT(PE_MULTIPLYBY), DBUFFER(PE_FRAMEBUFFER));
   }
 
   // Rotozoomer
-  if (DBOOL(PE_PRERZ)) {
-    Rotate(DFLOAT(PE_PRERZANGLE), DFLOAT(PE_PRERZEXPAND), DBOOL(PE_PRERZALIAS), DBUFFER(PE_FRAMEBUFFER), DBUFFER(PE_FRAMEBUFFER), NO);
+  if (DENUM(PE_PRERZ)) {
+    Rotate(DFLOAT(PE_PRERZANGLE), DFLOAT(PE_PRERZEXPAND), DENUM(PE_PRERZALIAS) != OS_NO, DBUFFER(PE_FRAMEBUFFER), DBUFFER(PE_FRAMEBUFFER), NO);
     DFLOAT(PE_PRERZANGLE) += DFLOAT(PE_PRERZINC);
   }
 
   // Zero the red.
-  if (DBOOL(PE_NORED)) {
+  if (DENUM(PE_NORED)) {
     ClearRed(currentSet);
   }
 
   // Zero the blue.
-  if (DBOOL(PE_NOBLUE)) {
+  if (DENUM(PE_NOBLUE)) {
     ClearBlue(currentSet);
   }
 
   // Zero the green.
-  if (DBOOL(PE_NOGREEN)) {
+  if (DENUM(PE_NOGREEN)) {
     ClearGreen(currentSet);
   }
 
   // Mirrors
-  if (DBOOL(PE_MIRROR_V)) {
+  if (DENUM(PE_MIRROR_V)) {
     VerticalMirror(DBUFFER(PE_FRAMEBUFFER));
   }
-  if (DBOOL(PE_MIRROR_H)) {
+  if (DENUM(PE_MIRROR_H)) {
     HorizontalMirror(DBUFFER(PE_FRAMEBUFFER));
   }
 
@@ -1167,15 +1158,45 @@ void ProcessModes(int set) {
   }
 
   // Seed the entire array with the foreground color.
-  if (DBOOL(PE_CAA)) {
+  if (DENUM(PE_CAA)) {
     ColorAll(fgOutput[A_COLORALLA][set], DBUFFER(PE_FRAMEBUFFER));
-    DBOOL(PE_CAA) = NO;
   }
 
   // Clear screen.
-  if (DBOOL(PE_CAB)) {
+  if (DENUM(PE_CAB)) {
     ColorAll(fgOutput[A_COLORALLB][set], DBUFFER(PE_FRAMEBUFFER));
-    DBOOL(PE_CAB) = NO;
+  }
+
+  // Reset the one shots.
+  ResetOneShots(set);
+}
+
+void ResetOneShots(int set) {
+  int currentSet = set; // Override
+  int i;
+
+  for (i = 0; i < patternElementCount; i++) {
+    if (patternElements[i].etype == E_ONESHOT) {
+      // The switch is to handle the special cases.
+      switch(i) {
+        case PE_PRERZALIAS: case PE_IMAGEALIAS: case PE_SNAIL: case PE_FSNAIL:
+        case PE_BARSEED: case PE_SIDEPULSE:
+          break;
+        case PE_PRERZ:
+          if ((DENUM(i) == OS_YES) && (DENUM(PE_PRERZALIAS) == OS_ONESHOT))
+            DENUM(PE_PRERZALIAS) = OS_NO;
+          if (DENUM(i) == OS_ONESHOT) DENUM(i) = OS_NO;
+          break;
+        case PE_POSTIMAGE:
+          if ((DENUM(i) == OS_YES) && (DENUM(PE_IMAGEALIAS) == OS_ONESHOT))
+            DENUM(PE_IMAGEALIAS) = OS_NO;
+          if (DENUM(i) == OS_ONESHOT) DENUM(i) = OS_NO;
+          break;
+        default:
+          if (DENUM(i) == OS_ONESHOT) DENUM(i) = OS_NO;
+          break;
+      }
+    }
   }
 }
 
@@ -1218,7 +1239,7 @@ void HorizontalMirror(unsigned char * buffer) {
   }
 }
 
-void SnailSeed(int set, int position) {
+void SnailSeed(int set) {
   int currentSet = set; // Override global currentSet for D*.
   int i;
   int x = 0, y = 0;
@@ -1231,14 +1252,15 @@ void SnailSeed(int set, int position) {
   yh = TENSOR_HEIGHT;
   yl = 0;
   for (i = 0; i < TENSOR_HEIGHT * TENSOR_WIDTH; i++) {
-    if (position == tp) {
-      //~ printf("tp: %i, (%i, %i)\n", tp, x, y);
+    if (DINT(PE_SNAIL_POS) == tp) {
       SetPixelA(x, y, color, DBUFFER(PE_FRAMEBUFFER));
+      DINT(PE_SNAIL_POS)++;
       break;
     }
     tp++;
     if (tp >= TENSOR_HEIGHT * TENSOR_WIDTH) {
-      DBOOL(PE_SNAIL) = NO;
+      if (DENUM(PE_SNAIL) == OS_ONESHOT) DENUM(PE_SNAIL) = OS_NO;
+      DINT(PE_SNAIL_POS) = 0;
     }
     switch(dir) {
       case 0:
@@ -1275,7 +1297,7 @@ void SnailSeed(int set, int position) {
   }
 }
 
-void FastSnailSeed(int set, int position) {
+void FastSnailSeed(int set) {
   int currentSet = set; // Overrides global currentSet for D*.
   int i;
   int x = -1, y = 0;
@@ -1288,17 +1310,19 @@ void FastSnailSeed(int set, int position) {
   yh = TENSOR_HEIGHT - 1;
   yl = 1;
   for (i = 0; i < TENSOR_HEIGHT * TENSOR_WIDTH; i++) {
-    if (position == tp) {
+    if (DINT(PE_FSNAILP) == tp) {
       //~ printf("tp: %i, (%i, %i)\n", tp, x, y);
       SetPixelA(x, y, color, DBUFFER(PE_FRAMEBUFFER));
       SetPixelA(x, y + 1, color, DBUFFER(PE_FRAMEBUFFER));
       SetPixelA(x + 1, y + 1, color, DBUFFER(PE_FRAMEBUFFER));
       SetPixelA(x + 1, y, color, DBUFFER(PE_FRAMEBUFFER));
+      DINT(PE_FSNAILP)++;
       break;
     }
     tp++;
     if (tp >= TENSOR_HEIGHT * TENSOR_WIDTH / 4 + 5) {
-      DBOOL(PE_FSNAIL) = NO;
+      if (DENUM(PE_FSNAIL) == OS_ONESHOT) DENUM(PE_FSNAIL) = OS_NO;
+      DINT(PE_FSNAILP) = 0;
       break;
     }
     switch(dir) {
@@ -1566,7 +1590,7 @@ bool_t HandleKey(int set, SDL_Keycode key, SDL_Keymod mod) {
   for ( i = 0 ; i < displayCommandCount; i++) {
     for (j = 0; j < MOUSE_COUNT; j++) {
       if ((displayCommand[i].commands[j].key == key) && (displayCommand[i].commands[j].mod == mod)) {
-        return(HandleCommand(set, displayCommand[i].commands[j].command, displayCommand[i].dataSource));
+        return(HandleCommand(set, displayCommand[i].commands[j].command, i));
       }
     }
   }
@@ -1575,7 +1599,7 @@ bool_t HandleKey(int set, SDL_Keycode key, SDL_Keymod mod) {
   for ( i = 0 ; i < otherCommandsCount; i++) {
     for (j = 0 ; j < MOUSE_COUNT; j++) {
       if ((otherCommands[i].commands[j].key == key) && (otherCommands[i].commands[j].mod == mod)) {
-        return(HandleCommand(set, otherCommands[i].commands[j].command, displayCommand[i].dataSource));
+        return(HandleCommand(set, otherCommands[i].commands[j].command, i));
       }
     }
   }
@@ -1652,18 +1676,20 @@ bool_t HandleCommand(int set, command_e command, int selection) {
   patternElement_e element;
 
   element = displayCommand[selection].dataSource;
-  if (element < PE_INVALID) element = GetSelectElement(set, element);
 
   // To deal with disabled color selector elements:
-  if (element == PE_INVALID) {
-    switch(command) {
-      case COM_RST_FLOAT: case COM_INC_FLOAT: case COM_DEC_FLOAT: case COM_BOOL_FLIP:
-      case COM_BOOL_RST: case COM_ENUM_RST: case COM_ENUM_INC: case COM_ENUM_DEC:
-      case COM_INT_RST: case COM_INT_INC: case COM_INT_DEC: case COM_LINT_DEC:
-      case COM_LINT_INC:
-        return NO;
-      default:
-        break;
+  if (element < PE_INVALID) {
+    element = GetSelectElement(set, element);
+    if (element == PE_INVALID) {
+      switch(command) {
+        case COM_RST_FLOAT: case COM_INC_FLOAT: case COM_DEC_FLOAT: case COM_BOOL_FLIP:
+        case COM_BOOL_RST: case COM_ENUM_RST: case COM_ENUM_INC: case COM_ENUM_DEC:
+        case COM_INT_RST: case COM_INT_INC: case COM_INT_DEC: case COM_LINT_DEC:
+        case COM_LINT_INC:
+          return NO;
+        default:
+          break;
+      }
     }
   }
 
@@ -1753,14 +1779,20 @@ bool_t HandleCommand(int set, command_e command, int selection) {
         if (patternElements[i].type == ET_BOOL) {
           SBOOL(set, i) = NO;
         }
+        if (patternElements[i].type == ET_ENUM) {
+          switch(i) {
+            case PE_SHIFTBLUE: case PE_SHIFTCYAN: case PE_SHIFTGREEN:
+            case PE_SHIFTMAGENTA: case PE_SHIFTRED: case PE_SHIFTYELLOW:
+              SENUM(set, i) = SM_HOLD;
+              break;
+            case PE_TEXTMODE: case PE_SCROLLDIR:
+              break;
+            default:
+              SENUM(set, i) = 0;
+              break;
+          }
+        }
       }
-      SENUM(set, PE_SHIFTBLUE) = SM_HOLD;
-      SENUM(set, PE_SHIFTCYAN) = SM_HOLD;
-      SENUM(set, PE_SHIFTGREEN) = SM_HOLD;
-      SENUM(set, PE_SHIFTMAGENTA) = SM_HOLD;
-      SENUM(set, PE_SHIFTYELLOW) = SM_HOLD;
-      SENUM(set, PE_SHIFTRED) = SM_HOLD;
-      SENUM(set, PE_CROSSBAR) = CB_NONE;
       SINT(set, PE_BOUNCER) = 0;
       cyclePatternSets = NO;
       break;
@@ -1828,19 +1860,35 @@ bool_t HandleCommand(int set, command_e command, int selection) {
       break;
     case COM_SCROLL_UPC:
       SENUM(set, PE_SCROLLDIR) = DIR_UP;
-      SBOOL(set, PE_SCROLL) = YES;
+      SENUM(set, PE_SCROLL) = OS_ONESHOT;
       break;
     case COM_SCROLL_DOWNC:
       SENUM(set, PE_SCROLLDIR) = DIR_DOWN;
-      SBOOL(set, PE_SCROLL) = YES;
+      SENUM(set, PE_SCROLL) = OS_ONESHOT;
       break;
     case COM_SCROLL_LEFTC:
       SENUM(set, PE_SCROLLDIR) = DIR_LEFT;
-      SBOOL(set, PE_SCROLL) = YES;
+      SENUM(set, PE_SCROLL) = OS_ONESHOT;
       break;
     case COM_SCROLL_RIGHTC:
       SENUM(set, PE_SCROLLDIR) = DIR_RIGHT;
-      SBOOL(set, PE_SCROLL) = YES;
+      SENUM(set, PE_SCROLL) = OS_ONESHOT;
+      break;
+    case COM_SCROLL_UPA:
+      SENUM(set, PE_SCROLLDIR) = DIR_UP;
+      SENUM(set, PE_SCROLL) = OS_YES;
+      break;
+    case COM_SCROLL_DOWNA:
+      SENUM(set, PE_SCROLLDIR) = DIR_DOWN;
+      SENUM(set, PE_SCROLL) = OS_YES;
+      break;
+    case COM_SCROLL_LEFTA:
+      SENUM(set, PE_SCROLLDIR) = DIR_LEFT;
+      SENUM(set, PE_SCROLL) = OS_YES;
+      break;
+    case COM_SCROLL_RIGHTA:
+      SENUM(set, PE_SCROLLDIR) = DIR_RIGHT;
+      SENUM(set, PE_SCROLL) = OS_YES;
       break;
     case COM_STEP_INC: SFLOAT(set, PE_FLOATINC) *= 10; break;
     case COM_STEP_DEC: SFLOAT(set, PE_FLOATINC) /= 10; break;
@@ -1979,7 +2027,7 @@ void FadeAll(int inc, fadeModes_e fadeMode, unsigned char *buffer) {
         colorTemp.r += inc;
         colorTemp.g += inc;
         colorTemp.b += inc;
-      } else {
+      } else if (fadeMode == FM_LIMIT) {
         // For the limiter, we'll do the math with ints.
         r = colorTemp.r;
         g = colorTemp.g;
@@ -1996,8 +2044,48 @@ void FadeAll(int inc, fadeModes_e fadeMode, unsigned char *buffer) {
         colorTemp.r = r;
         colorTemp.g = g;
         colorTemp.b = b;
+      } else if (fadeMode == FM_NONZEROL) {
+        if (colorTemp.r != 0) {
+          r = colorTemp.r;
+          r+=inc;
+          if ( r < 0 ) r = 0;
+          if ( r > 255 ) r = 255;
+          colorTemp.r = r;
+        }
+        if (colorTemp.g != 0) {
+          g = colorTemp.g;
+          g+=inc;
+          if ( g < 0 ) g = 0;
+          if ( g > 255 ) g = 255;
+          colorTemp.g = g;
+        }
+        if (colorTemp.b != 0) {
+          b = colorTemp.b;
+          b+=inc;
+          if ( b < 0 ) b = 0;
+          if ( b > 255 ) b = 255;
+          colorTemp.b = b;
+        }
+      } else if (fadeMode == FM_NONZEROM) {
+        if (colorTemp.r != 0) {
+          colorTemp.r += inc;
+          if (colorTemp.r == 0) {
+            colorTemp.r = colorTemp.r + (inc < 0 ? -1 : 1);
+          }
+        }
+        if (colorTemp.g != 0) {
+          colorTemp.g += inc;
+          if (colorTemp.g == 0) {
+            colorTemp.g = colorTemp.g + (inc < 0 ? -1 : 1);
+          }
+        }
+        if (colorTemp.b != 0) {
+          colorTemp.b += inc;
+          if (colorTemp.b == 0) {
+            colorTemp.b = colorTemp.b + (inc < 0 ? -1 : 1);
+          }
+        }
       }
-
       SetPixel(x, y, colorTemp, buffer);
     }
   }
@@ -2329,7 +2417,8 @@ void Scroll (int set, dir_e direction, bool_t toroidal, unsigned char *fb, unsig
   unsigned char alpha;
   color_t temp;
 
-  if ((shiftModes_e) direction == SM_HOLD) return;
+  // Ignore SM_HOLD values that have been pre decremented.
+  if ((shiftModes_e)direction == SM_HOLD) return;
 
   // Get the scroller alpha
   alpha = (unsigned char) (DFLOAT(PE_SCROLLALPHA) * 255.0);
@@ -2343,7 +2432,7 @@ void Scroll (int set, dir_e direction, bool_t toroidal, unsigned char *fb, unsig
         break;
 
       case DIR_DOWN:
-        if (DBOOL(PE_MIRROR_H)) {
+        if (DENUM(PE_MIRROR_H)) {
           for (i = 0; i < tensorWidth; i++) rollSave[i] = GetPixel(i, (tensorHeight - 1)/2, fb);
         } else {
           for (i = 0; i < tensorWidth; i++) rollSave[i] = GetPixel(i, tensorHeight - 1, fb);
@@ -2351,7 +2440,7 @@ void Scroll (int set, dir_e direction, bool_t toroidal, unsigned char *fb, unsig
         break;
 
       case DIR_RIGHT:
-        if (DBOOL(PE_MIRROR_V)) {
+        if (DENUM(PE_MIRROR_V)) {
           for (i = 0; i < tensorHeight; i++) rollSave[i] = GetPixel((tensorWidth - 1) / 2, i, fb);
         } else {
           for (i = 0; i < tensorHeight; i++) rollSave[i] = GetPixel(tensorWidth - 1, i, fb);
@@ -2375,7 +2464,7 @@ void Scroll (int set, dir_e direction, bool_t toroidal, unsigned char *fb, unsig
   // Make the shift.
   switch(direction) {
     case DIR_UP:
-      if (DBOOL(PE_MIRROR_H)) {
+      if (DENUM(PE_MIRROR_H)) {
         for (y = 0; y < (tensorHeight - 1) / 2; y++) {
           for (x = 0; x < tensorWidth; x++) {
             temp = GetPixel(x, y + 1, fb);
@@ -2405,7 +2494,7 @@ void Scroll (int set, dir_e direction, bool_t toroidal, unsigned char *fb, unsig
       break;
 
     case DIR_LEFT:
-      if (DBOOL(PE_MIRROR_V)) {
+      if (DENUM(PE_MIRROR_V)) {
         for (y = 0; y < tensorHeight; y++) {
           for (x = 0; x < (tensorWidth - 1) / 2; x++) {
             temp = GetPixel(x + 1, y, fb);
@@ -2426,7 +2515,7 @@ void Scroll (int set, dir_e direction, bool_t toroidal, unsigned char *fb, unsig
 
     case DIR_RIGHT:
       for (y = 0; y < tensorHeight; y++) {
-        if (DBOOL(PE_MIRROR_V)) {
+        if (DENUM(PE_MIRROR_V)) {
           for (x = (tensorWidth - 1) / 2; x > 0; x--) {
             temp = GetPixel(x - 1, y, fb);
             temp.a = alpha;
@@ -2450,7 +2539,7 @@ void Scroll (int set, dir_e direction, bool_t toroidal, unsigned char *fb, unsig
   if (toroidal) {
     switch(direction) {
       case DIR_UP:
-        if (DBOOL(PE_MIRROR_H)) {
+        if (DENUM(PE_MIRROR_H)) {
           for(i = 0; i < tensorWidth; i++)
             SetPixelByPlaneA(i, (tensorHeight - 1)/2, rollSave[i], plane, fb);
         } else {
@@ -2470,7 +2559,7 @@ void Scroll (int set, dir_e direction, bool_t toroidal, unsigned char *fb, unsig
         break;
 
       case DIR_LEFT:
-        if (DBOOL(PE_MIRROR_V)) {
+        if (DENUM(PE_MIRROR_V)) {
           for (i = 0; i < tensorHeight; i++)
             SetPixelByPlaneA((tensorWidth - 1)/2, i, rollSave[i],plane, fb);
         } else {
@@ -2536,13 +2625,13 @@ void WriteSlice(int set) {
   switch (DSENUM(PE_SCROLLDIR, dir_e)) {
     case DIR_LEFT:
       sliceColOrRow = tensorWidth - 1;
-      if (DBOOL(PE_MIRROR_V)) sliceColOrRow = (tensorWidth - 1) / 2;
+      if (DENUM(PE_MIRROR_V)) sliceColOrRow = (tensorWidth - 1) / 2;
       break;
 
     case DIR_UP:
       horizontal = NO;
       sliceColOrRow = tensorHeight - 1;
-      if (DBOOL(PE_MIRROR_H)) sliceColOrRow = (tensorHeight - 1) / 2;
+      if (DENUM(PE_MIRROR_H)) sliceColOrRow = (tensorHeight - 1) / 2;
       break;
 
     case DIR_DOWN:
@@ -3224,8 +3313,11 @@ void SavePatternSet(char key, int set, bool_t overWrite, bool_t backup) {
       case ET_BOOL:
         fprintf(fp, "%s", SBOOL(set, i) ? "YES" : "NO");
         break;
-      case ET_INT: case ET_ENUM:
+      case ET_INT:
         fprintf(fp, "%i", SINT(set, i));
+        break;
+      case ET_ENUM:
+        fprintf(fp, "%s", enumerations[patternElements[i].etype].texts[SINT(set, i)]);
         break;
       case ET_FLOAT:
         fprintf(fp, "%f", SFLOAT(set, i));
@@ -3276,6 +3368,7 @@ void LoadPatternSet(char key, int set) {
   color_t temp;
   char *token;
   unsigned char * bufferData;
+  bool_t gotIt = NO;
 
   // Filename
   snprintf(filename, sizeof(filename), "%c.now", key);
@@ -3374,8 +3467,36 @@ void LoadPatternSet(char key, int set) {
         // Process the result by parameter type.
         switch(patternElements[parameterIndex].type) {
           // TODO Range checking for ET_ENUM (and others).
-          case ET_INT: case ET_ENUM:
+          case ET_INT:
             DINT(parameterIndex) = atoi(value);
+            break;
+          case ET_ENUM:
+            // Must make a string comparison to the texts of the enumeration values.
+            // I want to shave off trailing white space, and make the comparison
+            // without case.
+            // Strip the white space off the end.
+            for (i = strlen(value) - 1; i >= 0; i--) {
+              if (value[i] == 32) value[i] = '\0';
+              else if (value[i] == '\t') value[i] = '\0';
+              else break;  // Any other value means we are no longer looking for trailing whitespace.
+            }
+            // Now we set the enum value by doing comparing the string to known values.
+            gotIt = NO;
+            for (i = 0; i < enumerations[patternElements[parameterIndex].etype].size; i++) {
+              if (strcasecmp(value, enumerations[patternElements[parameterIndex].etype].texts[i]) == 0) {
+                DENUM(parameterIndex) = i;
+                gotIt = YES;
+                break;
+              }
+            }
+            // If we didn't find a legit value, this may be a legacy file.  In
+            // that case, let's do a string conversion.
+            if (!gotIt) {
+              DENUM(parameterIndex) = atoi(value);
+            }
+            // Correct for out of range.  Out of range would segfault the program.
+            if (DENUM(parameterIndex) < 0 || DENUM(parameterIndex) >= enumerations[patternElements[parameterIndex].etype].size)
+              DENUM(parameterIndex) = 0;
             break;
           case ET_BOOL:
             if (strncasecmp(value, "YES", 3) == 0) {
@@ -3499,11 +3620,32 @@ void DrawSideBar(int set) {
   int currentSet = set; // Override global for D*
   int i;
   color_t color = fgOutput[A_SIDEBAR][set];
+  static int sideBarCount[PATTERN_SET_COUNT];
+
+  // Let's deal with one-shots first.
+  sideBarCount[set]++;
+  if (DENUM(PE_BARSEED) == OS_ONESHOT) {
+    switch(DSENUM(PE_SCROLLDIR, dir_e)) {
+      case DIR_LEFT: case DIR_RIGHT:
+        if (sideBarCount[set] >= tensorWidth) {
+          DENUM(PE_BARSEED) = OS_NO;
+          sideBarCount[set] = 0;
+        }
+        break;
+      case DIR_UP: case DIR_DOWN:
+        if (sideBarCount[set] >= tensorHeight) {
+          DENUM(PE_BARSEED) = OS_NO;
+          sideBarCount[set] = 0;
+        }
+        break;
+      default: break;
+    }
+  }
 
   switch (DSENUM(PE_SCROLLDIR, dir_e)) {
     case DIR_LEFT:
       for (i = 0; i < tensorHeight; i++) {
-        if (DBOOL(PE_MIRROR_V)) {
+        if (DENUM(PE_MIRROR_V)) {
           SetPixelA((tensorWidth - 1) / 2, i, color, DBUFFER(PE_FRAMEBUFFER));
         } else {
           SetPixelA(tensorWidth - 1, i, color, DBUFFER(PE_FRAMEBUFFER));
@@ -3519,7 +3661,7 @@ void DrawSideBar(int set) {
 
     case DIR_UP:
       for (i = 0; i < tensorWidth; i++) {
-        if (DBOOL(PE_MIRROR_H)) {
+        if (DENUM(PE_MIRROR_H)) {
           SetPixelA(i, (tensorHeight - 1) / 2, color, DBUFFER(PE_FRAMEBUFFER));
         } else {
           SetPixelA(i, tensorHeight - 1, color, DBUFFER(PE_FRAMEBUFFER));
@@ -3541,6 +3683,7 @@ void DrawSidePulse(int set) {
   int currentSet = set; // Override global for D*
   static int pos[PATTERN_SET_COUNT];
   static int dir[PATTERN_SET_COUNT];
+  static int oneShotCount[PATTERN_SET_COUNT];
   static int initial = YES;
   int i;
   color_t color = fgOutput[A_SIDEPULSE][set];
@@ -3553,12 +3696,39 @@ void DrawSidePulse(int set) {
     }
   }
 
+  // Deal with one-shots
+  // Let's deal with one-shots first.
+  oneShotCount[set]++;
+  if (DENUM(PE_SIDEPULSE) == OS_ONESHOT) {
+    switch(DSENUM(PE_SCROLLDIR, dir_e)) {
+      case DIR_LEFT: case DIR_RIGHT:
+        if (oneShotCount[set] > tensorHeight) {
+          DENUM(PE_SIDEPULSE) = OS_NO;
+          oneShotCount[set] = 0;
+          pos[set] = 0;
+          dir[set] = 1;
+          return;
+        }
+        break;
+      case DIR_UP: case DIR_DOWN:
+        if (oneShotCount[set] > tensorWidth) {
+          DENUM(PE_SIDEPULSE) = OS_NO;
+          oneShotCount[set] = 0;
+          pos[set] = 0;
+          dir[set] = 1;
+          return;
+        }
+        break;
+      default: break;
+    }
+  }
+
   switch (DSENUM(PE_SCROLLDIR, dir_e)) {
     case DIR_LEFT:
-      if (DBOOL(PE_MIRROR_V)) {
+      if (DENUM(PE_MIRROR_V)) {
         SetPixelA((tensorWidth - 1) / 2, pos[set], color, DBUFFER(PE_FRAMEBUFFER));
         pos[set] += dir[set];
-        if (DBOOL(PE_MIRROR_H)) {
+        if (DENUM(PE_MIRROR_H)) {
           if (pos[set] >= (tensorHeight - 1) / 2) dir[set] = -1;
         } else {
           if (pos[set] >= (tensorHeight - 1) ) dir[set] = -1;
@@ -3566,7 +3736,7 @@ void DrawSidePulse(int set) {
       } else {
         SetPixelA(tensorWidth - 1, pos[set], color, DBUFFER(PE_FRAMEBUFFER));
         pos[set] += dir[set];
-        if (DBOOL(PE_MIRROR_H)) {
+        if (DENUM(PE_MIRROR_H)) {
           if (pos[set] >= (tensorHeight - 1) / 2) dir[set] = -1;
         } else {
           if (pos[set] >= tensorHeight - 1) dir[set] = -1;
@@ -3578,7 +3748,7 @@ void DrawSidePulse(int set) {
     case DIR_RIGHT:
         SetPixelA(0, pos[set], color, DBUFFER(PE_FRAMEBUFFER));
         pos[set] += dir[set];
-        if (DBOOL(PE_MIRROR_H)) {
+        if (DENUM(PE_MIRROR_H)) {
           if (pos[set] >= (tensorHeight - 1) / 2) dir[set] = -1;
         } else {
           if (pos[set] >= (tensorHeight - 1) ) dir[set] = -1;
@@ -3587,10 +3757,10 @@ void DrawSidePulse(int set) {
       break;
 
     case DIR_UP:
-      if (DBOOL(PE_MIRROR_H)) {
+      if (DENUM(PE_MIRROR_H)) {
         SetPixelA(pos[set], (tensorHeight - 1) / 2, color, DBUFFER(PE_FRAMEBUFFER));
         pos[set] += dir[set];
-        if (DBOOL(PE_MIRROR_V)) {
+        if (DENUM(PE_MIRROR_V)) {
           if (pos[set] >= (tensorWidth - 1) / 2) dir[set] = -1;
         } else {
           if (pos[set] >= tensorWidth - 1) dir[set] = -1;
@@ -3598,7 +3768,7 @@ void DrawSidePulse(int set) {
       } else {
         SetPixelA(pos[set], tensorHeight - 1, color, DBUFFER(PE_FRAMEBUFFER));
         pos[set] += dir[set];
-        if (DBOOL(PE_MIRROR_V)) {
+        if (DENUM(PE_MIRROR_V)) {
           if (pos[set] >= (tensorWidth - 1) / 2) dir[set] = -1;
         } else {
           if (pos[set] >= tensorWidth - 1) dir[set] = -1;
@@ -3610,7 +3780,7 @@ void DrawSidePulse(int set) {
     case DIR_DOWN:
       SetPixelA(pos[set], 0, color, DBUFFER(PE_FRAMEBUFFER));
       pos[set] += dir[set];
-      if (DBOOL(PE_MIRROR_V)) {
+      if (DENUM(PE_MIRROR_V)) {
         if (pos[set] >= (tensorWidth - 1) / 2) dir[set] = -1;
       } else {
         if (pos[set] >= tensorWidth - 1) dir[set] = -1;
@@ -3679,8 +3849,8 @@ point_t GetDisplayPixel(point_t mouse, SDL_Rect box) {
 
 // Allows for remapping of pixel output and ip addresses without recompiling.
 void LoadTensorMaps(void) {
-  LoadPixelMap();
   LoadIPMap();
+  LoadPixelMap();
 }
 
 // For remapping individual pixels sent to tensor without recompiling.
@@ -4475,12 +4645,12 @@ void UpdateInfoDisplay(int set) {
       } else if (element_o < PE_INVALID) {
         // This is a place holder because these things come into and go out of
         // existance sometimes.  Ugh.
-        CreateTextureInt(&tempTarget, INT_MIN,
+        CreateTextureInt(&tempTarget, INT_MAX - 1,
           displayCommand[i].line, displayCommand[i].col + 1, PARAMETER_WIDTH);
         if (tempTarget.texture != NULL) {
           infoCount++;
           infoCache = realloc(infoCache, infoCount * sizeof(infoCache_t));
-          infoCache[infoCount - 1].cacheValue.i = INT_MIN;
+          infoCache[infoCount - 1].cacheValue.i = INT_MAX - 1;
           infoCache[infoCount - 1].infoText = tempTarget;
         }
       }
@@ -4797,6 +4967,15 @@ void UpdateInfoDisplay(int set) {
       color.a = 255;
       DrawOutlineBox(GetBoxofLine(displayCommand[i].line, displayCommand[i].col + 7, 0),
         DISPLAY_COLOR_PARMS, color);
+      if (seedPalette[displayCommand[i].colorSource].bgColorA != PE_INVALID) {
+        // A background if there is one.
+        color = bgOutput[displayCommand[i].colorSource][set];
+        color.a = 255;
+        tempBox = GetBoxofLine(displayCommand[i].line, displayCommand[i].col + 7, 0);
+        tempBox.w = tempBox.w / 2;
+        tempBox.x = tempBox.x + tempBox.w;
+        DrawOutlineBox(tempBox, DISPLAY_COLOR_PARMS, color);
+      }
     }
   }
 }

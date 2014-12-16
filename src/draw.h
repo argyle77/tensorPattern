@@ -27,10 +27,8 @@
   // Layout
   #define ROW_O 27
   #define COL_O 0
-  #define ROW_MI (ROW_O + 8)
-  #define COL_MI COL_O
-  #define ROW_CB (ROW_MI + 5)
-  #define COL_CB COL_MI
+  #define ROW_CB (ROW_O + 11)
+  #define COL_CB COL_O
   #define ROW_R (ROW_CB + 3)
   #define COL_R COL_CB
   #define ROW_C (ROW_R + 3)

@@ -1,90 +1,89 @@
 Tensor pattern parameter set file
-Version 7.2.0.
-CellFun NO
+Version 8.0.0.
+CellFun No
 CFColorA 0 255 127 255
 CFColorB 0 0 0 255
-CFCMode 0
+CFCMode None
 CFCMRate 8
 CFCMPos 0
 CFAlpha 1.000000
 CycleScroll 0
-Fader YES
-Diffuse NO
+Fader Yes
+Diffuse No
 RollOver NO
-Scroll NO
-Hbars NO
+Scroll No
+Hbars No
 HbarsColorA 255 0 0 255
 HbarsColorB 0 0 0 255
-HbarsCMode 0
+HbarsCMode None
 HbarsCMRate 8
 HbarsCMPos 0
 HbarsAlpha 1.000000
 HbarsBGColorA 0 0 255 255
 HbarsBGColorB 0 0 0 255
-HbarsBGCMode 0
+HbarsBGCMode None
 HbarsBGCMRate 8
 HbarsBGCMPos 0
 HbarsBGAlpha 0.000000
-Vbars NO
+Vbars No
 VbarsColorA 255 127 0 255
 VbarsColorB 0 0 0 255
-VbarsCMode 0
+VbarsCMode None
 VbarsCMRate 8
 VbarsCMPos 0
 VbarsAlpha 1.000000
 VbarsBGColorA 0 255 127 255
 VbarsBGColorB 0 0 0 255
-VbarsBGCMode 0
+VbarsBGCMode None
 VbarsBGCMRate 8
 VbarsBGCMPos 0
 VbarsBGAlpha 0.000000
-ColorAllA NO
+ColorAllA No
 CAAColorA 255 255 0 255
 CAAColorB 0 0 0 255
-CAACMode 0
+CAACMode None
 CAACMRate 8
 CAACMPos 0
 CAAAlpha 1.000000
-ColorAllB NO
+ColorAllB No
 CABColorA 0 0 0 255
 CABColorB 255 0 0 255
-CABCMode 0
+CABCMode None
 CABCMRate 8
 CABCMPos 0
 CABAlpha 1.000000
-ImageAll NO
-RandomDots NO
+RandomDots No
 RDOTColorA 255 0 255 255
 RDOTColorB 0 0 0 255
-RDOTCMode 0
+RDOTCMode None
 RDOTCMRate 8
 RDOTCMPos 0
 RDOTAlpha 1.000000
-FadeMode 1
+FadeMode Modular
 PostRotZoom NO
-PreRotZoom YES
+PreRotZoom Yes
 AntiAlias NO
-Multiply NO
-SideBar NO
+Multiply No
+SideBar No
 SBColorA 0 255 255 255
 SBColorB 0 0 0 255
-SBCMode 0
+SBCMode None
 SBCMRate 8
 SBCMPos 0
 SBAlpha 1.000000
-NoRed NO
-NoGreen NO
-NoBlue NO
-ShiftRed 4
-ShiftGreen 4
-ShiftBlue 4
-ShiftCyan 4
-ShiftYellow 4
-ShiftMagenta 4
-PostImage NO
+NoRed No
+NoGreen No
+NoBlue No
+ShiftRed Hold
+ShiftGreen Hold
+ShiftBlue Hold
+ShiftCyan Hold
+ShiftYellow Hold
+ShiftMagenta Hold
+PostImage No
 FadeIncr -1
 DiffuseCoef 0.002000
-ScrollDir 1
+ScrollDir Left
 DotCoef 100
 Expansion 1.000000
 FloatInc 0.100000
@@ -96,87 +95,87 @@ FGCyclePos 0
 BGCyclePos 0
 CellFunCt 0
 TextBuffer Frostbyte was an engineer. 
-TextMode 3
+TextMode Full BG
 FontFlip NO
 FontDir NO
 TextOffset 5
 TextIndex 27
 PixelIndex 189
-ScrollDirLast 1
+ScrollDirLast Left
 TextSeed NO
 TSColorA 255 0 127 255
 TSColorB 0 0 0 255
-TSCMode 0
+TSCMode None
 TSCMRate 8
 TSCMPos 0
 TSAlpha 1.000000
 TSBGColorA 0 0 0 255
 TSBGColorB 0 0 0 255
-TSBGCMode 0
+TSBGCMode None
 TSBGCMRate 8
 TSBGCMPos 0
 TSBGAlpha 1.000000
-FrameBuffer 2f 27 69 2f 27 6c 2f 1b 8a 33 15 2c 33 15 2c 2b 23 4c 27 1f 8a 29 1f b9 25 1d 16 29 21 b9 1d 0b 73 25 17 39 25 17 39 25 17 39 25 1b 32 21 15 2a 25 1b 2d 27 1d 20 23 1d 12 27 1f 5f 29 21 5a 27 1d a9 17 05 a1 27 1f 81 33 15 2b 33 1f 8d 25 1b 8a 2f 27 6c 23 19 8a 33 15 2c 33 15 2c 29 21 50 2b 23 4c 29 21 60 24 1c 5a 21 0f 54 21 0f 54 21 0f 54 25 17 39 23 19 40 25 1b 32 21 0f 61 23 17 28 23 17 28 23 17 26 21 15 39 1b 11 60 25 1d 06 29 21 5a 29 1f ad 29 1d a9 2f 27 81 33 15 2b 31 1d 8a 25 1b 8d 31 1d 8d 33 15 2c 33 2f e7 29 1f ad 29 21 60 29 21 60 24 1c 5a 23 1d 07 83 4b 21 1d 0b 73 23 19 40 21 0f 61 21 0f 61 21 0f 61 23 17 2b 1d 0c 73 27 1f 2a 29 23 0f 29 23 0f 29 23 0f 23 1d 04 27 1f 57 25 1d 13 17 2b 2c 33 15 2b 33 15 2b 31 1d 8d 33 15 2c 33 2f e7 27 1f 78 19 07 a7 27 1f 64 1a 10 65 83 4b 21 83 4b 21 83 4b 21 83 4b 21 23 19 40 1f 0e 61 21 0f 61 21 0f 61 0f 9f 78 0f 9f 78 21 17 0e 29 23 0f 29 23 0f 29 23 0f 29 23 0f 23 19 20 29 21 ad 29 21 56 2b 21 7e 33 15 2b 31 1d 8d 33 15 2c 29 21 50 29 1d a9 1b 15 2a 23 1d 15 7d 45 1c 1a 10 65 83 4b 21 7d 45 1c 1f 0e 61 1d 0b 73 21 0f 62 21 0f 61 21 0f 61 0f 9f 78 0f 9f 78 21 17 0e 1f 15 38 1f 15 38 1f 15 38 1b 14 51 1b 12 4d 1b 13 48 27 1f 6f 2b 23 4e 33 15 2b 33 15 2c 33 15 2c 2f 27 8d 27 1f 90 27 1f 90 7d 45 1c 7d 45 1c 83 4b 21 7d 45 1c 83 4b 21 1f 0e 61 83 4b 21 17 0f 70 17 0f 70 0f 9f 78 0f 9f 78 1f 15 27 1f 15 26 0f 9f 78 1f 15 38 1b 13 5b 23 17 0f 23 17 0f 1b 13 48 21 17 14 29 1f 4e 33 2f e2 33 15 2c 33 2f e7 2e 26 8c 29 21 56 22 1a 1f 7d 45 1c 83 4b 21 83 4b 21 83 4b 21 83 4b 21 17 0d 5e 17 0d 5e 01 9f 78 01 9f 78 17 0f 70 01 9f 78 0f 9f 78 0f 9f 78 0f 9f 78 1f 15 38 1f 15 38 23 17 0f 23 17 0f 23 17 0f 21 17 11 29 1f 54 2e 26 89 33 15 2c 33 2f e7 28 1e 55 21 17 12 7b 43 1a 7d 45 1c 7d 45 1c 7d 45 1c 7d 45 1c 02 9f 78 17 0d 5e 17 0d 5e 17 0d 5e 01 9f 78 01 9f 78 0f 9f 78 0f 9f 78 0f 9f 78 1b 0b 63 21 15 54 21 15 53 1b 14 51 1b 14 51 27 1d 20 27 1d 20 29 21 54 27 1f 75 33 15 2c 33 15 2c 29 1f 50 21 17 15 23 1d 17 23 1b 31 7d 45 1c 19 0c 73 17 0d 63 02 9f 78 02 9f 78 17 09 78 17 09 78 01 9f 78 01 9f 78 01 9f 78 1f 0d 68 1b 0b 63 1b 0b 62 1b 0b 62 1b 13 52 1b 14 51 1f 15 49 1b 14 51 26 1c 20 27 1f 8d 28 20 83 33 15 2c 2b 21 81 27 1f 72 1b 13 49 1b 13 49 23 1b 31 19 0c 73 19 0c 73 02 9f 78 02 9f 78 10 9f 78 17 09 78 17 09 78 d7 9f 78 d6 9f 78 1f 0d 68 1f 0d 68 1f 0d 68 1f 0d 68 1b 0b 62 1b 14 51 1b 14 51 27 1d 20 27 1d 20 27 1d 20 23 1d 14 29 1d a5 33 15 2c 2b 21 80 29 21 58 1b 13 48 1b 13 4d 23 1b 31 19 0c 73 19 0c 73 19 0c 73 02 9f 78 10 9f 78 02 9f 78 17 0c 73 d6 9f 78 d6 9f 78 d6 9f 78 1f 0d 68 1f 0d 68 d6 9f 78 1e 0c 73 1f 15 49 1f 15 49 27 1d 20 27 1d 20 23 1d 14 27 1f 63 19 07 a5 33 15 2c 17 2b 2d 25 1d 14 23 19 21 21 15 2d 23 1b 31 1b 13 72 19 0c 73 10 9f 78 10 9f 78 10 9f 78 10 9f 78 17 0c 73 17 0c 73 d8 9f 78 fd 9f 78 d6 9f 78 d6 9f 78 d6 9f 78 d6 9f 78 21 0e 73 27 1d 20 21 0f 71 21 15 3d 25 1d 08 25 1d 08 29 1f a9 33 15 2c 29 1d ad 29 1d ad 27 1f 59 21 15 2d 1b 13 6d 1d 0d 73 1d 0e 73 10 9f 78 77 3f 16 10 9f 78 17 0c 73 17 0c 73 17 0c 73 fd 9f 78 fd 9f 78 d6 9f 78 d6 9f 78 1f 0f 6f 19 0d 67 19 0d 66 27 1d 20 21 0f 71 21 15 3c 21 15 3c 27 1d af 27 1d af 33 15 2c 27 1f 84 28 1e b0 29 21 5c 1b 15 32 1b 15 32 1b 12 71 1b 12 6d 1f 13 4d 1f 13 4d 17 0a 73 17 0a 73 17 0a 73 17 0d 5f 17 0d 5f 17 0d 5f d6 9f 78 d6 9f 78 d6 9f 78 19 0d 68 19 0d 66 21 0f 72 23 1d 1e 23 1d 06 26 1e 5a 29 21 5e 17 05 a8 2f 27 75 2f 27 78 17 05 a5 27 1d ad 25 1d 07 1b 11 62 1b 12 6d 1b 12 6d 17 0d 73 17 0d 73 17 0a 73 17 0a 73 17 0a 73 17 0d 5f 17 0d 5f 17 0d 5f 17 0d 5f d6 9f 78 19 0d 66 19 0d 66 25 1d 28 25 1d 28 25 1d 27 23 1d 1e 23 19 22 29 1f b5 29 1d b0 2f 27 72 2d 25 75 29 21 7b 29 1f a5 27 1f 61 23 1d 13 1b 12 6d 1b 12 6d 17 0d 73 17 0d 73 1f 15 4d 1f 15 52 1f 15 52 17 0a 73 21 14 4d 17 0d 5f 1f 15 45 1f 13 48 1f 13 48 19 0d 66 1f 13 47 25 1d 28 25 1d 28 27 1d 19 25 1d 15 25 1d 15 29 1d b1 2d 25 6f 2d 25 72 2f 27 78 19 07 a1 2b 23 5e 23 1d 13 26 1c 20 1b 12 6d 1b 12 6d 1b 12 6d 1f 13 50 1f 14 4d 1f 14 4d 21 15 58 21 14 4d 1f 15 45 1f 15 45 1f 15 45 1f 13 48 19 0d 66 25 1d 28 27 1f 29 25 1d 28 27 1d 19 29 21 5a 17 2b 2e 33 15 2d 2f 27 6f 2f 27 72 2d 25 75 29 21 7b 29 1d a1 27 1f 8a 23 1b 1e 23 1d 12 1b 12 6d 1f 13 4b 1b 12 6d 21 15 56 1f 14 4b 1f 14 4b 21 14 4d 1f 14 4a 1f 15 45 1f 15 3c 19 0d 66 19 0d 66 27 1f 29 21 17 13 21 17 16 29 1f 52 2b 21 84 33 15 2d 33 15 2d 2d 25 6c 2d 25 6f 2d 25 72 2d 25 75 29 21 81 27 1f 72 29 21 52 21 17 10 1b 12 6d 1b 12 6d 1b 12 6d 22 14 51 1f 14 54 21 13 51 1f 15 3a 21 15 29 1f 14 4a 1b 11 65 1f 15 3c 1f 14 3c 21 17 13 28 20 57 29 1f 52 29 1f 52 2b 23 52 33 15 2d 2f 27 78 2f 27 6c 2f 27 6f 2f 27 72 2f 27 75 31 2d ec 2f 27 87 29 1f 52 2b 21 54 21 17 13 1b 13 46 1b 11 4d 1b 13 4d 1f 15 3a 1f 15 3a 1f 15 3a 23 1d 08 1f 15 3a 1b 11 65 23 1d 16 24 1c 90 24 1c 90 29 21 58 29 21 52 33 2f ec 33 15 2d 2f 27 78 2f 27 75 
-PreRotAngle 1229.000000
-PreRotAlias NO
+FrameBuffer 2f 27 1f 2f 27 20 23 19 2c 2f 19 2d 31 15 02 2f 27 33 25 19 48 1f 15 21 23 1b bd 1b 11 29 29 21 fb 29 21 fb 29 21 fb 23 1d 01 23 1d 01 1f 15 1e 15 29 17 21 17 23 21 15 25 1f 13 25 2f 27 48 24 16 52 29 1f 1e 17 05 3d 33 15 02 30 1c 2b 31 1d 2c 2f 27 20 23 19 2e 2f 19 2f 31 15 04 2f 27 36 25 19 4c 21 19 c5 29 23 01 29 23 01 1d 10 e2 23 1d 0a 1f 0b be 23 1d 0d 25 1b 0d 1f 15 18 1e 12 21 21 0e ab 20 14 26 23 16 22 1b 11 39 21 15 55 1f 14 e8 1f 15 25 21 13 55 21 13 56 2d 27 5a 33 13 f6 23 19 2e 2f 19 2f 31 15 04 2f 27 36 1f 15 23 1b 11 2b 29 23 01 29 23 01 20 18 25 1d 10 e2 23 1d 0a 27 1f 1b 1f 0b be 1f 15 20 1f 13 28 1f 13 23 1f 15 27 1f 13 2e 1f 12 1d 1f 15 28 1b 11 32 29 23 0a 1b 11 2d 1b 11 31 25 15 54 17 05 39 2f 27 26 23 19 2e 31 15 04 2f 27 36 1f 15 23 22 1a c4 1b 11 2b 21 1d 16 23 1b 10 23 1d 0a 23 1d 0a 25 1d 17 19 0d 44 27 1f 1b 21 15 1b 1f 15 34 1f 15 2c 1f 0e 3f 1f 11 23 23 1d 0e 1f 12 28 29 23 0e 29 23 0a 29 23 0a 21 18 e1 24 17 54 22 16 3c 31 2d 56 2e 18 2e 2f 18 2e 2f 27 36 1f 15 23 23 1b c5 1b 11 2a 0f 64 3e 21 17 0e 23 1d 19 a7 70 49 a7 70 49 a7 70 49 17 0d 43 1f 13 39 1f 15 33 1f 0e 3f 1f 0f 36 1f 11 23 1f 13 27 1b 11 3e 29 23 0e 29 23 0a 29 23 08 29 23 08 25 19 56 29 1f 1c 31 2b 55 2e 18 2e 31 15 04 2f 27 36 21 19 cd 29 23 03 29 23 03 23 1b 15 1b 10 28 1f 0d 43 a7 70 49 a7 70 49 a7 70 49 1f 15 44 1f 0d 41 15 0c 49 1d 11 42 1f 15 2f 1d 0d 49 18 0d 49 1f 13 2f 29 23 0c 29 23 0a 29 23 08 29 23 08 29 23 08 1b 11 2e 23 17 54 31 15 04 2f 25 34 25 19 50 29 23 03 29 23 03 29 23 03 23 19 16 1f 0d 43 a7 70 49 a7 70 49 a7 70 49 a7 70 49 b4 70 49 17 0b 49 17 0c 49 15 0a 49 15 0a 49 1b 11 49 17 0b 49 17 0b 49 29 23 0e 29 23 0c 0e 6e 48 29 23 0a 0f 68 42 1b 11 2f 2f 27 3c 31 15 06 2f 27 3a 25 19 50 29 23 03 0c 68 42 25 1d 10 1f 15 23 1f 0d 44 1f 0d 45 a7 70 49 a7 70 49 a7 70 49 b7 70 49 a9 70 49 a9 70 49 b1 70 49 17 0d 49 15 0b 49 1f 15 49 17 0b 49 0e 70 49 0e 70 49 0f 70 49 0e 70 49 29 23 06 21 19 dc 2f 27 3c 33 13 f1 2f 27 3a 1f 15 25 23 1b ce 1b 11 29 25 1b 16 23 1b 16 27 1d 1d 27 1d 20 a7 70 49 a7 70 49 ce 70 49 a9 70 49 a9 70 49 a9 70 49 a9 70 49 af 70 49 17 0d 49 17 0d 49 17 0b 49 17 0b 49 1f 13 30 1b 15 23 1f 19 0a 29 23 06 25 19 52 2f 27 3c 33 13 f1 2f 27 3a 1f 15 25 29 23 05 29 23 05 27 1d 18 23 1b 18 1f 15 2a 27 1d 20 0f 70 49 a8 70 49 aa 70 49 a9 70 49 a9 70 49 a8 70 49 a9 70 49 a9 70 49 ad 70 49 17 09 49 17 0b 49 10 70 49 0c 70 49 1d 0d 44 1b 12 4b 29 23 06 23 1b d0 21 19 d1 33 13 f1 25 19 4e 1f 15 24 29 23 05 21 17 d1 27 1d 1b 27 1d 1b 19 0a 49 17 08 49 19 0a 49 aa 70 49 a9 70 49 a9 70 49 a7 70 49 a7 70 49 a9 70 49 a9 70 49 ab 70 49 17 09 49 17 09 49 0e 70 49 1b 11 46 23 1b 19 0d 68 42 0d 68 42 29 23 06 24 18 51 31 2d 54 25 19 54 20 18 d6 29 23 05 21 17 d1 1b 15 2b 27 1d 1a 1b 13 47 0f 70 49 17 0a 49 1b 0b 49 ae 70 49 a9 70 49 a9 70 49 a9 70 49 a9 70 49 a9 70 49 a9 70 49 17 0c 49 18 0e 49 1b 0d 46 23 17 16 23 19 17 29 23 04 29 23 04 1b 11 2d 2f 27 38 31 2b 53 29 1f 1b 22 1a d7 23 1b d2 29 23 07 1b 15 27 1b 13 3d 0d 70 49 23 17 0f 0f 70 49 0f 70 49 a9 70 49 b0 70 49 a9 70 49 a9 70 49 a9 70 49 b8 70 49 10 70 49 17 0d 49 19 0d 49 7d 45 1c 1b 0e 43 23 1b 17 29 23 04 29 23 04 21 19 d2 2f 27 38 31 2d 54 23 17 3b 1f 15 27 29 23 07 1b 13 37 1b 13 3c 29 23 09 0f 70 49 0f 70 49 0f 70 49 0f 70 49 15 09 49 a9 70 49 b2 70 49 a9 70 49 b6 70 49 b4 70 49 17 0d 49 10 70 49 19 0c 44 1b 0e 43 1b 0e 43 73 3b 15 29 23 04 29 23 04 20 18 c6 1f 15 24 2f 27 25 17 05 37 1f 15 27 21 19 e1 29 23 07 0f 6a 44 29 23 09 29 23 0d 29 23 0f 0f 70 49 0f 70 49 15 0a 49 15 0b 49 15 0a 49 aa 70 49 02 70 49 02 70 49 02 70 49 02 70 49 7d 45 1c 77 3f 17 1b 10 28 23 1b 15 1b 10 29 23 1b c9 1f 15 24 1f 15 24 33 13 f1 2d 27 58 2f 27 3e 20 18 e0 29 23 09 29 23 09 29 23 09 0f 6e 48 23 17 1c 0f 70 49 29 23 0f 19 09 49 1f 0d 45 15 0a 49 02 70 49 02 70 49 83 4b 21 83 4b 21 7d 45 1c 77 3f 18 1b 0f 28 23 1b 0f 0e 68 42 29 23 02 1b 11 2c 1f 15 24 2f 27 38 31 1d 2b 2f 27 58 21 13 54 24 17 54 23 1b e2 29 23 09 29 23 0b 0f 6e 48 1b 11 33 1d 11 1f 0f 70 49 1f 15 1f 21 0f 34 21 0f 37 7d 45 1c 7d 45 1c 7d 45 1c 83 4b 21 7d 45 1c 77 3f 16 73 3b 12 1f 17 0b 29 23 02 21 19 c8 25 19 4e 2f 27 38 31 15 05 31 1d 2b 33 15 01 17 05 3b 25 17 54 1f 15 29 29 23 09 29 23 0b 29 23 0d 1f 15 26 1f 15 26 1f 13 23 1f 15 1f 21 0f 32 21 0f 3a 17 0c 49 7b 43 1a 75 3d 15 83 4b 21 81 49 1f 72 3a 12 73 3b 13 72 3a 10 29 23 02 1f 15 22 25 19 49 2f 27 34 31 15 03 25 1b 2b 33 1d 2d 2d 27 5c 1f 13 25 23 17 3f 23 19 e3 1b 11 2e 1b 11 33 1b 10 d5 21 15 27 1f 13 21 21 0f 3f 1f 13 1c 21 0f 39 21 0f 34 7a 42 19 77 3f 16 75 3d 14 6e 36 0f 28 21 ff 29 22 ff 1b 11 2a 23 1b c1 1f 15 22 2f 27 34 31 15 03 2f 19 2e 2f 27 20 25 1b 2b 2f 25 5b 30 2a 56 17 05 3b 17 05 3a 25 14 54 24 18 53 1d 13 23 21 17 f2 23 1d 0e 21 0f 40 23 1c 0a 21 13 22 21 0f 2f 1f 13 21 1f 0d 3d 79 41 18 29 22 ff 29 22 ff 1b 11 2a 23 1b c1 1f 15 22 2f 27 34 31 15 03 2f 19 2e 23 19 2d 
+PreRotAngle 1276.000000
+PreRotAlias No
 PreRotInc 1.000000
 PreRotExp 1.000000
 CycleFCount 1000
 ImageAngle 629.023315
-ImageAlias YES
+ImageAlias Yes
 ImageInc 1.000000
 ImageExp 0.400000
 ImageXOffset 0.400000
 ImageYOffset 0.500000
 ImageName Fbyte-01.jpg
-SnailShot NO
+SnailShot No
 SnailColorA 127 255 0 255
 SnailColorB 0 0 0 255
-SnailCMode 0
+SnailCMode None
 SnailCMRate 8
 SnailCMPos 0
 SnailAlpha 1.000000
 SnailPos 0
-FastSnail NO
+FastSnail No
 FSNAILColorA 0 255 0 255
 FSNAILColorB 0 0 0 255
-FSNAILCMode 0
+FSNAILCMode None
 FSNAILCMRate 8
 FSNAILCMPos 0
 FSNAILAlpha 1.000000
 FastSnailP 0
-Crossbar 0
+Crossbar None
 CBColorA 127 0 255 255
 CBColorB 0 0 0 255
-CBCMode 0
+CBCMode None
 CBCMRate 8
 CBCMPos 0
 CBAlpha 1.000000
 CrossLikely 1002
-MirrorV NO
-MirrorH NO
+MirrorV No
+MirrorH No
 ScrollRandE NO
 ScrollRand 50
-SidePulse NO
+SidePulse No
 SPColorA 0 127 255 255
 SPColorB 0 0 0 255
-SPCMode 0
+SPCMode None
 SPCMRate 8
 SPCMPos 0
 SPAlpha 1.000000
 Intensity 1.000000
 ScrollAlpha 1.000000
 ImageAlpha 1.000000
-PaletteSelct 0
+PaletteSelct H Bars
 LPColorA 0 0 255 255
 LPColorB 0 0 0 255
-LPCMode 0
+LPCMode None
 LPCMRate 8
 LPCMPos 0
 LPAlpha 1.000000
 LPBGColorA 255 0 0 255
 LPBGColorB 0 0 0 255
-LPBGCMode 0
+LPBGCMode None
 LPBGCMRate 8
 LPBGCMPos 0
 LPBGAlpha 1.000000

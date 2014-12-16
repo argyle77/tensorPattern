@@ -12,11 +12,17 @@
 #include "drv-tensor.h"
 
 // Fade modes
-const char *fadeModeText[] = { "Limited", "Modular" };
+const char *fadeModeText[] = { "Limited", "Modular", "NonZero Limited", "NonZero Modular" };
 const int fadeModeTextCount = sizeof(fadeModeText) / sizeof(const char *);
 
+// One shot modes - The pattern elements using this were once booleans, so the
+// exact spelling of "No" and "Yes" below are important for maintaining backward
+// compatibility with old *.now files.
+const char *oneShotText[] = { "No", "Yes", "OneShot" };
+const int oneShotTextCount = sizeof(oneShotText) / sizeof(const char *);
+
 // Color plane shift modes - same order as dir_e please.
-const char *shiftText[] = { "Up", "Left", "Down", "Right", "Hold" };
+const char *shiftText[] = { "Up", "Left", "Down", "Right", "Hold"};
 const int shiftTextCount = sizeof(shiftText) / sizeof(const char *);
 
 // Scroller directions.
@@ -167,6 +173,7 @@ const enums_t enumerations[] = {
   { E_OPERATE, operateText, OO_COUNT },
   { E_CROSSBAR, crossbarText, CB_COUNT },
   { E_ALTERPALETTES, alterText, A_COUNT },
+  { E_ONESHOT, oneShotText, OS_COUNT },
 };
 const int enumerationsCount = sizeof(enumerations) / sizeof(enums_t);
 
@@ -215,215 +222,211 @@ const int seedPaletteCount = sizeof(seedPalette) / sizeof(paletteConnect_t);
 // due to the inclusion of the dynamically allocated dataset in the type.
 // ints, floats have min & maxes.  enums have etypes.  buffers and string have sizes.
 const patternElement_t patternElements[] = {
-//  Access enum,    "Name",        TYPE,      initial,     min,      max,      size,     etype
-  { PE_CELLFUN,     "CellFun",     ET_BOOL,   {.b = NO} },
-  { PE_CF_COLA,     "CFColorA",    ET_COLOR,  {.c = CD_AQUA} },
-  { PE_CF_COLB,     "CFColorB",    ET_COLOR,  {.c = CD_BLACK} },
-  { PE_CF_CM,       "CFCMode",     ET_ENUM,   {.e = CM_NONE}, .etype = E_COLORCYCLES },
-  { PE_CF_CMR,      "CFCMRate",    ET_INT,    {.i = INITIAL_RAINBOW_INC}, {.i = INT_MIN}, {.i = INT_MAX} },
-  { PE_CF_CMPOS,    "CFCMPos",     ET_INT,    {.i = 0} },  // Not user
-  { PE_CF_ALPHA,    "CFAlpha",     ET_FLOAT,  {.f = 1}, {.f = 0}, {.f = 1} },
-  { PE_BOUNCER,     "CycleScroll", ET_INT,    {.i = 0}, {.i = 0}, {.i = INT_MAX} },
-  { PE_FADE,        "Fader",       ET_BOOL,   {.b = NO} },
-  { PE_DIFFUSE,     "Diffuse",     ET_BOOL,   {.b = NO} },
-  { PE_ROLLOVER,    "RollOver",    ET_BOOL,   {.b = NO} },
-  { PE_SCROLL,      "Scroll",      ET_BOOL,   {.b = YES} },
-  { PE_HBARS,       "Hbars",       ET_BOOL,   {.b = NO} },
-  { PE_HBARS_COLA,  "HbarsColorA", ET_COLOR,  {.c = CD_RED} },
-  { PE_HBARS_COLB,  "HbarsColorB", ET_COLOR,  {.c = CD_BLACK} },
-  { PE_HBARS_CM,    "HbarsCMode",  ET_ENUM,   {.e = CM_NONE}, .etype = E_COLORCYCLES },
-  { PE_HBARS_CMR,   "HbarsCMRate", ET_INT,    {.i = INITIAL_RAINBOW_INC}, {.i = INT_MIN}, {.i = INT_MAX} },
-  { PE_HBARS_CMPOS, "HbarsCMPos",  ET_INT,    {.i = 0} },  // Not user
-  { PE_HBARS_ALPHA, "HbarsAlpha",  ET_FLOAT,  {.f = 1}, {.f = 0}, {.f = 1} },
-  { PE_HBARS_BGCOLA,"HbarsBGColorA",ET_COLOR, {.c = CD_BLUE} },
-  { PE_HBARS_BGCOLB,"HbarsBGColorB",ET_COLOR, {.c = CD_BLACK} },
-  { PE_HBARS_BGCM,  "HbarsBGCMode",ET_ENUM,   {.e = CM_NONE}, .etype = E_COLORCYCLES },
-  { PE_HBARS_BGCMR, "HbarsBGCMRate",ET_INT,   {.i = INITIAL_RAINBOW_INC}, {.i = INT_MIN}, {.i = INT_MAX} },
-  { PE_HBARS_BGCMPOS,"HbarsBGCMPos",ET_INT,   {.i = 0} },  // Not user
-  { PE_HBARS_BGALPHA,"HbarsBGAlpha",ET_FLOAT, {.f = 0}, {.f = 0}, {.f = 1} },
-  { PE_VBARS,       "Vbars",       ET_BOOL,   {.b = NO} },
-  { PE_VBARS_COLA,  "VbarsColorA", ET_COLOR,  {.c = CD_ORANGE} },
-  { PE_VBARS_COLB,  "VbarsColorB", ET_COLOR,  {.c = CD_BLACK} },
-  { PE_VBARS_CM,    "VbarsCMode",  ET_ENUM,   {.e = CM_NONE}, .etype = E_COLORCYCLES },
-  { PE_VBARS_CMR,   "VbarsCMRate", ET_INT,    {.i = INITIAL_RAINBOW_INC}, {.i = INT_MIN}, {.i = INT_MAX} },
-  { PE_VBARS_CMPOS, "VbarsCMPos",  ET_INT,    {.i = 0} },  // Not user
-  { PE_VBARS_ALPHA, "VbarsAlpha",  ET_FLOAT,  {.f = 1}, {.f = 0}, {.f = 1} },
+//  Access enum,      "Name",        TYPE,      initial,     min,      max,      size,     etype
+  { PE_CELLFUN,       "CellFun",       ET_ENUM,   {.e = OS_NO}, .etype = E_ONESHOT },
+  { PE_CF_COLA,       "CFColorA",      ET_COLOR,  {.c = CD_AQUA} },
+  { PE_CF_COLB,       "CFColorB",      ET_COLOR,  {.c = CD_BLACK} },
+  { PE_CF_CM,         "CFCMode",       ET_ENUM,   {.e = CM_NONE}, .etype = E_COLORCYCLES },
+  { PE_CF_CMR,        "CFCMRate",      ET_INT,    {.i = INITIAL_RAINBOW_INC}, {.i = INT_MIN}, {.i = INT_MAX} },
+  { PE_CF_CMPOS,      "CFCMPos",       ET_INT,    {.i = 0} },  // Not user
+  { PE_CF_ALPHA,      "CFAlpha",       ET_FLOAT,  {.f = 1}, {.f = 0}, {.f = 1} },
+  { PE_BOUNCER,       "CycleScroll",   ET_INT,    {.i = 0}, {.i = 0}, {.i = INT_MAX} },
+  { PE_FADE,          "Fader",         ET_ENUM,   {.e = OS_NO}, .etype = E_ONESHOT },
+  { PE_DIFFUSE,       "Diffuse",       ET_ENUM,   {.e = OS_NO}, .etype = E_ONESHOT },
+  { PE_ROLLOVER,      "RollOver",      ET_BOOL,   {.b = NO} },
+  { PE_SCROLL,        "Scroll",        ET_ENUM,   {.e = OS_YES}, .etype = E_ONESHOT },
+  { PE_HBARS,         "Hbars",         ET_ENUM,   {.e = OS_NO}, .etype = E_ONESHOT },
+  { PE_HBARS_COLA,    "HbarsColorA",   ET_COLOR,  {.c = CD_RED} },
+  { PE_HBARS_COLB,    "HbarsColorB",   ET_COLOR,  {.c = CD_BLACK} },
+  { PE_HBARS_CM,      "HbarsCMode",    ET_ENUM,   {.e = CM_NONE}, .etype = E_COLORCYCLES },
+  { PE_HBARS_CMR,     "HbarsCMRate",   ET_INT,    {.i = INITIAL_RAINBOW_INC}, {.i = INT_MIN}, {.i = INT_MAX} },
+  { PE_HBARS_CMPOS,   "HbarsCMPos",    ET_INT,    {.i = 0} },  // Not user
+  { PE_HBARS_ALPHA,   "HbarsAlpha",    ET_FLOAT,  {.f = 1}, {.f = 0}, {.f = 1} },
+  { PE_HBARS_BGCOLA,  "HbarsBGColorA", ET_COLOR,  {.c = CD_BLUE} },
+  { PE_HBARS_BGCOLB,  "HbarsBGColorB", ET_COLOR,  {.c = CD_BLACK} },
+  { PE_HBARS_BGCM,    "HbarsBGCMode",  ET_ENUM,   {.e = CM_NONE}, .etype = E_COLORCYCLES },
+  { PE_HBARS_BGCMR,   "HbarsBGCMRate", ET_INT,    {.i = INITIAL_RAINBOW_INC}, {.i = INT_MIN}, {.i = INT_MAX} },
+  { PE_HBARS_BGCMPOS, "HbarsBGCMPos",  ET_INT,    {.i = 0} },  // Not user
+  { PE_HBARS_BGALPHA, "HbarsBGAlpha",  ET_FLOAT,  {.f = 0}, {.f = 0}, {.f = 1} },
+  { PE_VBARS,         "Vbars",         ET_ENUM,   {.e = OS_NO}, .etype = E_ONESHOT },
+  { PE_VBARS_COLA,    "VbarsColorA",   ET_COLOR,  {.c = CD_ORANGE} },
+  { PE_VBARS_COLB,    "VbarsColorB",   ET_COLOR,  {.c = CD_BLACK} },
+  { PE_VBARS_CM,      "VbarsCMode",    ET_ENUM,   {.e = CM_NONE}, .etype = E_COLORCYCLES },
+  { PE_VBARS_CMR,     "VbarsCMRate",   ET_INT,    {.i = INITIAL_RAINBOW_INC}, {.i = INT_MIN}, {.i = INT_MAX} },
+  { PE_VBARS_CMPOS,   "VbarsCMPos",    ET_INT,    {.i = 0} },  // Not user
+  { PE_VBARS_ALPHA,   "VbarsAlpha",    ET_FLOAT,  {.f = 1}, {.f = 0}, {.f = 1} },
   { PE_VBARS_BGCOLA,  "VbarsBGColorA", ET_COLOR,  {.c = CD_AQUA} },
   { PE_VBARS_BGCOLB,  "VbarsBGColorB", ET_COLOR,  {.c = CD_BLACK} },
   { PE_VBARS_BGCM,    "VbarsBGCMode",  ET_ENUM,   {.e = CM_NONE}, .etype = E_COLORCYCLES },
   { PE_VBARS_BGCMR,   "VbarsBGCMRate", ET_INT,    {.i = INITIAL_RAINBOW_INC}, {.i = INT_MIN}, {.i = INT_MAX} },
   { PE_VBARS_BGCMPOS, "VbarsBGCMPos",  ET_INT,    {.i = 0} },  // Not user
   { PE_VBARS_BGALPHA, "VbarsBGAlpha",  ET_FLOAT,  {.f = 0}, {.f = 0}, {.f = 1} },
-  { PE_CAA,         "ColorAllA",   ET_BOOL,   {.b = NO} },
-  { PE_CAA_COLA,    "CAAColorA",   ET_COLOR,  {.c = CD_YELLOW} },
-  { PE_CAA_COLB,    "CAAColorB",   ET_COLOR,  {.c = CD_BLACK} },
-  { PE_CAA_CM,      "CAACMode",    ET_ENUM,   {.e = CM_NONE}, .etype = E_COLORCYCLES },
-  { PE_CAA_CMR,     "CAACMRate",   ET_INT,    {.i = INITIAL_RAINBOW_INC}, {.i = INT_MIN}, {.i = INT_MAX} },
-  { PE_CAA_CMPOS,   "CAACMPos",    ET_INT,    {.i = 0} },  // Not user
-  { PE_CAA_ALPHA,   "CAAAlpha",    ET_FLOAT,  {.f = 1}, {.f = 0}, {.f = 1} },
-  { PE_CAB,         "ColorAllB",   ET_BOOL,   {.b = NO} },
-  { PE_CAB_COLA,    "CABColorA",   ET_COLOR,  {.c = CD_BLACK} },
-  { PE_CAB_COLB,    "CABColorB",   ET_COLOR,  {.c = CD_RED} },
-  { PE_CAB_CM,      "CABCMode",    ET_ENUM,   {.e = CM_NONE}, .etype = E_COLORCYCLES },
-  { PE_CAB_CMR,     "CABCMRate",   ET_INT,    {.i = INITIAL_RAINBOW_INC}, {.i = INT_MIN}, {.i = INT_MAX} },
-  { PE_CAB_CMPOS,   "CABCMPos",    ET_INT,    {.i = 0} },  // Not user
-  { PE_CAB_ALPHA,   "CABAlpha",    ET_FLOAT,  {.f = 1}, {.f = 0}, {.f = 1} },
-  { PE_IMAGEALL,    "ImageAll",    ET_BOOL,   {.b = NO} },
-  { PE_RDOT,        "RandomDots",  ET_BOOL,   {.b = NO} },
-  { PE_RDOT_COLA,   "RDOTColorA",  ET_COLOR,  {.c = CD_MAGENTA} },
-  { PE_RDOT_COLB,   "RDOTColorB",  ET_COLOR,  {.c = CD_BLACK} },
-  { PE_RDOT_CM,     "RDOTCMode",   ET_ENUM,   {.e = CM_NONE}, .etype = E_COLORCYCLES },
-  { PE_RDOT_CMR,    "RDOTCMRate",  ET_INT,    {.i = INITIAL_RAINBOW_INC}, {.i = INT_MIN}, {.i = INT_MAX} },
-  { PE_RDOT_CMPOS,  "RDOTCMPos",   ET_INT,    {.i = 0} },  // Not user
-  { PE_RDOT_ALPHA,  "RDOTAlpha",   ET_FLOAT,  {.f = 1}, {.f = 0}, {.f = 1} },
-  { PE_FADEMODE,    "FadeMode",    ET_ENUM,   {.e = FM_LIMIT}, .etype = E_FADEMODES },
-  { PE_POSTRZ,      "PostRotZoom", ET_BOOL,   {.b = NO} },
-  { PE_PRERZ,       "PreRotZoom",  ET_BOOL,   {.b = NO} },
-  { PE_ALIAS,       "AntiAlias",   ET_BOOL,   {.b = NO} },
-  { PE_MULTIPLY,    "Multiply",    ET_BOOL,   {.b = NO} },
-  { PE_BARSEED,     "SideBar",     ET_BOOL,   {.b = NO} },
-  { PE_BS_COLA,     "SBColorA",    ET_COLOR,  {.c = CD_CYAN} },
-  { PE_BS_COLB,     "SBColorB",    ET_COLOR,  {.c = CD_BLACK} },
-  { PE_BS_CM,       "SBCMode",     ET_ENUM,   {.e = CM_NONE}, .etype = E_COLORCYCLES },
-  { PE_BS_CMR,      "SBCMRate",    ET_INT,    {.i = INITIAL_RAINBOW_INC}, {.i = INT_MIN}, {.i = INT_MAX} },
-  { PE_BS_CMPOS,    "SBCMPos",     ET_INT,    {.i = 0} },  // Not user
-  { PE_BS_ALPHA,    "SBAlpha",     ET_FLOAT,  {.f = 1}, {.f = 0}, {.f = 1} },
-  { PE_NORED,       "NoRed",       ET_BOOL,   {.b = NO} },
-  { PE_NOGREEN,     "NoGreen",     ET_BOOL,   {.b = NO} },
-  { PE_NOBLUE,      "NoBlue",      ET_BOOL,   {.b = NO} },
-  { PE_SHIFTRED,    "ShiftRed",    ET_ENUM,   {.e = SM_HOLD}, .etype = E_SHIFTMODES },
-  { PE_SHIFTGREEN,  "ShiftGreen",  ET_ENUM,   {.e = SM_HOLD}, .etype = E_SHIFTMODES },
-  { PE_SHIFTBLUE,   "ShiftBlue",   ET_ENUM,   {.e = SM_HOLD}, .etype = E_SHIFTMODES },
-  { PE_SHIFTCYAN,   "ShiftCyan",   ET_ENUM,   {.e = SM_HOLD}, .etype = E_SHIFTMODES },
-  { PE_SHIFTYELLOW, "ShiftYellow", ET_ENUM,   {.e = SM_HOLD}, .etype = E_SHIFTMODES },
-  { PE_SHIFTMAGENTA,"ShiftMagenta",ET_ENUM,   {.e = SM_HOLD}, .etype = E_SHIFTMODES },
-  { PE_POSTIMAGE,   "PostImage",   ET_BOOL,   {.b = NO} },
-  { PE_FADEINC,     "FadeIncr",    ET_INT,    {.i = INITIAL_FADE_INC}, {.i = INT_MIN}, {.i = INT_MAX} },
-  { PE_DIFFUSECOEF, "DiffuseCoef", ET_FLOAT,  {.f = INITIAL_DIFF_COEF}, {.f = -1000}, {.f = 1000} },
-  { PE_SCROLLDIR,   "ScrollDir",   ET_ENUM,   {.e = INITIAL_DIR}, .etype = E_DIRECTIONS },
-  { PE_RDOTCOEF,    "DotCoef",     ET_INT,    {.i = INITIAL_RAND_MOD}, {.i = 1}, {.i = 20000} },
-  { PE_POSTEXP,     "Expansion",   ET_FLOAT,  {.f = INITIAL_EXPAND}, {.f = -20}, {.f = 20}  },
-  { PE_FLOATINC,    "FloatInc",    ET_FLOAT,  {.f = INITIAL_FLOAT_INC}, {.f = 0.00001}, {.f = 1000000000} },
-  { PE_POSTRZANGLE, "PostRotAngle",ET_FLOAT,  {.f = INITIAL_POSTROT_ANGLE}, {.f = -999999999}, {.f = 1000000000 } },
-  { PE_POSTRZINC,   "PostRotInc",  ET_FLOAT,  {.f = INITIAL_POSTROT_INC}, {.f = -999999999}, {.f = 1000000000} },
-  { PE_MULTIPLYBY,  "MultiplyBy",  ET_FLOAT,  {.f = INITIAL_MULTIPLIER}, {.f = -999999999 }, {.f = 1000000000} },
-  { PE_DELAY,       "Delay",       ET_INT,    {.i = INITIAL_DELAY}, {.i = 1}, {.i = INT_MAX}},
-  { PE_CYCLESAVEFG, "FGCyclePos",  ET_INT,    {.i = 0} }, // Not user
-  { PE_CYCLESAVEBG, "BGCyclePos",  ET_INT,    {.i = 0} }, // Not user
-  { PE_CELLFUNCOUNT,"CellFunCt",   ET_INT,    {.i = 0} }, // Not user
-  { PE_TEXTBUFFER,  "TextBuffer",  ET_STRING, {.s = INITIAL_TEXT}, .size = TEXT_BUFFER_SIZE },
-  { PE_TEXTMODE,    "TextMode",    ET_ENUM,   {.e = TS_FULLBG}, .etype = E_TEXTMODES },
-  { PE_FONTFLIP,    "FontFlip",    ET_BOOL,   {.b = NO} },
-  { PE_FONTDIR,     "FontDir",     ET_BOOL,   {.b = FORWARDS} },
-  { PE_TEXTOFFSET,  "TextOffset",  ET_INT,    {.i = TENSOR_HEIGHT / 3 - 1}, {.i = 0}, {.i = TENSOR_WIDTH} },
-  { PE_TEXTINDEX,   "TextIndex",   ET_INT,    {.i = sizeof(INITIAL_TEXT) - 1} }, // Not user
-  { PE_PIXELINDEX,  "PixelIndex",  ET_INT,    {.i = INVALID} }, // Not user
-  { PE_SCROLLDIRLAST,"ScrollDirLast",ET_ENUM, {.e = INITIAL_DIR}, .etype = E_DIRECTIONS },
-  { PE_TEXTSEED,    "TextSeed",    ET_BOOL,   {.b = YES} },
-  { PE_TS_COLA,     "TSColorA",    ET_COLOR,  {.c = CD_ROSE} },
-  { PE_TS_COLB,     "TSColorB",    ET_COLOR,  {.c = CD_BLACK} },
-  { PE_TS_CM,       "TSCMode",     ET_ENUM,   {.e = CM_NONE}, .etype = E_COLORCYCLES },
-  { PE_TS_CMR,      "TSCMRate",    ET_INT,    {.i = INITIAL_RAINBOW_INC}, {.i = INT_MIN}, {.i = INT_MAX} },
-  { PE_TS_CMPOS,    "TSCMPos",     ET_INT,    {.i = 0} },  // Not user
-  { PE_TS_ALPHA,    "TSAlpha",     ET_FLOAT,  {.f = 1}, {.f = 0}, {.f = 1} },
-  { PE_TS_BGCOLA,   "TSBGColorA",  ET_COLOR,  {.c = CD_BLACK} },
-  { PE_TS_BGCOLB,   "TSBGColorB",  ET_COLOR,  {.c = CD_BLACK} },
-  { PE_TS_BGCM,     "TSBGCMode",   ET_ENUM,   {.e = CM_NONE}, .etype = E_COLORCYCLES },
-  { PE_TS_BGCMR,    "TSBGCMRate",  ET_INT,    {.i = INITIAL_RAINBOW_INC}, {.i = INT_MIN}, {.i = INT_MAX} },
-  { PE_TS_BGCMPOS,  "TSBGCMPos",   ET_INT,    {.i = 0} },  // Not user
-  { PE_TS_BGALPHA,  "TSBGAlpha",   ET_FLOAT,  {.f = 1}, {.f = 0}, {.f = 1} },
-  { PE_FRAMEBUFFER, "FrameBuffer", ET_BUFFER, .size = TENSOR_BYTES },
-  { PE_PRERZANGLE,  "PreRotAngle", ET_FLOAT,  {.f = INITIAL_PREROT_ANGLE}, {.f = -999999999}, {.f = 1000000000} },
-  { PE_PRERZALIAS,  "PreRotAlias", ET_BOOL,   {.b = NO} },
-  { PE_PRERZINC,    "PreRotInc",   ET_FLOAT,  {.f = INITIAL_POSTROT_INC}, {.f = -999999999}, {.f = 1000000000} },
-  { PE_PRERZEXPAND, "PreRotExp",   ET_FLOAT,  {.f = INITIAL_PREEXPAND}, {.f = -20}, {.f = 20} },
-  { PE_FRAMECOUNT,  "CycleFCount", ET_INT,    {.i = INITIAL_FRAMECYCLECOUNT}, {.i = 1}, {.i = INT_MAX} },
-  { PE_IMAGEANGLE,  "ImageAngle",  ET_FLOAT,  {.f = INITIAL_IMAGE_ANGLE}, {.f = -999999999}, {.f = 1000000000} },
-  { PE_IMAGEALIAS,  "ImageAlias",  ET_BOOL,   {.b = NO} },
-  { PE_IMAGEINC,    "ImageInc",    ET_FLOAT,  {.f = INITIAL_IMAGE_INC}, {.f = -999999999}, {.f = 1000000000} },
-  { PE_IMAGEEXP,    "ImageExp",    ET_FLOAT,  {.f = INITIAL_IMAGE_EXPAND}, {.f = -20}, {.f = 20} },
-  { PE_IMAGEXOFFSET,"ImageXOffset",ET_FLOAT,  {.f = INITIAL_IMAGE_XOFFSET}, {.f = 0}, {.f = 1} },
-  { PE_IMAGEYOFFSET,"ImageYOffset",ET_FLOAT,  {.f = INITIAL_IMAGE_YOFFSET}, {.f = 0}, {.f = 1} },
-  { PE_IMAGENAME,   "ImageName",   ET_STRING, {.s = INITIAL_IMAGE}, .size = 1024},
-  { PE_SNAIL,       "SnailShot",   ET_BOOL,   {.b = NO} },
-  { PE_SNAIL_COLA,  "SnailColorA", ET_COLOR,  {.c = CD_CHARTREUSE} },
-  { PE_SNAIL_COLB,  "SnailColorB", ET_COLOR,  {.c = CD_BLACK} },
-  { PE_SNAIL_CM,    "SnailCMode",  ET_ENUM,   {.e = CM_NONE}, .etype = E_COLORCYCLES },
-  { PE_SNAIL_CMR,   "SnailCMRate", ET_INT,    {.i = INITIAL_RAINBOW_INC}, {.i = INT_MIN}, {.i = INT_MAX} },
-  { PE_SNAIL_CMPOS, "SnailCMPos",  ET_INT,    {.i = 0} },  // Not user
-  { PE_SNAIL_ALPHA, "SnailAlpha",  ET_FLOAT,  {.f = 1}, {.f = 0}, {.f = 1} },
-  { PE_SNAIL_POS,   "SnailPos",    ET_INT,    {.i = 0} }, // Not user
-  { PE_FSNAIL,      "FastSnail",   ET_BOOL,   {.b = NO} },
-  { PE_FSNAIL_COLA, "FSNAILColorA",ET_COLOR,  {.c = CD_GREEN} },
-  { PE_FSNAIL_COLB, "FSNAILColorB",ET_COLOR,  {.c = CD_BLACK} },
-  { PE_FSNAIL_CM,   "FSNAILCMode", ET_ENUM,   {.e = CM_NONE}, .etype = E_COLORCYCLES },
-  { PE_FSNAIL_CMR,  "FSNAILCMRate",ET_INT,    {.i = INITIAL_RAINBOW_INC}, {.i = INT_MIN}, {.i = INT_MAX} },
-  { PE_FSNAIL_CMPOS,"FSNAILCMPos", ET_INT,    {.i = 0} },  // Not user
-  { PE_FSNAIL_ALPHA,"FSNAILAlpha", ET_FLOAT,  {.f = 1}, {.f = 0}, {.f = 1} },
-  { PE_FSNAILP,     "FastSnailP",  ET_INT,    {.i = 0} }, // Not user
-  { PE_CROSSBAR,    "Crossbar",    ET_ENUM,   {.e = CB_NONE}, .etype = E_CROSSBAR },
-  { PE_CB_COLA,     "CBColorA",    ET_COLOR,  {.c = CD_VIOLET} },
-  { PE_CB_COLB,     "CBColorB",    ET_COLOR,  {.c = CD_BLACK} },
-  { PE_CB_CM,       "CBCMode",     ET_ENUM,   {.e = CM_NONE}, .etype = E_COLORCYCLES },
-  { PE_CB_CMR,      "CBCMRate",    ET_INT,    {.i = INITIAL_RAINBOW_INC}, {.i = INT_MIN}, {.i = INT_MAX} },
-  { PE_CB_CMPOS,    "CBCMPos",     ET_INT,    {.i = 0} },  // Not user
-  { PE_CB_ALPHA,    "CBAlpha",     ET_FLOAT,  {.f = 1}, {.f = 0}, {.f = 1} },
-  { PE_CBLIKELY,    "CrossLikely", ET_INT,    {.i = 1002 }, {.i = 1}, {.i = 20000} },
-  { PE_MIRROR_V,    "MirrorV",     ET_BOOL,   {.b = NO } },
-  { PE_MIRROR_H,    "MirrorH",     ET_BOOL,   {.b = NO } },
-  { PE_SCROLLRANDEN,"ScrollRandE", ET_BOOL,   {.b = NO } },
-  { PE_SCROLLRANDOM,"ScrollRand",  ET_INT,    {.i = 50 }, {.i = 1}, {.i = INT_MAX} },
-  { PE_SIDEPULSE,   "SidePulse",   ET_BOOL,   {.b = NO } },
-  { PE_SP_COLA,     "SPColorA",    ET_COLOR,  {.c = CD_AZURE} },
-  { PE_SP_COLB,     "SPColorB",    ET_COLOR,  {.c = CD_BLACK} },
-  { PE_SP_CM,       "SPCMode",     ET_ENUM,   {.e = CM_NONE}, .etype = E_COLORCYCLES },
-  { PE_SP_CMR,      "SPCMRate",    ET_INT,    {.i = INITIAL_RAINBOW_INC}, {.i = INT_MIN}, {.i = INT_MAX} },
-  { PE_SP_CMPOS,    "SPCMPos",     ET_INT,    {.i = 0} },  // Not user
-  { PE_SP_ALPHA,    "SPAlpha",     ET_FLOAT,  {.f = 1}, {.f = 0}, {.f = 1} },
-  { PE_INTENSITY,   "Intensity",   ET_FLOAT,  {.f = 1.0}, {.f = 0}, {.f = 1} },
-  { PE_SCROLLALPHA, "ScrollAlpha", ET_FLOAT,  {.f = 1.0}, {.f = 0}, {.f = 1.0} },
-  { PE_IMAGEALPHA,  "ImageAlpha",  ET_FLOAT,  {.f = 1.0}, {.f = 0}, {.f = 1.0} },
-  { PE_PALETTEALTER,"PaletteSelct",ET_ENUM,   {.e = A_HBARS}, .etype = E_ALTERPALETTES },
-  { PE_LP_COLA,     "LPColorA",    ET_COLOR,  {.c = CD_BLUE} },
-  { PE_LP_COLB,     "LPColorB",    ET_COLOR,  {.c = CD_BLACK} },
-  { PE_LP_CM,       "LPCMode",     ET_ENUM,   {.e = CM_NONE}, .etype = E_COLORCYCLES },
-  { PE_LP_CMR,      "LPCMRate",    ET_INT,    {.i = INITIAL_RAINBOW_INC}, {.i = INT_MIN}, {.i = INT_MAX} },
-  { PE_LP_CMPOS,    "LPCMPos",     ET_INT,    {.i = 0} },  // Not user
-  { PE_LP_ALPHA,    "LPAlpha",     ET_FLOAT,  {.f = 1}, {.f = 0}, {.f = 1} },
-  { PE_LP_BGCOLA,   "LPBGColorA",  ET_COLOR,  {.c = CD_RED} },
-  { PE_LP_BGCOLB,   "LPBGColorB",  ET_COLOR,  {.c = CD_BLACK} },
-  { PE_LP_BGCM,     "LPBGCMode",   ET_ENUM,   {.e = CM_NONE}, .etype = E_COLORCYCLES },
-  { PE_LP_BGCMR,    "LPBGCMRate",  ET_INT,    {.i = INITIAL_RAINBOW_INC}, {.i = INT_MIN}, {.i = INT_MAX} },
-  { PE_LP_BGCMPOS,  "LPBGCMPos",   ET_INT,    {.i = 0} },  // Not user
-  { PE_LP_BGALPHA,  "LPBGAlpha",   ET_FLOAT,  {.f = 1}, {.f = 0}, {.f = 1} },
-  { PE_PAUSE,       "Pause",       ET_BOOL,   {.b = NO } },
+  { PE_CAA,           "ColorAllA",     ET_ENUM,   {.e = OS_NO}, .etype = E_ONESHOT },
+  { PE_CAA_COLA,      "CAAColorA",     ET_COLOR,  {.c = CD_YELLOW} },
+  { PE_CAA_COLB,      "CAAColorB",     ET_COLOR,  {.c = CD_BLACK} },
+  { PE_CAA_CM,        "CAACMode",      ET_ENUM,   {.e = CM_NONE}, .etype = E_COLORCYCLES },
+  { PE_CAA_CMR,       "CAACMRate",     ET_INT,    {.i = INITIAL_RAINBOW_INC}, {.i = INT_MIN}, {.i = INT_MAX} },
+  { PE_CAA_CMPOS,     "CAACMPos",      ET_INT,    {.i = 0} },  // Not user
+  { PE_CAA_ALPHA,     "CAAAlpha",      ET_FLOAT,  {.f = 1}, {.f = 0}, {.f = 1} },
+  { PE_CAB,           "ColorAllB",     ET_ENUM,   {.e = OS_NO}, .etype = E_ONESHOT },
+  { PE_CAB_COLA,      "CABColorA",     ET_COLOR,  {.c = CD_BLACK} },
+  { PE_CAB_COLB,      "CABColorB",     ET_COLOR,  {.c = CD_RED} },
+  { PE_CAB_CM,        "CABCMode",      ET_ENUM,   {.e = CM_NONE}, .etype = E_COLORCYCLES },
+  { PE_CAB_CMR,       "CABCMRate",     ET_INT,    {.i = INITIAL_RAINBOW_INC}, {.i = INT_MIN}, {.i = INT_MAX} },
+  { PE_CAB_CMPOS,     "CABCMPos",      ET_INT,    {.i = 0} },  // Not user
+  { PE_CAB_ALPHA,     "CABAlpha",      ET_FLOAT,  {.f = 1}, {.f = 0}, {.f = 1} },
+  { PE_RDOT,          "RandomDots",    ET_ENUM,   {.e = OS_NO}, .etype = E_ONESHOT },
+  { PE_RDOT_COLA,     "RDOTColorA",    ET_COLOR,  {.c = CD_MAGENTA} },
+  { PE_RDOT_COLB,     "RDOTColorB",    ET_COLOR,  {.c = CD_BLACK} },
+  { PE_RDOT_CM,       "RDOTCMode",     ET_ENUM,   {.e = CM_NONE}, .etype = E_COLORCYCLES },
+  { PE_RDOT_CMR,      "RDOTCMRate",    ET_INT,    {.i = INITIAL_RAINBOW_INC}, {.i = INT_MIN}, {.i = INT_MAX} },
+  { PE_RDOT_CMPOS,    "RDOTCMPos",     ET_INT,    {.i = 0} },  // Not user
+  { PE_RDOT_ALPHA,    "RDOTAlpha",     ET_FLOAT,  {.f = 1}, {.f = 0}, {.f = 1} },
+  { PE_FADEMODE,      "FadeMode",      ET_ENUM,   {.e = FM_LIMIT}, .etype = E_FADEMODES },
+  { PE_POSTRZ,        "PostRotZoom",   ET_BOOL,   {.b = NO} },
+  { PE_PRERZ,         "PreRotZoom",    ET_ENUM,   {.e = OS_NO}, .etype = E_ONESHOT },
+  { PE_ALIAS,         "AntiAlias",     ET_BOOL,   {.b = NO} },
+  { PE_MULTIPLY,      "Multiply",      ET_ENUM,   {.e = OS_NO}, .etype = E_ONESHOT },
+  { PE_BARSEED,       "SideBar",       ET_ENUM,   {.e = OS_NO}, .etype = E_ONESHOT },
+  { PE_BS_COLA,       "SBColorA",      ET_COLOR,  {.c = CD_CYAN} },
+  { PE_BS_COLB,       "SBColorB",      ET_COLOR,  {.c = CD_BLACK} },
+  { PE_BS_CM,         "SBCMode",       ET_ENUM,   {.e = CM_NONE}, .etype = E_COLORCYCLES },
+  { PE_BS_CMR,        "SBCMRate",      ET_INT,    {.i = INITIAL_RAINBOW_INC}, {.i = INT_MIN}, {.i = INT_MAX} },
+  { PE_BS_CMPOS,      "SBCMPos",       ET_INT,    {.i = 0} },  // Not user
+  { PE_BS_ALPHA,      "SBAlpha",       ET_FLOAT,  {.f = 1}, {.f = 0}, {.f = 1} },
+  { PE_NORED,         "NoRed",         ET_ENUM,   {.e = OS_NO}, .etype = E_ONESHOT },
+  { PE_NOGREEN,       "NoGreen",       ET_ENUM,   {.e = OS_NO}, .etype = E_ONESHOT },
+  { PE_NOBLUE,        "NoBlue",        ET_ENUM,   {.e = OS_NO}, .etype = E_ONESHOT },
+  { PE_SHIFTRED,      "ShiftRed",      ET_ENUM,   {.e = SM_HOLD}, .etype = E_SHIFTMODES },
+  { PE_SHIFTGREEN,    "ShiftGreen",    ET_ENUM,   {.e = SM_HOLD}, .etype = E_SHIFTMODES },
+  { PE_SHIFTBLUE,     "ShiftBlue",     ET_ENUM,   {.e = SM_HOLD}, .etype = E_SHIFTMODES },
+  { PE_SHIFTCYAN,     "ShiftCyan",     ET_ENUM,   {.e = SM_HOLD}, .etype = E_SHIFTMODES },
+  { PE_SHIFTYELLOW,   "ShiftYellow",   ET_ENUM,   {.e = SM_HOLD}, .etype = E_SHIFTMODES },
+  { PE_SHIFTMAGENTA,  "ShiftMagenta",  ET_ENUM,   {.e = SM_HOLD}, .etype = E_SHIFTMODES },
+  { PE_POSTIMAGE,     "PostImage",     ET_ENUM,   {.e = OS_NO}, .etype = E_ONESHOT },
+  { PE_FADEINC,       "FadeIncr",      ET_INT,    {.i = INITIAL_FADE_INC}, {.i = INT_MIN}, {.i = INT_MAX} },
+  { PE_DIFFUSECOEF,   "DiffuseCoef",   ET_FLOAT,  {.f = INITIAL_DIFF_COEF}, {.f = -1000}, {.f = 1000} },
+  { PE_SCROLLDIR,     "ScrollDir",     ET_ENUM,   {.e = INITIAL_DIR}, .etype = E_DIRECTIONS },
+  { PE_RDOTCOEF,      "DotCoef",       ET_INT,    {.i = INITIAL_RAND_MOD}, {.i = 1}, {.i = 20000} },
+  { PE_POSTEXP,       "Expansion",     ET_FLOAT,  {.f = INITIAL_EXPAND}, {.f = -20}, {.f = 20}  },
+  { PE_FLOATINC,      "FloatInc",      ET_FLOAT,  {.f = INITIAL_FLOAT_INC}, {.f = 0.00001}, {.f = 1000000000} },
+  { PE_POSTRZANGLE,   "PostRotAngle",  ET_FLOAT,  {.f = INITIAL_POSTROT_ANGLE}, {.f = -999999999}, {.f = 1000000000 } },
+  { PE_POSTRZINC,     "PostRotInc",    ET_FLOAT,  {.f = INITIAL_POSTROT_INC}, {.f = -999999999}, {.f = 1000000000} },
+  { PE_MULTIPLYBY,    "MultiplyBy",    ET_FLOAT,  {.f = INITIAL_MULTIPLIER}, {.f = -999999999 }, {.f = 1000000000} },
+  { PE_DELAY,         "Delay",         ET_INT,    {.i = INITIAL_DELAY}, {.i = 1}, {.i = INT_MAX}},
+  { PE_CYCLESAVEFG,   "FGCyclePos",    ET_INT,    {.i = 0} }, // Not user
+  { PE_CYCLESAVEBG,   "BGCyclePos",    ET_INT,    {.i = 0} }, // Not user
+  { PE_CELLFUNCOUNT,  "CellFunCt",     ET_INT,    {.i = 0} }, // Not user
+  { PE_TEXTBUFFER,    "TextBuffer",    ET_STRING, {.s = INITIAL_TEXT}, .size = TEXT_BUFFER_SIZE },
+  { PE_TEXTMODE,      "TextMode",      ET_ENUM,   {.e = TS_FULLBG}, .etype = E_TEXTMODES },
+  { PE_FONTFLIP,      "FontFlip",      ET_BOOL,   {.b = NO} },
+  { PE_FONTDIR,       "FontDir",       ET_BOOL,   {.b = FORWARDS} },
+  { PE_TEXTOFFSET,    "TextOffset",    ET_INT,    {.i = TENSOR_HEIGHT / 3 - 1}, {.i = 0}, {.i = TENSOR_WIDTH} },
+  { PE_TEXTINDEX,     "TextIndex",     ET_INT,    {.i = sizeof(INITIAL_TEXT) - 1} }, // Not user
+  { PE_PIXELINDEX,    "PixelIndex",    ET_INT,    {.i = INVALID} }, // Not user
+  { PE_SCROLLDIRLAST, "ScrollDirLast", ET_ENUM,   {.e = INITIAL_DIR}, .etype = E_DIRECTIONS },
+  { PE_TEXTSEED,      "TextSeed",      ET_BOOL,   {.b = YES} },
+  { PE_TS_COLA,       "TSColorA",      ET_COLOR,  {.c = CD_ROSE} },
+  { PE_TS_COLB,       "TSColorB",      ET_COLOR,  {.c = CD_BLACK} },
+  { PE_TS_CM,         "TSCMode",       ET_ENUM,   {.e = CM_NONE}, .etype = E_COLORCYCLES },
+  { PE_TS_CMR,        "TSCMRate",      ET_INT,    {.i = INITIAL_RAINBOW_INC}, {.i = INT_MIN}, {.i = INT_MAX} },
+  { PE_TS_CMPOS,      "TSCMPos",       ET_INT,    {.i = 0} },  // Not user
+  { PE_TS_ALPHA,      "TSAlpha",       ET_FLOAT,  {.f = 1}, {.f = 0}, {.f = 1} },
+  { PE_TS_BGCOLA,     "TSBGColorA",    ET_COLOR,  {.c = CD_BLACK} },
+  { PE_TS_BGCOLB,     "TSBGColorB",    ET_COLOR,  {.c = CD_BLACK} },
+  { PE_TS_BGCM,       "TSBGCMode",     ET_ENUM,   {.e = CM_NONE}, .etype = E_COLORCYCLES },
+  { PE_TS_BGCMR,      "TSBGCMRate",    ET_INT,    {.i = INITIAL_RAINBOW_INC}, {.i = INT_MIN}, {.i = INT_MAX} },
+  { PE_TS_BGCMPOS,    "TSBGCMPos",     ET_INT,    {.i = 0} },  // Not user
+  { PE_TS_BGALPHA,    "TSBGAlpha",     ET_FLOAT,  {.f = 1}, {.f = 0}, {.f = 1} },
+  { PE_FRAMEBUFFER,   "FrameBuffer",   ET_BUFFER, .size = TENSOR_BYTES },
+  { PE_PRERZANGLE,    "PreRotAngle",   ET_FLOAT,  {.f = INITIAL_PREROT_ANGLE}, {.f = -999999999}, {.f = 1000000000} },
+  { PE_PRERZALIAS,    "PreRotAlias",   ET_ENUM,   {.e = OS_NO}, .etype = E_ONESHOT },
+  { PE_PRERZINC,      "PreRotInc",     ET_FLOAT,  {.f = INITIAL_POSTROT_INC}, {.f = -999999999}, {.f = 1000000000} },
+  { PE_PRERZEXPAND,   "PreRotExp",     ET_FLOAT,  {.f = INITIAL_PREEXPAND}, {.f = -20}, {.f = 20} },
+  { PE_FRAMECOUNT,    "CycleFCount",   ET_INT,    {.i = INITIAL_FRAMECYCLECOUNT}, {.i = 1}, {.i = INT_MAX} },
+  { PE_IMAGEANGLE,    "ImageAngle",    ET_FLOAT,  {.f = INITIAL_IMAGE_ANGLE}, {.f = -999999999}, {.f = 1000000000} },
+  { PE_IMAGEALIAS,    "ImageAlias",    ET_ENUM,   {.e = OS_NO}, .etype = E_ONESHOT },
+  { PE_IMAGEINC,      "ImageInc",      ET_FLOAT,  {.f = INITIAL_IMAGE_INC}, {.f = -999999999}, {.f = 1000000000} },
+  { PE_IMAGEEXP,      "ImageExp",      ET_FLOAT,  {.f = INITIAL_IMAGE_EXPAND}, {.f = -20}, {.f = 20} },
+  { PE_IMAGEXOFFSET,  "ImageXOffset",  ET_FLOAT,  {.f = INITIAL_IMAGE_XOFFSET}, {.f = 0}, {.f = 1} },
+  { PE_IMAGEYOFFSET,  "ImageYOffset",  ET_FLOAT,  {.f = INITIAL_IMAGE_YOFFSET}, {.f = 0}, {.f = 1} },
+  { PE_IMAGENAME,     "ImageName",     ET_STRING, {.s = INITIAL_IMAGE}, .size = 1024},
+  { PE_SNAIL,         "SnailShot",     ET_ENUM,   {.e = OS_NO}, .etype = E_ONESHOT },
+  { PE_SNAIL_COLA,    "SnailColorA",   ET_COLOR,  {.c = CD_CHARTREUSE} },
+  { PE_SNAIL_COLB,    "SnailColorB",   ET_COLOR,  {.c = CD_BLACK} },
+  { PE_SNAIL_CM,      "SnailCMode",    ET_ENUM,   {.e = CM_NONE}, .etype = E_COLORCYCLES },
+  { PE_SNAIL_CMR,     "SnailCMRate",   ET_INT,    {.i = INITIAL_RAINBOW_INC}, {.i = INT_MIN}, {.i = INT_MAX} },
+  { PE_SNAIL_CMPOS,   "SnailCMPos",    ET_INT,    {.i = 0} },  // Not user
+  { PE_SNAIL_ALPHA,   "SnailAlpha",    ET_FLOAT,  {.f = 1}, {.f = 0}, {.f = 1} },
+  { PE_SNAIL_POS,     "SnailPos",      ET_INT,    {.i = 0} }, // Not user
+  { PE_FSNAIL,        "FastSnail",     ET_ENUM,   {.e = OS_NO}, .etype = E_ONESHOT },
+  { PE_FSNAIL_COLA,   "FSNAILColorA",  ET_COLOR,  {.c = CD_GREEN} },
+  { PE_FSNAIL_COLB,   "FSNAILColorB",  ET_COLOR,  {.c = CD_BLACK} },
+  { PE_FSNAIL_CM,     "FSNAILCMode",   ET_ENUM,   {.e = CM_NONE}, .etype = E_COLORCYCLES },
+  { PE_FSNAIL_CMR,    "FSNAILCMRate",  ET_INT,    {.i = INITIAL_RAINBOW_INC}, {.i = INT_MIN}, {.i = INT_MAX} },
+  { PE_FSNAIL_CMPOS,  "FSNAILCMPos",   ET_INT,    {.i = 0} },  // Not user
+  { PE_FSNAIL_ALPHA,  "FSNAILAlpha",   ET_FLOAT,  {.f = 1}, {.f = 0}, {.f = 1} },
+  { PE_FSNAILP,       "FastSnailP",    ET_INT,    {.i = 0} }, // Not user
+  { PE_CROSSBAR,      "Crossbar",      ET_ENUM,   {.e = CB_NONE}, .etype = E_CROSSBAR },
+  { PE_CB_COLA,       "CBColorA",      ET_COLOR,  {.c = CD_VIOLET} },
+  { PE_CB_COLB,       "CBColorB",      ET_COLOR,  {.c = CD_BLACK} },
+  { PE_CB_CM,         "CBCMode",       ET_ENUM,   {.e = CM_NONE}, .etype = E_COLORCYCLES },
+  { PE_CB_CMR,        "CBCMRate",      ET_INT,    {.i = INITIAL_RAINBOW_INC}, {.i = INT_MIN}, {.i = INT_MAX} },
+  { PE_CB_CMPOS,      "CBCMPos",       ET_INT,    {.i = 0} },  // Not user
+  { PE_CB_ALPHA,      "CBAlpha",       ET_FLOAT,  {.f = 1}, {.f = 0}, {.f = 1} },
+  { PE_CBLIKELY,      "CrossLikely",   ET_INT,    {.i = 1002 }, {.i = 1}, {.i = 20000} },
+  { PE_MIRROR_V,      "MirrorV",       ET_ENUM,   {.e = OS_NO }, .etype = E_ONESHOT },
+  { PE_MIRROR_H,      "MirrorH",       ET_ENUM,   {.e = OS_NO }, .etype = E_ONESHOT },
+  { PE_SCROLLRANDEN,  "ScrollRandE",   ET_BOOL,   {.b = NO } },
+  { PE_SCROLLRANDOM,  "ScrollRand",    ET_INT,    {.i = 50 }, {.i = 1}, {.i = INT_MAX} },
+  { PE_SIDEPULSE,     "SidePulse",     ET_ENUM,   {.e = OS_NO }, .etype = E_ONESHOT },
+  { PE_SP_COLA,       "SPColorA",      ET_COLOR,  {.c = CD_AZURE} },
+  { PE_SP_COLB,       "SPColorB",      ET_COLOR,  {.c = CD_BLACK} },
+  { PE_SP_CM,         "SPCMode",       ET_ENUM,   {.e = CM_NONE}, .etype = E_COLORCYCLES },
+  { PE_SP_CMR,        "SPCMRate",      ET_INT,    {.i = INITIAL_RAINBOW_INC}, {.i = INT_MIN}, {.i = INT_MAX} },
+  { PE_SP_CMPOS,      "SPCMPos",       ET_INT,    {.i = 0} },  // Not user
+  { PE_SP_ALPHA,      "SPAlpha",       ET_FLOAT,  {.f = 1}, {.f = 0}, {.f = 1} },
+  { PE_INTENSITY,     "Intensity",     ET_FLOAT,  {.f = 1.0}, {.f = 0}, {.f = 1} },
+  { PE_SCROLLALPHA,   "ScrollAlpha",   ET_FLOAT,  {.f = 1.0}, {.f = 0}, {.f = 1.0} },
+  { PE_IMAGEALPHA,    "ImageAlpha",    ET_FLOAT,  {.f = 1.0}, {.f = 0}, {.f = 1.0} },
+  { PE_PALETTEALTER,  "PaletteSelct",  ET_ENUM,   {.e = A_HBARS}, .etype = E_ALTERPALETTES },
+  { PE_LP_COLA,       "LPColorA",      ET_COLOR,  {.c = CD_BLUE} },
+  { PE_LP_COLB,       "LPColorB",      ET_COLOR,  {.c = CD_BLACK} },
+  { PE_LP_CM,         "LPCMode",       ET_ENUM,   {.e = CM_NONE}, .etype = E_COLORCYCLES },
+  { PE_LP_CMR,        "LPCMRate",      ET_INT,    {.i = INITIAL_RAINBOW_INC}, {.i = INT_MIN}, {.i = INT_MAX} },
+  { PE_LP_CMPOS,      "LPCMPos",       ET_INT,    {.i = 0} },  // Not user
+  { PE_LP_ALPHA,      "LPAlpha",       ET_FLOAT,  {.f = 1}, {.f = 0}, {.f = 1} },
+  { PE_LP_BGCOLA,     "LPBGColorA",    ET_COLOR,  {.c = CD_RED} },
+  { PE_LP_BGCOLB,     "LPBGColorB",    ET_COLOR,  {.c = CD_BLACK} },
+  { PE_LP_BGCM,       "LPBGCMode",     ET_ENUM,   {.e = CM_NONE}, .etype = E_COLORCYCLES },
+  { PE_LP_BGCMR,      "LPBGCMRate",    ET_INT,    {.i = INITIAL_RAINBOW_INC}, {.i = INT_MIN}, {.i = INT_MAX} },
+  { PE_LP_BGCMPOS,    "LPBGCMPos",     ET_INT,    {.i = 0} },  // Not user
+  { PE_LP_BGALPHA,    "LPBGAlpha",     ET_FLOAT,  {.f = 1}, {.f = 0}, {.f = 1} },
+  { PE_PAUSE,         "Pause",         ET_BOOL,   {.b = NO } },
 };
 #define PATTERN_ELEMENT_COUNT ( sizeof(patternElements) / sizeof(patternElement_t) )
 const int patternElementCount = PATTERN_ELEMENT_COUNT;
 
 // Clickable commands displayed on the gui.
 const command_t displayCommand[] = {
-  // One shot seeds
-  {ROW_O + 1, COL_O, "Horizontal bars",  PE_HBARS,    {{KMOD_CTRL, SDLK_i, COM_BOOL_FLIP}, {0, 0, COM_BOOL_RST}}, A_HBARS},
-  {ROW_O + 2, COL_O, "Vertical bars",    PE_VBARS,    {{KMOD_CTRL, SDLK_o, COM_BOOL_FLIP}, {0, 0, COM_BOOL_RST}}, A_VBARS},
-  {ROW_O + 3, COL_O, "Color all A",      PE_CAA,      {{KMOD_CTRL, SDLK_p, COM_BOOL_FLIP}, {0, 0, COM_BOOL_RST}}, A_COLORALLA},
-  {ROW_O + 4, COL_O, "Color all B",      PE_CAB,      {{KMOD_CTRL, SDLK_a, COM_BOOL_FLIP}, {0, 0, COM_BOOL_RST}}, A_COLORALLB},
-  {ROW_O + 5, COL_O, "Image seed",       PE_IMAGEALL, {{0, 0, COM_BOOL_FLIP}, {0, 0, COM_BOOL_RST}}, A_INVALID},
-  {ROW_O + 6, COL_O, "Small snail seed", PE_SNAIL,    {{0, 0, COM_BOOL_FLIP}, {0, 0, COM_BOOL_RST}}, A_SMALLSNAIL},
-  {ROW_O + 7, COL_O, "Large snail seed", PE_FSNAIL,   {{0, 0, COM_BOOL_FLIP}, {0, 0, COM_BOOL_RST}}, A_LARGESNAIL},
-
-  // Misc Persistent Seeds
-  {ROW_MI + 1, COL_MI, "Cell pattern",    PE_CELLFUN,  {{KMOD_CTRL, SDLK_q, COM_BOOL_FLIP}, {0, 0, COM_BOOL_RST}}, A_CELL},
-  {ROW_MI + 2, COL_MI, "Sidebar seed",    PE_BARSEED,  {{KMOD_CTRL, SDLK_n, COM_BOOL_FLIP}, {0, 0, COM_BOOL_RST}}, A_SIDEBAR},
-  {ROW_MI + 3, COL_MI, "Sidepulse seed",  PE_SIDEPULSE,{{0, 0, COM_BOOL_FLIP}, {0, 0, COM_BOOL_RST}}, A_SIDEPULSE},
-  {ROW_MI + 4, COL_MI, "Light pen",       PE_INVALID,  {}, A_LIGHTPEN},
+  // Misc seeds
+  {ROW_O + 1, COL_O, "Horizontal bars",  PE_HBARS,    {{}, {0, 0, COM_ENUM_RST}, {KMOD_CTRL, SDLK_i, COM_ENUM_INC}, {0, 0, COM_ENUM_DEC}}, A_HBARS},
+  {ROW_O + 2, COL_O, "Vertical bars",    PE_VBARS,    {{}, {0, 0, COM_ENUM_RST}, {KMOD_CTRL, SDLK_o, COM_ENUM_INC}, {0, 0, COM_ENUM_DEC}}, A_VBARS},
+  {ROW_O + 3, COL_O, "Color all A",      PE_CAA,      {{}, {0, 0, COM_ENUM_RST}, {KMOD_CTRL, SDLK_p, COM_ENUM_INC}, {0, 0, COM_ENUM_DEC}}, A_COLORALLA},
+  {ROW_O + 4, COL_O, "Color all B",      PE_CAB,      {{}, {0, 0, COM_ENUM_RST}, {KMOD_CTRL, SDLK_a, COM_ENUM_INC}, {0, 0, COM_ENUM_DEC}}, A_COLORALLB},
+  {ROW_O + 5, COL_O, "Small snail seed", PE_SNAIL,    {{}, {0, 0, COM_ENUM_RST}, {0, 0, COM_ENUM_INC}, {0, 0, COM_ENUM_DEC}}, A_SMALLSNAIL},
+  {ROW_O + 6, COL_O, "Large snail seed", PE_FSNAIL,   {{}, {0, 0, COM_ENUM_RST}, {0, 0, COM_ENUM_INC}, {0, 0, COM_ENUM_DEC}}, A_LARGESNAIL},
+  {ROW_O + 7, COL_O, "Cell pattern",    PE_CELLFUN,  {{}, {0, 0, COM_ENUM_RST}, {KMOD_CTRL, SDLK_q, COM_ENUM_INC}, {0, 0, COM_ENUM_DEC}}, A_CELL},
+  {ROW_O + 8, COL_O, "Sidebar seed",    PE_BARSEED,  {{}, {0, 0, COM_ENUM_RST}, {KMOD_CTRL, SDLK_n, COM_ENUM_INC}, {0, 0, COM_ENUM_DEC}}, A_SIDEBAR},
+  {ROW_O + 9, COL_O, "Sidepulse seed",  PE_SIDEPULSE,{{}, {0, 0, COM_ENUM_RST}, {0, 0, COM_ENUM_INC}, {0, 0, COM_ENUM_DEC}}, A_SIDEPULSE},
+  {ROW_O + 10, COL_O, "Light pen",       PE_INVALID,  {}, A_LIGHTPEN},
 
   // Crossbar seeds
-  {ROW_CB + 1, COL_CB, "Enable",  PE_CROSSBAR,     {{}, {0, 0, COM_ENUM_RST}, {0, 0, COM_ENUM_INC}, {0, 0, COM_ENUM_DEC}}, A_CROSSBARS},
+  {ROW_CB + 1, COL_CB, "Enable",      PE_CROSSBAR, {{}, {0, 0, COM_ENUM_RST}, {0, 0, COM_ENUM_INC}, {0, 0, COM_ENUM_DEC}}, A_CROSSBARS},
   {ROW_CB + 2, COL_CB, "Randomness",  PE_CBLIKELY, {{}, {0, 0, COM_INT_RST}, {0, 0, COM_LINT_INC}, {0, 0, COM_LINT_DEC}}, A_INVALID},
 
   // Random Dots
-  {ROW_R + 1, COL_R, "Enable",     PE_RDOT,     {{KMOD_CTRL, SDLK_s, COM_BOOL_FLIP}, {0, 0, COM_BOOL_RST}}, A_RDOT},
+  {ROW_R + 1, COL_R, "Enable",     PE_RDOT,     {{}, {0, 0, COM_ENUM_RST}, {KMOD_CTRL, SDLK_s, COM_ENUM_INC}, {0, 0, COM_ENUM_DEC}}, A_RDOT},
   {ROW_R + 2, COL_R, "Randomness", PE_RDOTCOEF, {{}, {KMOD_ALT, SDLK_LEFTBRACKET, COM_INT_RST}, {KMOD_ALT, SDLK_p, COM_LINT_INC}, {KMOD_ALT, SDLK_RIGHTBRACKET, COM_LINT_DEC}}, A_INVALID},
 
     // Text
@@ -432,7 +435,7 @@ const command_t displayCommand[] = {
   {ROW_T + 4, COL_T, "Erase all text",     PE_INVALID,    {{KMOD_NONE, SDLK_DELETE, COM_DELETE}}, A_INVALID},
   {ROW_T + 5, COL_T, "Reverse text",       PE_FONTDIR,    {{KMOD_CTRL, SDLK_QUOTE, COM_BOOL_FLIP}, {0, 0, COM_BOOL_RST}}, A_INVALID},
   {ROW_T + 6, COL_T, "Flip text.",         PE_FONTFLIP,   {{KMOD_CTRL, SDLK_SEMICOLON, COM_BOOL_FLIP}, {0, 0, COM_BOOL_RST}}, A_INVALID},
-  {ROW_T + 7, COL_T, "Background mode",    PE_TEXTMODE,   {{}, {KMOD_CTRL, SDLK_b, COM_ENUM_RST}, {0, 0, COM_ENUM_INC}, {0, 0, COM_ENUM_DEC}}, A_INVALID},
+  {ROW_T + 7, COL_T, "Background mode",    PE_TEXTMODE,   {{}, {0, 0, COM_ENUM_RST}, {KMOD_CTRL, SDLK_b, COM_ENUM_INC}, {0, 0, COM_ENUM_DEC}}, A_INVALID},
   {ROW_T + 8, COL_T, "Edge Offset",        PE_TEXTOFFSET, {{}, {0, 0, COM_TEXTO_RST}, {KMOD_ALT | KMOD_CTRL, SDLK_z, COM_TEXTO_INC}, {KMOD_ALT | KMOD_CTRL, SDLK_x, COM_TEXTO_DEC}}, A_INVALID},
   {ROW_T + 9, COL_T, "Restart text",       PE_INVALID,    {{KMOD_CTRL, SDLK_j, COM_TEXTRESET}, {0, 0, COM_TEXTRESET}}, A_INVALID},
 
@@ -448,39 +451,39 @@ const command_t displayCommand[] = {
   {ROW_PA + 14,COL_PA, "Auto blend rate",                  PE_INVALID,    {{}, {0, 0, COM_BLENDINC_RST}, {0, 0, COM_BLENDINC_INC}, {0, 0, COM_BLENDINC_DEC}}, A_INVALID},
 
   // Averager / Diffusion
-  {ROW_D + 1, COL_D, "Enable",      PE_DIFFUSE,     {{KMOD_CTRL, SDLK_r, COM_BOOL_FLIP}, {0, 0, COM_BOOL_RST}}, A_INVALID},
+  {ROW_D + 1, COL_D, "Enable",      PE_DIFFUSE,     {{}, {0, 0, COM_ENUM_RST}, {KMOD_CTRL, SDLK_r, COM_ENUM_INC}, {0, 0, COM_ENUM_DEC}}, A_INVALID},
   {ROW_D + 2, COL_D, "Coefficient", PE_DIFFUSECOEF, {{}, {KMOD_ALT, SDLK_w, COM_RST_FLOAT}, {KMOD_ALT, SDLK_q, COM_INC_FLOAT}, {KMOD_ALT, SDLK_e, COM_DEC_FLOAT}}, A_INVALID},
 
   // Fader
-  {ROW_F + 1, COL_F, "Enable", PE_FADE,     {{KMOD_CTRL, SDLK_e, COM_BOOL_FLIP}, {0, 0, COM_BOOL_RST}}, A_INVALID},
+  {ROW_F + 1, COL_F, "Enable", PE_FADE,     {{}, {0, 0, COM_ENUM_RST}, {KMOD_CTRL, SDLK_e, COM_ENUM_INC}, {0, 0, COM_ENUM_DEC}}, A_INVALID},
   {ROW_F + 2, COL_F, "Amount", PE_FADEINC,  {{}, {KMOD_ALT,  SDLK_x, COM_INT_RST}, {KMOD_ALT, SDLK_z, COM_INT_INC}, {KMOD_ALT, SDLK_c, COM_INT_DEC}}, A_INVALID},
   {ROW_F + 3, COL_F, "Mode",   PE_FADEMODE, {{}, {KMOD_CTRL, SDLK_h, COM_ENUM_RST}, {0, 0, COM_ENUM_INC}, {0, 0, COM_ENUM_DEC}}, A_INVALID},
 
   // Multiplier
-  {ROW_M + 1, COL_M, "Enable",      PE_MULTIPLY,   {{KMOD_CTRL, SDLK_c, COM_BOOL_FLIP}, {0, 0, COM_BOOL_RST}}, A_INVALID},
+  {ROW_M + 1, COL_M, "Enable",      PE_MULTIPLY,   {{}, {0, 0, COM_ENUM_RST}, {KMOD_CTRL, SDLK_c, COM_ENUM_INC}, {0, 0, COM_ENUM_DEC}}, A_INVALID},
   {ROW_M + 2, COL_M, "Multiply by", PE_MULTIPLYBY, {{}, {KMOD_ALT, SDLK_i, COM_RST_FLOAT}, {KMOD_ALT, SDLK_u, COM_INC_FLOAT}, {KMOD_ALT, SDLK_o, COM_DEC_FLOAT}}, A_INVALID},
 
   // Colors
   {ROW_C + 1, COL_C, "Alter palette of", PE_PALETTEALTER, {{}, {0, 0, COM_ENUM_RST}, {0, 0, COM_ENUM_INC}, {0, 0, COM_ENUM_DEC}}, A_INVALID},
-  {ROW_C + 2, COL_C, "FG Color A",     PE_FGCOLORA,    {}, A_INVALID},
-  {ROW_C + 3, COL_C, "FG Color B",     PE_FGCOLORB,    {}, A_INVALID},
-  {ROW_C + 4, COL_C, "FG Cycle mode",  PE_FGCYCLE,     {{}, {0, 0, COM_ENUM_RST}, {0, 0, COM_ENUM_INC}, {0, 0, COM_ENUM_DEC}}, A_INVALID},
-  {ROW_C + 5, COL_C, "FG Cycle rate",  PE_FGCYCLERATE, {{}, {0, 0, COM_INT_RST}, {0, 0, COM_INT_INC}, {0, 0, COM_INT_DEC}}, A_INVALID},
-  {ROW_C + 6, COL_C, "FG Alpha",       PE_FGALPHA,     {{}, {0, 0, COM_RST_FLOAT}, {0, 0, COM_INC_FLOAT}, {0, 0, COM_DEC_FLOAT}}, A_INVALID},
-  {ROW_C + 7, COL_C, "BG Color A",     PE_BGCOLORA,    {}, A_INVALID},
-  {ROW_C + 8, COL_C, "BG Color B",     PE_BGCOLORB,    {}, A_INVALID},
-  {ROW_C + 9, COL_C, "BG Cycle mode",  PE_BGCYCLE,     {{}, {0, 0, COM_ENUM_RST}, {0, 0, COM_ENUM_INC}, {0, 0, COM_ENUM_DEC}}, A_INVALID},
-  {ROW_C + 10, COL_C, "BG Cycle rate", PE_BGCYCLERATE, {{}, {0, 0, COM_INT_RST}, {0, 0, COM_INT_INC}, {0, 0, COM_INT_DEC}}, A_INVALID},
-  {ROW_C + 11, COL_C, "BG Alpha",      PE_BGALPHA,     {{}, {0, 0, COM_RST_FLOAT}, {0, 0, COM_INC_FLOAT}, {0, 0, COM_DEC_FLOAT}}, A_INVALID},
+  {ROW_C + 2, COL_C, "FG Color A",       PE_FGCOLORA,     {}, A_INVALID},
+  {ROW_C + 3, COL_C, "FG Color B",       PE_FGCOLORB,     {}, A_INVALID},
+  {ROW_C + 4, COL_C, "FG Cycle mode",    PE_FGCYCLE,      {{}, {0, 0, COM_ENUM_RST}, {0, 0, COM_ENUM_INC}, {0, 0, COM_ENUM_DEC}}, A_INVALID},
+  {ROW_C + 5, COL_C, "FG Cycle rate",    PE_FGCYCLERATE,  {{}, {0, 0, COM_INT_RST}, {0, 0, COM_INT_INC}, {0, 0, COM_INT_DEC}}, A_INVALID},
+  {ROW_C + 6, COL_C, "FG Alpha",         PE_FGALPHA,      {{}, {0, 0, COM_RST_FLOAT}, {0, 0, COM_INC_FLOAT}, {0, 0, COM_DEC_FLOAT}}, A_INVALID},
+  {ROW_C + 7, COL_C, "BG Color A",       PE_BGCOLORA,     {}, A_INVALID},
+  {ROW_C + 8, COL_C, "BG Color B",       PE_BGCOLORB,     {}, A_INVALID},
+  {ROW_C + 9, COL_C, "BG Cycle mode",    PE_BGCYCLE,      {{}, {0, 0, COM_ENUM_RST}, {0, 0, COM_ENUM_INC}, {0, 0, COM_ENUM_DEC}}, A_INVALID},
+  {ROW_C + 10, COL_C, "BG Cycle rate",   PE_BGCYCLERATE,  {{}, {0, 0, COM_INT_RST}, {0, 0, COM_INT_INC}, {0, 0, COM_INT_DEC}}, A_INVALID},
+  {ROW_C + 11, COL_C, "BG Alpha",        PE_BGALPHA,      {{}, {0, 0, COM_RST_FLOAT}, {0, 0, COM_INC_FLOAT}, {0, 0, COM_DEC_FLOAT}}, A_INVALID},
 
   // Plane suppression
-  {ROW_P + 1, COL_P, "Supress red",     PE_NORED,    {{KMOD_CTRL, SDLK_m,      COM_BOOL_FLIP}, {0, 0, COM_BOOL_RST}}, A_INVALID},
-  {ROW_P + 2, COL_P, "Supress green",   PE_NOGREEN,  {{KMOD_CTRL, SDLK_COMMA,  COM_BOOL_FLIP}, {0, 0, COM_BOOL_RST}}, A_INVALID},
-  {ROW_P + 3, COL_P, "Supress blue",    PE_NOBLUE,   {{KMOD_CTRL, SDLK_PERIOD, COM_BOOL_FLIP}, {0, 0, COM_BOOL_RST}}, A_INVALID},
+  {ROW_P + 1, COL_P, "Supress red",     PE_NORED,    {{}, {0, 0, COM_ENUM_RST}, {KMOD_CTRL, SDLK_m, COM_ENUM_INC}, {0, 0, COM_ENUM_DEC}}, A_INVALID},
+  {ROW_P + 2, COL_P, "Supress green",   PE_NOGREEN,  {{}, {0, 0, COM_ENUM_RST}, {KMOD_CTRL, SDLK_COMMA, COM_ENUM_INC}, {0, 0, COM_ENUM_DEC}}, A_INVALID},
+  {ROW_P + 3, COL_P, "Supress blue",    PE_NOBLUE,   {{}, {0, 0, COM_ENUM_RST}, {KMOD_CTRL, SDLK_PERIOD, COM_ENUM_INC}, {0, 0, COM_ENUM_DEC}}, A_INVALID},
 
   // Scrollers
-  {ROW_S + 1, COL_S, "Scroller",       PE_SCROLL,       {{KMOD_CTRL, SDLK_u, COM_BOOL_FLIP}, {0, 0, COM_BOOL_RST}}, A_INVALID},
-  {ROW_S + 2, COL_S, "Direction (<a>) <arrows>", PE_SCROLLDIR, {{}, {}, {0, 0, COM_ENUM_INC}, {0, 0, COM_ENUM_DEC}}, A_INVALID},
+  {ROW_S + 1, COL_S, "Scroller",       PE_SCROLL,       {{}, {0, 0, COM_ENUM_RST}, {KMOD_CTRL, SDLK_u, COM_ENUM_INC}, {0, 0, COM_ENUM_DEC}}, A_INVALID},
+  {ROW_S + 2, COL_S, "Direction (<a>, <c>) <arrows>", PE_SCROLLDIR, {{}, {}, {0, 0, COM_ENUM_INC}, {0, 0, COM_ENUM_DEC}}, A_INVALID},
   {ROW_S + 3, COL_S, "Direction randomizer", PE_SCROLLRANDEN,  {{0, 0, COM_BOOL_FLIP}, {0, 0, COM_BOOL_RST}}, A_INVALID},
   {ROW_S + 4, COL_S, "Direction randomness", PE_SCROLLRANDOM, {{}, {0, 0, COM_INT_RST}, {0, 0, COM_INT_INC}, {0, 0, COM_INT_DEC}}, A_INVALID},
   {ROW_S + 5, COL_S, "Cycle Scroller (0 = Off)",     PE_BOUNCER,  {{}, {0, 0, COM_INT_RST}, {0, 0, COM_INT_INC}, {0, 0, COM_INT_DEC}}, A_INVALID},
@@ -494,8 +497,8 @@ const command_t displayCommand[] = {
   {ROW_S + 13, COL_S, "Scroll alpha", PE_SCROLLALPHA, {{}, {0, 0, COM_RST_FLOAT}, {0, 0, COM_INC_FLOAT}, {0, 0, COM_DEC_FLOAT}}, A_INVALID},
 
   // Mirrors
-  {ROW_MIR + 1, COL_MIR, "Vertical Mirror", PE_MIRROR_V, {{0, 0, COM_BOOL_FLIP}, {0, 0, COM_BOOL_RST}}, A_INVALID},
-  {ROW_MIR + 2, COL_MIR, "Horizontal Mirror", PE_MIRROR_H, {{0, 0, COM_BOOL_FLIP}, {0, 0, COM_BOOL_RST}}, A_INVALID},
+  {ROW_MIR + 1, COL_MIR, "Vertical Mirror",   PE_MIRROR_V, {{}, {0, 0, COM_ENUM_RST}, {0, 0, COM_ENUM_INC}, {0, 0, COM_ENUM_DEC}}, A_INVALID},
+  {ROW_MIR + 2, COL_MIR, "Horizontal Mirror", PE_MIRROR_H, {{}, {0, 0, COM_ENUM_RST}, {0, 0, COM_ENUM_INC}, {0, 0, COM_ENUM_DEC}}, A_INVALID},
 
   // Post rotozoom
   {ROW_PR + 1, COL_PR, "Enable",     PE_POSTRZ,      {{KMOD_CTRL, SDLK_k, COM_BOOL_FLIP}, {0, 0, COM_BOOL_RST}}, A_INVALID},
@@ -505,21 +508,21 @@ const command_t displayCommand[] = {
   {ROW_PR + 5, COL_PR, "Anti-alias", PE_ALIAS,       {{KMOD_CTRL, SDLK_x, COM_BOOL_FLIP}, {0, 0, COM_BOOL_RST}}, A_INVALID},
 
   // Pre rotozoom
-  {ROW_PE + 1, COL_PE, "Enable",    PE_PRERZ,      {{KMOD_CTRL, SDLK_z, COM_BOOL_FLIP}, {0, 0, COM_BOOL_RST}}, A_INVALID},
+  {ROW_PE + 1, COL_PE, "Enable",    PE_PRERZ,      {{}, {0, 0, COM_ENUM_RST}, {KMOD_CTRL, SDLK_z, COM_ENUM_INC}, {0, 0, COM_ENUM_DEC}}, A_INVALID},
   {ROW_PE + 2, COL_PE, "Angle",     PE_PRERZANGLE, {{}, {KMOD_ALT, SDLK_t, COM_RST_FLOAT}, {KMOD_ALT, SDLK_r, COM_INC_FLOAT}, {KMOD_ALT, SDLK_y, COM_DEC_FLOAT}}, A_INVALID},
   {ROW_PE + 3, COL_PE, "Angle Inc", PE_PRERZINC,   {{}, {0, 0, COM_RST_FLOAT}, {0, 0, COM_INC_FLOAT}, {0, 0, COM_DEC_FLOAT}}, A_INVALID},
   {ROW_PE + 4, COL_PE, "Expansion", PE_PRERZEXPAND,{{}, {0, 0, COM_RST_FLOAT}, {0, 0, COM_INC_FLOAT}, {0, 0, COM_DEC_FLOAT}}, A_INVALID},
-  {ROW_PE + 5, COL_PE, "Anti-alias",PE_PRERZALIAS, {{0, 0, COM_BOOL_FLIP}, {0, 0, COM_BOOL_RST}}, A_INVALID},
+  {ROW_PE + 5, COL_PE, "Anti-alias",PE_PRERZALIAS, {{}, {0, 0, COM_ENUM_RST}, {0, 0, COM_ENUM_INC}, {0, 0, COM_ENUM_DEC}}, A_INVALID},
 
   // Image stuff
-  {ROW_I + 1, COL_I, "Enable",        PE_POSTIMAGE,    {{KMOD_CTRL | KMOD_ALT, SDLK_p, COM_BOOL_FLIP}, {0, 0, COM_BOOL_RST}}, A_INVALID},
+  {ROW_I + 1, COL_I, "Enable",        PE_POSTIMAGE,    {{}, {0, 0, COM_ENUM_RST}, {KMOD_CTRL | KMOD_ALT, SDLK_p, COM_ENUM_INC}, {0, 0, COM_ENUM_DEC}}, A_INVALID},
   {ROW_I + 2, COL_I, "Angle",         PE_IMAGEANGLE,   {{}, {0, 0, COM_RST_FLOAT}, {0, 0, COM_INC_FLOAT}, {0, 0, COM_DEC_FLOAT}}, A_INVALID},
   {ROW_I + 3, COL_I, "Angle Inc",     PE_IMAGEINC,     {{}, {0, 0, COM_RST_FLOAT}, {0, 0, COM_INC_FLOAT}, {0, 0, COM_DEC_FLOAT}}, A_INVALID},
   {ROW_I + 4, COL_I, "Expansion",     PE_IMAGEEXP,     {{}, {0, 0, COM_RST_FLOAT}, {0, 0, COM_INC_FLOAT}, {0, 0, COM_DEC_FLOAT}}, A_INVALID},
   {ROW_I + 5, COL_I, "Center x",      PE_IMAGEXOFFSET, {{}, {0, 0, COM_RST_FLOAT}, {0, 0, COM_INC_FLOAT}, {0, 0, COM_DEC_FLOAT}}, A_INVALID},
   {ROW_I + 6, COL_I, "Center y",      PE_IMAGEYOFFSET, {{}, {0, 0, COM_RST_FLOAT}, {0, 0, COM_INC_FLOAT}, {0, 0, COM_DEC_FLOAT}}, A_INVALID},
-  {ROW_I + 7, COL_I, "Anti-alias",    PE_IMAGEALIAS,   {{0, 0, COM_BOOL_FLIP}, {0, 0, COM_BOOL_RST}}, A_INVALID},
-  {ROW_I + 8, COL_I, "Image alpha", PE_IMAGEALPHA,     {{}, {0, 0, COM_RST_FLOAT}, {0, 0, COM_INC_FLOAT}, {0,0,COM_DEC_FLOAT}}, A_INVALID},
+  {ROW_I + 7, COL_I, "Anti-alias",    PE_IMAGEALIAS,   {{}, {0, 0, COM_ENUM_RST},  {0, 0, COM_ENUM_INC},  {0, 0, COM_ENUM_DEC}}, A_INVALID},
+  {ROW_I + 8, COL_I, "Image alpha",   PE_IMAGEALPHA,   {{}, {0, 0, COM_RST_FLOAT}, {0, 0, COM_INC_FLOAT}, {0,0,COM_DEC_FLOAT}}, A_INVALID},
 
   // Auxillary
   {ROW_A + 1, COL_A, "Tensor Broadcast",     PE_INVALID,   {{0, 0, COM_BROAD_FLIP}, {0, 0, COM_BROAD_RST}}, A_INVALID},
@@ -527,7 +530,7 @@ const command_t displayCommand[] = {
   {ROW_A + 3, COL_A, "Set output intensity", PE_INTENSITY, {{}, {0, 0, COM_RST_FLOAT}, {0, 0, COM_INC_FLOAT}, {0, 0, COM_DEC_FLOAT}}, A_INVALID},
   {ROW_A + 4, COL_A, "Frame delay(ms)",      PE_DELAY,     {{}, {0, 0, COM_INT_RST}, {0, 0, COM_INT_INC}, {0, 0, COM_INT_DEC}}, A_INVALID},
   {ROW_A + 5, COL_A, "Float step",           PE_FLOATINC,  {{}, {KMOD_ALT, SDLK_COMMA, COM_RST_FLOAT}, {KMOD_ALT, SDLK_m, COM_STEP_INC}, {KMOD_ALT, SDLK_PERIOD, COM_STEP_DEC}}, A_INVALID},
-  {ROW_A + 6, COL_A, "All modes off",        PE_INVALID,   {{KMOD_CTRL, SDLK_l, COM_MODEOFF}, {KMOD_CTRL, SDLK_l, COM_MODEOFF}}, A_INVALID},
+  {ROW_A + 6, COL_A, "All modes off",        PE_INVALID,   {{KMOD_CTRL, SDLK_l, COM_MODEOFF}, {0, 0, COM_MODEOFF}}, A_INVALID},
 
   // Quit
   {ROW_COUNT - 2, 4, "Quit",           PE_INVALID,  {{KMOD_NONE, SDLK_ESCAPE, COM_EXIT}, {KMOD_NONE, SDLK_ESCAPE, COM_EXIT}}, A_INVALID},
@@ -563,13 +566,12 @@ const guiText_t headerText[] = {
   {ROW_PA,  COL_PA, "Pattern sets:"},
   {ROW_P,   COL_P,  "Color suppression:"},
   {ROW_A,   COL_A,  "Auxiliary:"},
-  {ROW_MI,  COL_MI, "Misc seeds:"},
   {ROW_CB,  COL_CB, "Crossbar seeds:"},
   {ROW_I,   COL_I,  "Image overlay:"},
   {ROW_R,   COL_R,  "Random dot seeds:"},
   {ROW_C,   COL_C,  "Item palette editor:"},
   {ROW_D,   COL_D,  "Averager:"},
-  {ROW_O,   COL_O,  "One-shot seeds:"},
+  {ROW_O,   COL_O,  "Misc seeds:"},
   {ROW_F,   COL_F,  "Adder (fader):"},
   {ROW_M,   COL_M,  "Multiplier:"},
   {ROW_T,   COL_T,  "Text entry:"},
@@ -588,10 +590,14 @@ const command_t otherCommands[] = {
   {-1, 2, "Scroll Down", PE_INVALID, {{KMOD_NONE, SDLK_DOWN, COM_SCROLL_DOWN}}},
   {-1, 2, "Scroll Left", PE_INVALID, {{KMOD_NONE, SDLK_LEFT, COM_SCROLL_LEFT}}},
   {-1, 2, "Scroll Right", PE_INVALID, {{KMOD_NONE, SDLK_RIGHT, COM_SCROLL_RIGHT}}},
-  {-1, 2, "Activate & Scroll Up", PE_INVALID, {{KMOD_ALT, SDLK_UP, COM_SCROLL_UPC}}},
-  {-1, 2, "Activate & Scroll Down", PE_INVALID, {{KMOD_ALT, SDLK_DOWN, COM_SCROLL_DOWNC}}},
-  {-1, 2, "Activate & Scroll Left", PE_INVALID, {{KMOD_ALT, SDLK_LEFT, COM_SCROLL_LEFTC}}},
-  {-1, 2, "Activate & Scroll Right", PE_INVALID, {{KMOD_ALT, SDLK_RIGHT, COM_SCROLL_RIGHTC}}},
+  {-1, 2, "Scroll Up Once", PE_INVALID, {{KMOD_CTRL, SDLK_UP, COM_SCROLL_UPC}}},
+  {-1, 2, "Scroll Down Once", PE_INVALID, {{KMOD_CTRL, SDLK_DOWN, COM_SCROLL_DOWNC}}},
+  {-1, 2, "Scroll Left Once", PE_INVALID, {{KMOD_CTRL, SDLK_LEFT, COM_SCROLL_LEFTC}}},
+  {-1, 2, "Scroll Right Once", PE_INVALID, {{KMOD_CTRL, SDLK_RIGHT, COM_SCROLL_RIGHTC}}},
+  {-1, 2, "Activate Scroll Up", PE_INVALID, {{KMOD_ALT, SDLK_UP, COM_SCROLL_UPA}}},
+  {-1, 2, "Activate Scroll Down", PE_INVALID, {{KMOD_ALT, SDLK_DOWN, COM_SCROLL_DOWNA}}},
+  {-1, 2, "Activate Scroll Left", PE_INVALID, {{KMOD_ALT, SDLK_LEFT, COM_SCROLL_LEFTA}}},
+  {-1, 2, "Activate Scroll Right", PE_INVALID, {{KMOD_ALT, SDLK_RIGHT, COM_SCROLL_RIGHTA}}},
   {-1, 0, "Load image buffer 0", PE_INVALID, {{KMOD_ALT,  SDLK_0, COM_LOAD0 }}},
   {-1, 0, "Load image buffer 1", PE_INVALID, {{KMOD_ALT,  SDLK_1, COM_LOAD1 }}},
   {-1, 0, "Load image buffer 2", PE_INVALID, {{KMOD_ALT,  SDLK_2, COM_LOAD2 }}},
@@ -699,6 +705,10 @@ bool_t VerifyStructuralIntegrity(void) {
   }
   if (FM_COUNT != fadeModeTextCount) {
     fprintf(stderr, "Programmer error: Mismatched fadeModes_e(%i) != fadeModeText(%i)!\n", FM_COUNT, fadeModeTextCount);
+    rc = NO;
+  }
+  if (OS_COUNT != oneShotTextCount) {
+    fprintf(stderr, "Programmer error: Mismatched oneShots_e(%i) != oneShotText(%i)!\n", OS_COUNT, oneShotTextCount);
     rc = NO;
   }
   if (SM_COUNT != shiftTextCount) {

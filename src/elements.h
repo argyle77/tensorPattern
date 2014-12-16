@@ -41,11 +41,19 @@
   // Fade modes
   typedef enum fadeModes_e{
     FM_INVALID = -1,
-    FM_LIMIT = 0, FM_MODULAR,
+    FM_LIMIT = 0, FM_MODULAR, FM_NONZEROL, FM_NONZEROM,
     FM_COUNT // Last.
   } fadeModes_e;
 
-  // Color plane shift modes - should be in same order as dir_e.
+  // One shot modes - used to be booleans, which means to support old save files,
+  // there must be values for NO and YES in the corresponding oneShotText.
+  typedef enum oneShots_e {
+    OS_INVALID = -1,
+    OS_NO = 0, OS_YES, OS_ONESHOT,
+    OS_COUNT // Last.
+  } oneShots_e;
+
+  // Color plane shift modes - above SM_HOLD, should be in same order as dir_e.
   typedef enum shiftModes_e {
     SM_INVALID = -1,
     SM_UP, SM_LEFT, SM_DOWN, SM_RIGHT, SM_HOLD,
@@ -101,7 +109,7 @@
   typedef enum enums_e {
     E_INVALID = -1,
     E_DIRECTIONS = 0, E_FADEMODES, E_SHIFTMODES, E_TEXTMODES, E_COLORCYCLES,
-    /*E_COLORS,*/ E_OPERATE, E_CROSSBAR, E_ALTERPALETTES,
+    /*E_COLORS,*/ E_OPERATE, E_CROSSBAR, E_ALTERPALETTES, E_ONESHOT,
     E_COUNT // Last.
   } enums_e;
 
@@ -145,7 +153,6 @@
     PE_CAA_CMPOS, PE_CAA_ALPHA,
     PE_CAB, PE_CAB_COLA, PE_CAB_COLB, PE_CAB_CM, PE_CAB_CMR,
     PE_CAB_CMPOS, PE_CAB_ALPHA,
-    PE_IMAGEALL,
     PE_RDOT, PE_RDOT_COLA, PE_RDOT_COLB, PE_RDOT_CM, PE_RDOT_CMR,
     PE_RDOT_CMPOS, PE_RDOT_ALPHA,
     PE_FADEMODE, PE_POSTRZ, PE_PRERZ, PE_ALIAS, PE_MULTIPLY,
@@ -230,6 +237,7 @@
     COM_CYCLESET, COM_TEXTRESET, COM_MODEOFF, COM_STEP_INC, COM_STEP_DEC,
     COM_SCROLL_UP, COM_SCROLL_DOWN, COM_SCROLL_LEFT, COM_SCROLL_RIGHT,
     COM_SCROLL_DOWNC, COM_SCROLL_LEFTC, COM_SCROLL_RIGHTC, COM_SCROLL_UPC,
+    COM_SCROLL_DOWNA, COM_SCROLL_LEFTA, COM_SCROLL_RIGHTA, COM_SCROLL_UPA,
     COM_BACKSPACE, COM_DELETE, COM_TEXTO_INC, COM_TEXTO_DEC, COM_TEXTO_RST,
     COM_EXIT, COM_ORIENTATION, COM_LOAD0, COM_LOAD1, COM_LOAD2, COM_LOAD3,
     COM_LOAD4, COM_LOAD5, COM_LOAD6, COM_LOAD7, COM_LOAD8, COM_LOAD9,

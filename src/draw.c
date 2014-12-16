@@ -847,6 +847,8 @@ void CreateTextureCommand(displayText_t *target, int index, color_t fg, color_t 
 
   // Handle the key selection. TODO: Fix this mess.
   if (modified) {
+    ind += snprintf(ind, end - ind, "%s%s", SDL_GetKeyName(displayCommand[index].commands[MOUSE_EDIT].key),
+      strlen(SDL_GetKeyName(displayCommand[index].commands[MOUSE_EDIT].key)) ? " " : "");
     ind += snprintf(ind, end - ind, "%s%s", SDL_GetKeyName(displayCommand[index].commands[MOUSE_WHEEL_UP].key),
       strlen(SDL_GetKeyName(displayCommand[index].commands[MOUSE_WHEEL_UP].key)) ? " " : "");
     ind += snprintf(ind, end - ind, "%s%s", SDL_GetKeyName(displayCommand[index].commands[MOUSE_RST].key),
@@ -854,6 +856,10 @@ void CreateTextureCommand(displayText_t *target, int index, color_t fg, color_t 
     ind += snprintf(ind, end - ind, "%s%s", SDL_GetKeyName(displayCommand[index].commands[MOUSE_WHEEL_DOWN].key),
       strlen(SDL_GetKeyName(displayCommand[index].commands[MOUSE_WHEEL_DOWN].key)) ? " " : "");
   } else {
+    ind += snprintf(ind, end - ind, "%s%s%s",
+      strlen(SDL_GetKeyName(displayCommand[index].commands[MOUSE_EDIT].key)) ? " - " : "",
+      SDL_GetKeyName(displayCommand[index].commands[MOUSE_EDIT].key),
+      strlen(SDL_GetKeyName(displayCommand[index].commands[MOUSE_EDIT].key)) ? " " : "");
     ind += snprintf(ind, end - ind, "%s%s%s",
       strlen(SDL_GetKeyName(displayCommand[index].commands[MOUSE_WHEEL_UP].key)) ? " - " : "",
       SDL_GetKeyName(displayCommand[index].commands[MOUSE_WHEEL_UP].key),
