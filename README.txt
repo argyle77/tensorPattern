@@ -1,4 +1,4 @@
-Tensor pattern generation - Version 8.1.1
+Tensor pattern generation - Version 8.1.2
 http://core9.org/tensor
 http://wiki.artisansasylum.com/index.php/Tensor
 http://wiki.artisansasylum.com/index.php/Tensor_2011

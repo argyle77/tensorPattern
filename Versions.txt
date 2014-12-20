@@ -94,6 +94,6 @@ Version 8.0
   for all seeds.  Added pause, tensor broadcast enable, sorted
   out the controls.  Fixed the color cyclers.
 
-Version 8.1
+Version 8.1.2
   Bug fixes for key presses.  Added one-shot and persistent
   options to most seeds and modes.  Added some fade modes.
