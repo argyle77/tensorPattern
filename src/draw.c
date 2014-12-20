@@ -167,7 +167,7 @@ void DrawXBox(SDL_Rect rect, color_t fg, color_t bg) {
 
 // Writes a line of text to the selected line and column of the
 // output window with the selected color.
-void CreateTextureLine(displayText_t *target, char * thisText, int line, int col, color_t fg, color_t bg) {
+void CreateTextureLine(displayText_t *target, const char * thisText, int line, int col, color_t fg, color_t bg) {
 
   // Vars
   SDL_Surface *textSurface;
@@ -957,3 +957,4 @@ void DrawDisplayTexture(displayText_t dTexture) {
 void DrawTexture(SDL_Texture *texture, SDL_Rect target) {
   SDL_RenderCopy(mwRenderer, texture, NULL, &(target));
 }
+

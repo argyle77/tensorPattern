@@ -296,7 +296,7 @@
   void CreateTextureInt(displayText_t * target, int value, int row, int col, int width);
   void CreateTextureFloat(displayText_t *target, float value, int row, int col, int width, int precision);
   void CreateTextureString(displayText_t *target, const char *text, int line, int col, int width);
-  void CreateTextureLine(displayText_t *target, char * thisText, int line, int col, color_t fg, color_t bg);
+  void CreateTextureLine(displayText_t *target, const char * thisText, int line, int col, color_t fg, color_t bg);
 
 
   int GetPixelofColumn(int col);
