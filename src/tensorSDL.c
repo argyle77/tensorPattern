@@ -4561,413 +4561,183 @@ int OverColorBox(int set, point_t mouse, int item, SDL_Rect ** targets, int *las
   return INVALID;
 }
 
+// Initialize the texture cache.  All this crap actually lowers my CPU usage
+// from 25% to 12%.  Half of CPU time was dedicated to regenerating the text
+// textures 40x per second.
+void DrawAndCache(int *cachePosition, elementType_e type, void *value, int row, int col, int width) {
+  static int cacheCount = 0;
+  static infoCache_t *cache = NULL;
+
+  // Increase the cache position
+  (*cachePosition)++;
+
+  // Make a new slot if there isn't one already.
+  if (*cachePosition > cacheCount) {
+    cacheCount++;
+    cache = realloc(cache, cacheCount * sizeof(infoCache_t));
+    cache[*cachePosition - 1].infoText.texture = NULL;
+  }
+
+  // Compare new value with cached value.
+  switch(type) {
+    case ET_BOOL:
+      if ((cache[*cachePosition - 1].cacheValue.b != *((bool_t *)value)) ||
+          (!cache[*cachePosition - 1].infoText.texture)) {
+        cache[*cachePosition - 1].cacheValue.b = *((bool_t *)value);
+        SDL_DestroyTexture(cache[*cachePosition - 1].infoText.texture);
+        CreateTextureBoolean(&(cache[*cachePosition - 1].infoText), *((bool_t *)value), row, col, width);
+      }
+      break;
+    case ET_INT:
+      if ((cache[*cachePosition - 1].cacheValue.i != *((int *)value)) ||
+          (!cache[*cachePosition - 1].infoText.texture)) {
+        cache[*cachePosition - 1].cacheValue.i = *((int *)value);
+        SDL_DestroyTexture(cache[*cachePosition - 1].infoText.texture);
+        CreateTextureInt(&(cache[*cachePosition - 1].infoText), *((int *)value), row, col, width);
+      }
+      break;
+    case ET_FLOAT:
+      if ((cache[*cachePosition - 1].cacheValue.f != *((float *)value)) ||
+          (!cache[*cachePosition - 1].infoText.texture)) {
+        cache[*cachePosition - 1].cacheValue.f = *((float *)value);
+        SDL_DestroyTexture(cache[*cachePosition - 1].infoText.texture);
+        CreateTextureFloat(&(cache[*cachePosition - 1].infoText), *((float *)value), row, col, width, width / 2);
+      }
+      break;
+    case ET_ENUM:
+      if ((cache[*cachePosition - 1].cacheValue.e != *((int *)value)) ||
+          (!cache[*cachePosition - 1].infoText.texture)) {
+        cache[*cachePosition - 1].cacheValue.e = *((int *)value);
+        SDL_DestroyTexture(cache[*cachePosition - 1].infoText.texture);
+        CreateTextureString(&(cache[*cachePosition - 1].infoText),
+          (char *)value, row, col, width);
+      }
+      break;
+    default:
+      return;
+  }
+
+  DrawDisplayTexture(cache[*cachePosition - 1].infoText);
+}
+
+void DrawAndCacheString(int *cachePosition, char *value, int row, int col, color_t fg, color_t bg) {
+  static int cacheCount = 0;
+  static infoCache_t *cache = NULL;
+  static char **oldValue = NULL;
+  int length = strlen(value);
+
+  // Increase the cache position
+  (*cachePosition)++;
+
+  // Make a new slot if there isn't one already.
+  if (*cachePosition > cacheCount) {
+    cacheCount++;
+    cache = realloc(cache, cacheCount * sizeof(infoCache_t));
+    cache[*cachePosition - 1].infoText.texture = NULL;
+    oldValue = realloc(oldValue, cacheCount * sizeof(char *));
+    oldValue[*cachePosition - 1] = NULL;
+  }
+
+  // Regenerate the texture if the string changed.
+  if ((!cache[*cachePosition - 1].infoText.texture) ||
+      (strcmp(oldValue[*cachePosition - 1], value) != 0)) {
+    oldValue[*cachePosition - 1] = realloc(oldValue[*cachePosition - 1], (length + 1) * sizeof(char));
+    strncpy(oldValue[*cachePosition - 1], value, length + 1);
+    SDL_DestroyTexture(cache[*cachePosition - 1].infoText.texture);
+    CreateTextureLine(&(cache[*cachePosition - 1].infoText), value,
+      row, col, fg, bg);
+  }
+
+  DrawDisplayTexture(cache[*cachePosition - 1].infoText);
+}
+
 // Update the values of the text on the display window.
 // TODO: Shorten this function.  Lots of repetition.
 #define STATUS_BAR_LENGTH 75
 #define BUFFER_BAR_LENGTH 94
 void UpdateInfoDisplay(int set) {
-  int length;
-  int i;
-  static infoCache_t *infoCache = NULL;
-  static int infoCount = 0;
-  int thisInfo = 0;
-  displayText_t tempTarget;
-  bool_t initial = NO;
-  static char oldStatus[sizeof(statusText)] = { '\0' };
+  int cachePosition = 0;
+  int sCacheP = 0;
+  int length, i;
   char statusTemp[STATUS_BAR_LENGTH + 10];
   char bufferTemp1[BUFFER_BAR_LENGTH + 10];
   char bufferTemp2[BUFFER_BAR_LENGTH + 10];
-  static char *oldBuffer = NULL;
-  static int oldBufferSize = 0;
-  patternElement_e element;
-  patternElement_e element_o;
+  patternElement_e element, element_o;
   SDL_Rect tempBox;
   color_t color;
+  char enumString[100];
 
-  // Initialize the texture cache.  All this crap actually lowers my CPU usage
-  // from 25% to 12%.  Half of CPU time was dedicated to regenerating the text
-  // textures 40x per second.
-  if (!infoCount) {
-    for (i = 0; i < displayCommandCount; i++) {
-      element_o = element = displayCommand[i].dataSource;
-
-      // Adjust for selected elements
-      if (element < PE_INVALID) element = GetSelectElement(set, element);
-      if (element > PE_INVALID) {
-        switch(patternElements[element].type) {
-          case ET_BOOL:
-            CreateTextureBoolean(&tempTarget, SBOOL(set, element),
-              displayCommand[i].line, displayCommand[i].col + 1, PARAMETER_WIDTH);
-            if (tempTarget.texture != NULL) {
-              infoCount++;
-              infoCache = realloc(infoCache, infoCount * sizeof(infoCache_t));
-              infoCache[infoCount - 1].cacheValue.b = SBOOL(set, element);
-              infoCache[infoCount - 1].infoText = tempTarget;
-            }
-            break;
-
-          case ET_FLOAT:
-            CreateTextureFloat(&tempTarget, SFLOAT(set, element),
-              displayCommand[i].line, displayCommand[i].col + 1, PARAMETER_WIDTH, PARAMETER_WIDTH / 2);
-            if (tempTarget.texture != NULL) {
-              infoCount++;
-              infoCache = realloc(infoCache, infoCount * sizeof(infoCache_t));
-              infoCache[infoCount - 1].cacheValue.f = SFLOAT(set, element);
-              infoCache[infoCount - 1].infoText = tempTarget;
-            }
-            break;
-
-          case ET_INT:
-            CreateTextureInt(&tempTarget, SINT(set, element),
-              displayCommand[i].line, displayCommand[i].col + 1, PARAMETER_WIDTH);
-            if (tempTarget.texture != NULL) {
-              infoCount++;
-              infoCache = realloc(infoCache, infoCount * sizeof(infoCache_t));
-              infoCache[infoCount - 1].cacheValue.i = SINT(set, element);
-              infoCache[infoCount - 1].infoText = tempTarget;
-            }
-            break;
-
-          case ET_ENUM:
-            CreateTextureString(&tempTarget,
-              enumerations[patternElements[element].etype].texts[SENUM(set, element)],
-              displayCommand[i].line, displayCommand[i].col + 1, PARAMETER_WIDTH);
-            if (tempTarget.texture != NULL) {
-              infoCount++;
-              infoCache = realloc(infoCache, infoCount * sizeof(infoCache_t));
-              infoCache[infoCount - 1].cacheValue.e = SENUM(set, element);
-              infoCache[infoCount - 1].infoText = tempTarget;
-            }
-            break;
-
-          case ET_COLOR:
-            infoCount++;
-            break;
-
-          default:
-            // Lazy
-            //~ fprintf(stderr, "No data display driver for element %i, type %i.\n", element, patternElements[element].type);
-            break;
-        }
-      } else if (element_o < PE_INVALID) {
-        // This is a place holder because these things come into and go out of
-        // existance sometimes.  Ugh.
-        CreateTextureInt(&tempTarget, INT_MAX - 1,
-          displayCommand[i].line, displayCommand[i].col + 1, PARAMETER_WIDTH);
-        if (tempTarget.texture != NULL) {
-          infoCount++;
-          infoCache = realloc(infoCache, infoCount * sizeof(infoCache_t));
-          infoCache[infoCount - 1].cacheValue.i = INT_MAX - 1;
-          infoCache[infoCount - 1].infoText = tempTarget;
-        }
-      }
-    }
-  }
-
-  // Draw the textures representing the values, or get new textures if the
-  // values have changed.
+  // Automatic information based on displayCommand array.
   for (i = 0; i < displayCommandCount; i++) {
     element_o = element = displayCommand[i].dataSource;
-
-    // Adjust for color selected elements
     if (element < PE_INVALID) element = GetSelectElement(set, element);
     if (element > PE_INVALID) {
       switch(patternElements[element].type) {
-        case ET_BOOL:
-          if (infoCache[thisInfo].cacheValue.b != SBOOL(set, element)) {
-            infoCache[thisInfo].cacheValue.b = SBOOL(set, element);
-            SDL_DestroyTexture(infoCache[thisInfo].infoText.texture);
-            CreateTextureBoolean(&(infoCache[thisInfo].infoText),
-              infoCache[thisInfo].cacheValue.b, displayCommand[i].line,
-              displayCommand[i].col + 1, PARAMETER_WIDTH);
-          }
-          DrawDisplayTexture(infoCache[thisInfo].infoText);
-          thisInfo++;
-          break;
-
-        case ET_FLOAT:
-          if (infoCache[thisInfo].cacheValue.f != SFLOAT(set, element)) {
-            infoCache[thisInfo].cacheValue.f = SFLOAT(set, element);
-            SDL_DestroyTexture(infoCache[thisInfo].infoText.texture);
-            CreateTextureFloat(&(infoCache[thisInfo].infoText),
-              infoCache[thisInfo].cacheValue.f, displayCommand[i].line,
-              displayCommand[i].col + 1, PARAMETER_WIDTH, PARAMETER_WIDTH / 2);
-          }
-          DrawDisplayTexture(infoCache[thisInfo].infoText);
-          thisInfo++;
-          break;
-
         case ET_INT:
-          if (infoCache[thisInfo].cacheValue.i != SINT(set, element)) {
-            infoCache[thisInfo].cacheValue.i = SINT(set, element);
-            SDL_DestroyTexture(infoCache[thisInfo].infoText.texture);
-            CreateTextureInt(&(infoCache[thisInfo].infoText),
-              infoCache[thisInfo].cacheValue.i, displayCommand[i].line,
-              displayCommand[i].col + 1, PARAMETER_WIDTH);
-          }
-          DrawDisplayTexture(infoCache[thisInfo].infoText);
-          thisInfo++;
+          DrawAndCache(&cachePosition, patternElements[element].type,
+            &SINT(set, element), displayCommand[i].line, displayCommand[i].col + 1, PARAMETER_WIDTH);
           break;
-
+        case ET_BOOL:
+          DrawAndCache(&cachePosition, patternElements[element].type,
+            &SBOOL(set, element), displayCommand[i].line, displayCommand[i].col + 1, PARAMETER_WIDTH);
+          break;
+        case ET_FLOAT:
+          DrawAndCache(&cachePosition, patternElements[element].type,
+            &SFLOAT(set, element), displayCommand[i].line, displayCommand[i].col + 1, PARAMETER_WIDTH);
+          break;
         case ET_ENUM:
-          if (infoCache[thisInfo].cacheValue.e != SENUM(set, element)) {
-            infoCache[thisInfo].cacheValue.e = SENUM(set, element);
-            SDL_DestroyTexture(infoCache[thisInfo].infoText.texture);
-            CreateTextureString(&(infoCache[thisInfo].infoText),
-              enumerations[patternElements[element].etype].texts[SENUM(set, element)],
-              displayCommand[i].line, displayCommand[i].col + 1, PARAMETER_WIDTH);
-          }
-          DrawDisplayTexture(infoCache[thisInfo].infoText);
-          thisInfo++;
+          strncpy(enumString, enumerations[patternElements[element].etype].texts[SENUM(set, element)], sizeof(enumString));
+          DrawAndCache(&cachePosition, patternElements[element].type, enumString,
+            displayCommand[i].line, displayCommand[i].col + 1, PARAMETER_WIDTH);
           break;
-
         case ET_COLOR:
           tempBox = GetBoxofLine(displayCommand[i].line, displayCommand[i].col + 1, 0);
           tempBox.w = PARAMETER_WIDTH * CHAR_W;
           DrawOutlineBox(tempBox, DISPLAY_COLOR_PARMS, SCOLOR(set, element));
-          thisInfo++;
+          DrawAndCache(&cachePosition, PE_INVALID, NULL, 0, 0, 0);
           break;
-
         default:
-          // Lazy
-          fprintf(stderr, "No data display driver for element %i, type %i.\n", element, patternElements[element].type);
+          break;
       }
     } else if (element_o < PE_INVALID) {
+      // Make sure there is cache reserved even though we aren't really
+      // using this slot right now.
+      DrawAndCache(&cachePosition, PE_INVALID, NULL, 0, 0, 0);
+
       // Draw the disabled element boxes
       tempBox = GetBoxofLine(displayCommand[i].line, displayCommand[i].col + 1, 0);
       tempBox.w = PARAMETER_WIDTH * CHAR_W;
       DrawXBox(tempBox, DISPLAY_COLOR_PARMS, DISPLAY_COLOR_PARMSBG);
-      thisInfo++;
     }
   }
 
   // The ones that aren't automatic:
-
-  // If we got here and thisInfo is equal to infoCount, we haven't initialized
-  // the non-automatic values yet.
-  if (thisInfo == infoCount) {
-    initial = YES;
-  }
-
-  // Live Preview FPS
-  if (initial || infoCache[thisInfo].cacheValue.i != previewFPSA) {
-    if (initial) {
-      infoCount++;
-      infoCache = realloc(infoCache, infoCount * sizeof(infoCache_t));
-    } else {
-      SDL_DestroyTexture(infoCache[thisInfo].infoText.texture);
-    }
-    infoCache[thisInfo].cacheValue.i = previewFPSA;
-    CreateTextureInt(&(infoCache[thisInfo].infoText), previewFPSA, FPS_ROW, 1, PARAMETER_WIDTH);
-  }
-  DrawDisplayTexture(infoCache[thisInfo].infoText);
-  thisInfo++;
-
-  // Alternate Preview FPS
-  if (initial || infoCache[thisInfo].cacheValue.i != previewFPSB) {
-    if (initial) {
-      infoCount++;
-      infoCache = realloc(infoCache, infoCount * sizeof(infoCache_t));
-    } else {
-      SDL_DestroyTexture(infoCache[thisInfo].infoText.texture);
-    }
-    infoCache[thisInfo].cacheValue.i = previewFPSB;
-    CreateTextureInt(&(infoCache[thisInfo].infoText), previewFPSB, FPS_ROW, 5, PARAMETER_WIDTH);
-  }
-  DrawDisplayTexture(infoCache[thisInfo].infoText);
-  thisInfo++;
-
-  // Gui FPS
-  if (initial || infoCache[thisInfo].cacheValue.i != infoFPS) {
-    if (initial) {
-      infoCount++;
-      infoCache = realloc(infoCache, infoCount * sizeof(infoCache_t));
-    } else {
-      SDL_DestroyTexture(infoCache[thisInfo].infoText.texture);
-    }
-    infoCache[thisInfo].cacheValue.i = infoFPS;
-    CreateTextureInt(&(infoCache[thisInfo].infoText), infoFPS, ROW_COUNT - 1, 5, PARAMETER_WIDTH);
-  }
-  DrawDisplayTexture(infoCache[thisInfo].infoText);
-  thisInfo++;
-
-  // Pattern set cycling
-  if (cyclePatternSets) {
-    if (initial || infoCache[thisInfo].cacheValue.i != cycleFrameCount) {
-      if (initial) {
-        infoCount++;
-        infoCache = realloc(infoCache, infoCount * sizeof(infoCache_t));
-      } else {
-        SDL_DestroyTexture(infoCache[thisInfo].infoText.texture);
-      }
-      infoCache[thisInfo].cacheValue.i = cycleFrameCount;
-      CreateTextureInt(&(infoCache[thisInfo].infoText), cycleFrameCount, ROW_PA + 1, COL_PA + 1,  PARAMETER_WIDTH);
-    }
-  } else {
-    if (initial || infoCache[thisInfo].cacheValue.b != cyclePatternSets) {
-      if (initial) {
-        infoCount++;
-        infoCache = realloc(infoCache, infoCount * sizeof(infoCache_t));
-      } else {
-        SDL_DestroyTexture(infoCache[thisInfo].infoText.texture);
-      }
-      infoCache[thisInfo].cacheValue.b = cyclePatternSets;
-      CreateTextureBoolean(&(infoCache[thisInfo].infoText), cyclePatternSets, ROW_PA + 1, COL_PA + 1,  PARAMETER_WIDTH);
-    }
-  }
-  DrawDisplayTexture(infoCache[thisInfo].infoText);
-  thisInfo++;
-
-  // Alternate Set
-  if (initial || infoCache[thisInfo].cacheValue.i != alternateSet) {
-    if (initial) {
-      infoCount++;
-      infoCache = realloc(infoCache, infoCount * sizeof(infoCache_t));
-    } else {
-      SDL_DestroyTexture(infoCache[thisInfo].infoText.texture);
-    }
-    infoCache[thisInfo].cacheValue.i = alternateSet;
-    CreateTextureInt(&(infoCache[thisInfo].infoText), alternateSet, ROW_PA + 9, COL_PA + 1, PARAMETER_WIDTH);
-  }
-  DrawDisplayTexture(infoCache[thisInfo].infoText);
-  thisInfo++;
-
-  // Current Set
-  if (initial || infoCache[thisInfo].cacheValue.i != currentSet) {
-    if (initial) {
-      infoCount++;
-      infoCache = realloc(infoCache, infoCount * sizeof(infoCache_t));
-    } else {
-      SDL_DestroyTexture(infoCache[thisInfo].infoText.texture);
-    }
-    infoCache[thisInfo].cacheValue.i = currentSet;
-    CreateTextureInt(&(infoCache[thisInfo].infoText), currentSet, ROW_PA + 8, COL_PA + 1, PARAMETER_WIDTH);
-  }
-  DrawDisplayTexture(infoCache[thisInfo].infoText);
-  thisInfo++;
-
-
-  // Display set
-  if (initial || infoCache[thisInfo].cacheValue.i != displaySet) {
-    if (initial) {
-      infoCount++;
-      infoCache = realloc(infoCache, infoCount * sizeof(infoCache_t));
-    } else {
-      SDL_DestroyTexture(infoCache[thisInfo].infoText.texture);
-    }
-    infoCache[thisInfo].cacheValue.i = displaySet;
-    CreateTextureString(&(infoCache[thisInfo].infoText), operateText[displaySet],  ROW_PA + 10, COL_PA + 1, PARAMETER_WIDTH);
-  }
-  DrawDisplayTexture(infoCache[thisInfo].infoText);
-  thisInfo++;
-
-  // Alternate blend amount
-  if (initial || infoCache[thisInfo].cacheValue.f != alternateBlend) {
-    if (initial) {
-      infoCount++;
-      infoCache = realloc(infoCache, infoCount * sizeof(infoCache_t));
-    } else {
-      SDL_DestroyTexture(infoCache[thisInfo].infoText.texture);
-    }
-    infoCache[thisInfo].cacheValue.f = alternateBlend;
-    CreateTextureFloat(&(infoCache[thisInfo].infoText), alternateBlend, ROW_PA + 12, COL_PA + 1, PARAMETER_WIDTH, PARAMETER_WIDTH / 2);
-  }
-  DrawDisplayTexture(infoCache[thisInfo].infoText);
-  thisInfo++;
-
-  // Autoblend
-  if (initial || infoCache[thisInfo].cacheValue.b != autoBlend) {
-    if (initial) {
-      infoCount++;
-      infoCache = realloc(infoCache, infoCount * sizeof(infoCache_t));
-    } else {
-      SDL_DestroyTexture(infoCache[thisInfo].infoText.texture);
-    }
-    infoCache[thisInfo].cacheValue.b = autoBlend;
-    CreateTextureBoolean(&(infoCache[thisInfo].infoText), autoBlend, ROW_PA + 13, COL_PA + 1, PARAMETER_WIDTH);
-  }
-  DrawDisplayTexture(infoCache[thisInfo].infoText);
-  thisInfo++;
-
-  // Tensor broadcast
-  if (initial || infoCache[thisInfo].cacheValue.b != enableTensor) {
-    if (initial) {
-      infoCount++;
-      infoCache = realloc(infoCache, infoCount * sizeof(infoCache_t));
-    } else {
-      SDL_DestroyTexture(infoCache[thisInfo].infoText.texture);
-    }
-    infoCache[thisInfo].cacheValue.b = enableTensor;
-    CreateTextureBoolean(&(infoCache[thisInfo].infoText), enableTensor, ROW_A + 1, COL_A + 1, PARAMETER_WIDTH);
-  }
-  DrawDisplayTexture(infoCache[thisInfo].infoText);
-  thisInfo++;
-
-  // Alternate blend rate
-  if (initial || infoCache[thisInfo].cacheValue.f != alternateBlendRate) {
-    if (initial) {
-      infoCount++;
-      infoCache = realloc(infoCache, infoCount * sizeof(infoCache_t));
-    } else {
-      SDL_DestroyTexture(infoCache[thisInfo].infoText.texture);
-    }
-    infoCache[thisInfo].cacheValue.f = alternateBlendRate;
-    CreateTextureFloat(&(infoCache[thisInfo].infoText), alternateBlendRate, ROW_PA + 14, COL_PA + 1, PARAMETER_WIDTH, PARAMETER_WIDTH / 2);
-  }
-  DrawDisplayTexture(infoCache[thisInfo].infoText);
-  thisInfo++;
+  DrawAndCache(&cachePosition, ET_INT, &previewFPSA, FPS_ROW, 1, PARAMETER_WIDTH);
+  DrawAndCache(&cachePosition, ET_INT, &previewFPSB, FPS_ROW, 5, PARAMETER_WIDTH);
+  DrawAndCache(&cachePosition, ET_INT, &infoFPS, ROW_COUNT - 1, 5, PARAMETER_WIDTH);
+  DrawAndCache(&cachePosition, cyclePatternSets ? ET_INT : ET_BOOL,
+    cyclePatternSets ? (void *) &cycleFrameCount : (void *) &cyclePatternSets,
+    ROW_PA + 1, COL_PA + 1, PARAMETER_WIDTH);
+  DrawAndCache(&cachePosition, ET_INT, &alternateSet, ROW_PA + 9, COL_PA + 1, PARAMETER_WIDTH);
+  DrawAndCache(&cachePosition, ET_INT, &currentSet, ROW_PA + 8, COL_PA + 1, PARAMETER_WIDTH);
+  DrawAndCache(&cachePosition, ET_INT, &displaySet, ROW_PA + 10, COL_PA + 1, PARAMETER_WIDTH);
+  DrawAndCache(&cachePosition, ET_FLOAT, &alternateBlend, ROW_PA + 12, COL_PA + 1, PARAMETER_WIDTH);
+  DrawAndCache(&cachePosition, ET_BOOL, &autoBlend, ROW_PA + 13, COL_PA + 1, PARAMETER_WIDTH);
+  DrawAndCache(&cachePosition, ET_BOOL, &enableTensor, ROW_A + 1, COL_A + 1, PARAMETER_WIDTH);
+  DrawAndCache(&cachePosition, ET_FLOAT, &alternateBlendRate, ROW_PA + 14, COL_PA + 1, PARAMETER_WIDTH);
 
   // Show the status bar
-  if (initial || (strcmp(oldStatus, statusText) != 0)) {
-    if (initial) {
-      infoCount++;
-      infoCache = realloc(infoCache, infoCount * sizeof(infoCache_t));
-    } else {
-      SDL_DestroyTexture(infoCache[thisInfo].infoText.texture);
-    }
-    strncpy(oldStatus, statusText, sizeof(statusText));
-    snprintf(statusTemp, sizeof(statusTemp) - 1, "%-*.*s", STATUS_BAR_LENGTH, STATUS_BAR_LENGTH, statusText);
-    CreateTextureLine(&(infoCache[thisInfo].infoText), statusTemp, ROW_COUNT - 1, 1, cBlack, cRed);
-  }
-  DrawDisplayTexture(infoCache[thisInfo].infoText);
-  thisInfo++;
-
-  // Show the buffer character count.
-  length = strlen(SSTRING(set, PE_TEXTBUFFER));
-  if (initial || infoCache[thisInfo].cacheValue.i != length) {
-    if (initial) {
-      infoCount++;
-      infoCache = realloc(infoCache, infoCount * sizeof(infoCache_t));
-    } else {
-      SDL_DestroyTexture(infoCache[thisInfo].infoText.texture);
-    }
-    infoCache[thisInfo].cacheValue.i = length;
-    CreateTextureInt(&(infoCache[thisInfo].infoText), length, ROW_COUNT - 3, 1, PARAMETER_WIDTH);
-  }
-  DrawDisplayTexture(infoCache[thisInfo].infoText);
-  thisInfo++;
+  snprintf(statusTemp, sizeof(statusTemp) - 1, "%-*.*s", STATUS_BAR_LENGTH, STATUS_BAR_LENGTH, statusText);
+  DrawAndCacheString(&sCacheP, statusTemp, ROW_COUNT - 1, 1, cBlack, cRed);
 
   // Show the last 100 bytes of the text buffer.
-  if (initial || (strcmp(oldBuffer, SSTRING(set, PE_TEXTBUFFER)) != 0)) {
-    if (initial) {
-      infoCount++;
-      infoCache = realloc(infoCache, infoCount * sizeof(infoCache_t));
-    } else {
-      SDL_DestroyTexture(infoCache[thisInfo].infoText.texture);
-    }
-    if (oldBufferSize < length) {
-      oldBuffer = realloc(oldBuffer, length + 1);
-      oldBufferSize = length;
-    }
-    strncpy(oldBuffer, SSTRING(set, PE_TEXTBUFFER), length + 1);
-    strncpy(bufferTemp1, SSTRING(set, PE_TEXTBUFFER) + (length > BUFFER_BAR_LENGTH ? length - BUFFER_BAR_LENGTH : 0), BUFFER_BAR_LENGTH + 1);
-    snprintf(bufferTemp2, sizeof(bufferTemp2), " %-*s", BUFFER_BAR_LENGTH + 3, bufferTemp1);
-    CreateTextureLine(&(infoCache[thisInfo].infoText), bufferTemp2, ROW_COUNT - 2, 0, DISPLAY_COLOR_TBUF, DISPLAY_COLOR_TBUFBG);
-  }
-  DrawDisplayTexture(infoCache[thisInfo].infoText);
-  thisInfo++;
+  length = strlen(SSTRING(set, PE_TEXTBUFFER));
+  DrawAndCache(&cachePosition, ET_INT, &length, ROW_COUNT - 3, 1, PARAMETER_WIDTH);
+  strncpy(bufferTemp1, SSTRING(set, PE_TEXTBUFFER) + (length > BUFFER_BAR_LENGTH ? length - BUFFER_BAR_LENGTH : 0), BUFFER_BAR_LENGTH + 1);
+  snprintf(bufferTemp2, sizeof(bufferTemp2), " %-*s", BUFFER_BAR_LENGTH + 3, bufferTemp1);
+  DrawAndCacheString(&sCacheP, bufferTemp2, ROW_COUNT - 2, 0, DISPLAY_COLOR_TBUF, DISPLAY_COLOR_TBUFBG);
 
-  // Show the color selectors
+  // Show the color selectors swatches.
   for (i = 0; i < displayCommandCount; i++) {
     if (displayCommand[i].colorSource != A_INVALID) {
       color = fgOutput[displayCommand[i].colorSource][set];

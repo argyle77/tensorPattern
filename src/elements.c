@@ -635,106 +635,61 @@ const int otherCommandsCount = sizeof(otherCommands) / sizeof(command_t);
 // patternData holds the pattern set data, to be allocated after startup.
 void *patternData[PATTERN_ELEMENT_COUNT];
 
+// Verify item sizes
+void CheckCount(bool_t *rc, int a, int b, const char *at, const char *bt) {
+  if (a != b) {
+    fprintf(stderr, "Programmer error: Mismatched %s(%i) != %s(%i)!\n", at, a, bt, b);
+    *rc = NO;
+  }
+}
+
+// Print and set an error.
+// a = array index, b = stored enum, at = array name, bt = enum name,
+// aName = optional array element name.
+void Errps(bool_t *rc, int a, int b, const char * at, const char *bt, const char *aName) {
+  if (a != b) {
+    fprintf(stderr, "Programmer error: %s does not match %s array!\n", bt, at);
+    if (!aName) {
+      fprintf(stderr, "Element %i, has incorrect enumeration value %i!\n", a, b);
+    } else {
+      fprintf(stderr, "Element %i, \"%s\" has incorrect enumeration value %i!\n", a, aName, b);
+    }
+    *rc = NO;
+  }
+}
+
 // Check to make sure that some of the program's data sets are built correctly.
 // This is done to ensure that certain arrays can be accessed via enumeration
 // values rather than indicies (i.e. enumerations must match indecies).  It
-// catches some easy programmer errors.
+// catches some programming errors that can result in seg faults.
 bool_t VerifyStructuralIntegrity(void) {
   int i;
   bool_t rc = YES;
 
-  // patternElement_e and patternElements array.
-  for (i = 0; i < patternElementCount; i++) {
-    if (i != patternElements[i].index) {
-      fprintf(stderr, "Programmer error: patternElement_e does not match patternElements array!\n");
-      fprintf(stderr, "Element %i, \"%s\" has incorrect enumeration value %i!\n", i, patternElements[i].name, patternElements[i].index);
-      rc = NO;
-    }
-  }
-  if (patternElementCount != PE_COUNT) {
-    fprintf(stderr, "Programmer error: Mismatched patternElements(%i) != patternElement_e(%i)!\n", patternElementCount, PE_COUNT);
-    rc = NO;
-  }
+  for (i = 0; i < patternElementCount; i++)
+    Errps(&rc, i, patternElements[i].index, "patternElements", "patternElement_e", patternElements[i].name);
+  for (i = 0; i < namedColorsCount; i++)
+    Errps(&rc, i, namedColors[i].index, "namedColors", "color_e", NULL);
+  for (i = 0; i < seedPaletteCount; i++)
+    Errps(&rc, i, seedPalette[i].seed, "seedPalette", "alterPalettes_e", NULL);
+  for (i = 0; i < enumerationsCount; i++)
+    Errps(&rc, i, enumerations[i].type, "enumerations", "enums_e", NULL);
 
-  // color_e and namedColors array.
-  for (i = 0; i < namedColorsCount; i++) {
-    if (i != namedColors[i].index) {
-      fprintf(stderr, "Programmer error: color_e does not match namedColors array!\n");
-      fprintf(stderr, "Element %i, has incorrect enumeration value %i!\n", i, namedColors[i].index);
-      rc = NO;
-    }
-  }
-  if (CE_COUNT != namedColorsCount) {
-    fprintf(stderr, "Programmer error: Mismatched namedColors(%i) != color_e(%i)!\n", namedColorsCount, CE_COUNT);
-    rc = NO;
-  }
-  //~ if (CE_COUNT != colorsTextSize) {
-    //~ fprintf(stderr, "Programmer error: Mismatched color_e(%i) != colorText(%i)!\n", CE_COUNT, colorsTextSize);
-    //~ rc = NO;
-  //~ }
+  CheckCount(&rc, PE_COUNT, patternElementCount, "patternElement_e", "patternElements");
+  CheckCount(&rc, CE_COUNT, namedColorsCount, "color_e", "namedColors");
+  // CheckCount(&rc, CE_COUNT, colorTextSize, "color_e", "colorText");
+  CheckCount(&rc, A_COUNT, seedPaletteCount, "alterPalettes_e", "seedPalette");
+  CheckCount(&rc, A_COUNT, alterTextCount, "alterPalettes_e", "alterText");
+  CheckCount(&rc, E_COUNT, enumerationsCount, "enums_e", "enumerations");
+  CheckCount(&rc, DIR_COUNT, dirTextCount, "dir_e", "dirText");
+  CheckCount(&rc, FM_COUNT, fadeModeTextCount, "fadeModes_e", "fadeModeText");
+  CheckCount(&rc, OS_COUNT, oneShotTextCount, "oneShots_e", "oneShotText");
+  CheckCount(&rc, SM_COUNT, shiftTextCount, "shiftModes_e", "shiftText");
+  CheckCount(&rc, TS_COUNT, textModeTextCount, "textMode_e", "textModeText");
+  CheckCount(&rc, CM_COUNT, colorCycleTextCount, "colorCycleModes_e", "colorCycleText");
+  CheckCount(&rc, CB_COUNT, crossBarTextCount, "crossBar_e", "crossbarText");
+  CheckCount(&rc, OO_COUNT, operateTextCount, "operateOn_e", "operateText");
 
-  for (i = 0; i < seedPaletteCount; i++) {
-    if (i != seedPalette[i].seed) {
-      fprintf(stderr, "Programmer error: alterPalettes_e does not match seedPalette array!\n");
-      fprintf(stderr, "Element %i has incorrect enumeration value %i\n", i, seedPalette[i].seed);
-      rc = NO;
-    }
-  }
-  if (A_COUNT != seedPaletteCount) {
-    fprintf(stderr, "Programmer error: Mismatched seedPalette(%i) != alterPalettes_e(%i)!\n", seedPaletteCount, A_COUNT);
-    rc = NO;
-  }
-
-  // enums_e and enumerations array.
-  for (i = 0; i < enumerationsCount; i++) {
-    if (i != enumerations[i].type) {
-      fprintf(stderr, "Programmer error: enums_e does not match enumerations array!\n");
-      fprintf(stderr, "Element %i, has incorrect enumeration value %i!\n", i, enumerations[i].type);
-      rc = NO;
-    }
-  }
-  if (E_COUNT != enumerationsCount) {
-    fprintf(stderr, "Programmer error: Mismatched enums_e(%i) != enumerations(%i)!\n", E_COUNT, enumerationsCount);
-    rc = NO;
-  }
-
-  // Texts - we can only do a count on these.
-  if (DIR_COUNT != dirTextCount) {
-    fprintf(stderr, "Programmer error: Mismatched dir_e(%i) != dirText(%i)!\n", DIR_COUNT, dirTextCount);
-    rc = NO;
-  }
-  if (FM_COUNT != fadeModeTextCount) {
-    fprintf(stderr, "Programmer error: Mismatched fadeModes_e(%i) != fadeModeText(%i)!\n", FM_COUNT, fadeModeTextCount);
-    rc = NO;
-  }
-  if (OS_COUNT != oneShotTextCount) {
-    fprintf(stderr, "Programmer error: Mismatched oneShots_e(%i) != oneShotText(%i)!\n", OS_COUNT, oneShotTextCount);
-    rc = NO;
-  }
-  if (SM_COUNT != shiftTextCount) {
-    fprintf(stderr, "Programmer error: Mismatched shiftModes_e(%i) != shiftText(%i)!\n", SM_COUNT, shiftTextCount);
-    rc = NO;
-  }
-  if (TS_COUNT != textModeTextCount) {
-    fprintf(stderr, "Programmer error: Mismatched textMode_e(%i) != textModeText(%i)!\n", TS_COUNT, textModeTextCount);
-    rc = NO;
-  }
-  if (CM_COUNT != colorCycleTextCount) {
-    fprintf(stderr, "Programmer error: Mismatched colorCycleModes_e(%i) != colorCycleText(%i)!\n", CM_COUNT, colorCycleTextCount);
-    rc = NO;
-  }
-  if (CB_COUNT != crossBarTextCount) {
-    fprintf(stderr, "Programmer error: Mismatched crossBar_e(%i) != crossbarText(%i)!\n", CB_COUNT, crossBarTextCount);
-    rc = NO;
-  }
-  if (OO_COUNT != operateTextCount) {
-    fprintf(stderr, "Programmer error: Mismatched operateOn_e(%i) != operateText(%i)!\n", OO_COUNT, operateTextCount);
-    rc = NO;
-  }
-  if (A_COUNT != alterTextCount) {
-    fprintf(stderr, "Programmer error: Mismatched alterPalettes_e(%i) != alterText(%i)!\n", A_COUNT, alterTextCount);
-    rc = NO;
-  }
   return rc;
 }
 
