@@ -469,12 +469,12 @@ const command_t displayCommand[] = {
   {ROW_C + 3, COL_C, "FG Color B",       PE_FGCOLORB,     {}, A_INVALID},
   {ROW_C + 4, COL_C, "FG Cycle mode",    PE_FGCYCLE,      {{}, {0, 0, COM_ENUM_RST}, {0, 0, COM_ENUM_INC}, {0, 0, COM_ENUM_DEC}}, A_INVALID},
   {ROW_C + 5, COL_C, "FG Cycle rate",    PE_FGCYCLERATE,  {{}, {0, 0, COM_INT_RST}, {0, 0, COM_INT_INC}, {0, 0, COM_INT_DEC}}, A_INVALID},
-  {ROW_C + 6, COL_C, "FG Alpha",         PE_FGALPHA,      {{}, {0, 0, COM_RST_FLOAT}, {0, 0, COM_INC_FLOAT}, {0, 0, COM_DEC_FLOAT}}, A_INVALID},
+  {ROW_C + 6, COL_C, "FG Opacity",       PE_FGALPHA,      {{}, {0, 0, COM_RST_FLOAT}, {0, 0, COM_INC_FLOAT}, {0, 0, COM_DEC_FLOAT}}, A_INVALID},
   {ROW_C + 7, COL_C, "BG Color A",       PE_BGCOLORA,     {}, A_INVALID},
   {ROW_C + 8, COL_C, "BG Color B",       PE_BGCOLORB,     {}, A_INVALID},
   {ROW_C + 9, COL_C, "BG Cycle mode",    PE_BGCYCLE,      {{}, {0, 0, COM_ENUM_RST}, {0, 0, COM_ENUM_INC}, {0, 0, COM_ENUM_DEC}}, A_INVALID},
   {ROW_C + 10, COL_C, "BG Cycle rate",   PE_BGCYCLERATE,  {{}, {0, 0, COM_INT_RST}, {0, 0, COM_INT_INC}, {0, 0, COM_INT_DEC}}, A_INVALID},
-  {ROW_C + 11, COL_C, "BG Alpha",        PE_BGALPHA,      {{}, {0, 0, COM_RST_FLOAT}, {0, 0, COM_INC_FLOAT}, {0, 0, COM_DEC_FLOAT}}, A_INVALID},
+  {ROW_C + 11, COL_C, "BG Opacity",      PE_BGALPHA,      {{}, {0, 0, COM_RST_FLOAT}, {0, 0, COM_INC_FLOAT}, {0, 0, COM_DEC_FLOAT}}, A_INVALID},
 
   // Plane suppression
   {ROW_P + 1, COL_P, "Supress red",     PE_NORED,    {{}, {0, 0, COM_ENUM_RST}, {KMOD_CTRL, SDLK_m, COM_ENUM_INC}, {0, 0, COM_ENUM_DEC}}, A_INVALID},
@@ -494,7 +494,7 @@ const command_t displayCommand[] = {
   {ROW_S + 10, COL_S, "Yellow plane",  PE_SHIFTYELLOW,  {{}, {0, 0, COM_ENUM_RST}, {KMOD_CTRL | KMOD_ALT, SDLK_RIGHTBRACKET, COM_ENUM_INC}, {0, 0, COM_ENUM_DEC}}, A_INVALID},
   {ROW_S + 11, COL_S, "Magenta plane", PE_SHIFTMAGENTA, {{}, {0, 0, COM_ENUM_RST}, {KMOD_CTRL | KMOD_ALT, SDLK_BACKSLASH, COM_ENUM_INC}, {0, 0, COM_ENUM_DEC}}, A_INVALID},
   {ROW_S + 12, COL_S, "Toroidal",      PE_ROLLOVER, {{KMOD_CTRL, SDLK_y, COM_BOOL_FLIP}, {0, 0, COM_BOOL_RST}}, A_INVALID},
-  {ROW_S + 13, COL_S, "Scroll alpha", PE_SCROLLALPHA, {{}, {0, 0, COM_RST_FLOAT}, {0, 0, COM_INC_FLOAT}, {0, 0, COM_DEC_FLOAT}}, A_INVALID},
+  {ROW_S + 13, COL_S, "Scroll opacity", PE_SCROLLALPHA, {{}, {0, 0, COM_RST_FLOAT}, {0, 0, COM_INC_FLOAT}, {0, 0, COM_DEC_FLOAT}}, A_INVALID},
 
   // Mirrors
   {ROW_MIR + 1, COL_MIR, "Vertical Mirror",   PE_MIRROR_V, {{}, {0, 0, COM_ENUM_RST}, {0, 0, COM_ENUM_INC}, {0, 0, COM_ENUM_DEC}}, A_INVALID},
@@ -522,7 +522,7 @@ const command_t displayCommand[] = {
   {ROW_I + 5, COL_I, "Center x",      PE_IMAGEXOFFSET, {{}, {0, 0, COM_RST_FLOAT}, {0, 0, COM_INC_FLOAT}, {0, 0, COM_DEC_FLOAT}}, A_INVALID},
   {ROW_I + 6, COL_I, "Center y",      PE_IMAGEYOFFSET, {{}, {0, 0, COM_RST_FLOAT}, {0, 0, COM_INC_FLOAT}, {0, 0, COM_DEC_FLOAT}}, A_INVALID},
   {ROW_I + 7, COL_I, "Anti-alias",    PE_IMAGEALIAS,   {{}, {0, 0, COM_ENUM_RST},  {0, 0, COM_ENUM_INC},  {0, 0, COM_ENUM_DEC}}, A_INVALID},
-  {ROW_I + 8, COL_I, "Image alpha",   PE_IMAGEALPHA,   {{}, {0, 0, COM_RST_FLOAT}, {0, 0, COM_INC_FLOAT}, {0,0,COM_DEC_FLOAT}}, A_INVALID},
+  {ROW_I + 8, COL_I, "Image opacity",   PE_IMAGEALPHA,   {{}, {0, 0, COM_RST_FLOAT}, {0, 0, COM_INC_FLOAT}, {0,0,COM_DEC_FLOAT}}, A_INVALID},
 
   // Auxillary
   {ROW_A + 1, COL_A, "Tensor Broadcast",     PE_INVALID,   {{0, 0, COM_BROAD_FLIP}, {0, 0, COM_BROAD_RST}}, A_INVALID},
