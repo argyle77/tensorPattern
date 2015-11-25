@@ -924,7 +924,8 @@ void DrawPreviewBorder(int x, int y, int tw, int th, bool_t active) {
   } else {
     DrawBox(x + 1, y + 1, maxDim - 2, maxDim - 2, cBlack);
   }
-
+  printf("Preview box: %i, %i, %i, %i\n", x, y, maxDim, maxDim);
+  printf("Preview pixel size: %i\n", PREVIEW_PIXEL_SIZE);
   // Ajust x and y to center the preview.
   x = x + (maxDim - w) / 2;
   y = y + (maxDim - h) / 2;

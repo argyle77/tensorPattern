@@ -7,6 +7,7 @@
   #define DRAW_H_
 
   #include "useful.h"
+  #include "drv-tensor.h"
 
   //~ #define WINDOW_WIDTH 1024
   //~ #define WINDOW_HEIGHT 768
@@ -17,8 +18,9 @@
   #define CHAR_W 8
 
   // Preview window definitions
-  #define PREVIEW_PIXEL_SIZE 12
-  #define PREVIEW_BORDER 12
+  #define PREVIEW_PIXEL_SIZE (((WINDOW_WIDTH * 100) / 32) / (2 + TENSOR_WIDTH) / 10)
+  //#define PREVIEW_PIXEL_SIZE 12
+  #define PREVIEW_BORDER (PREVIEW_PIXEL_SIZE)
   #define PREVIEW_LIVE_POS_X 1
   #define PREVIEW_LIVE_POS_Y 1
   #define PREVIEW_ALT_POS_X (WINDOW_WIDTH - (TENSOR_WIDTH * PREVIEW_PIXEL_SIZE) - (PREVIEW_BORDER * 2) - 1)
