@@ -58,6 +58,7 @@ const color_t cDkGray = CD_DKGRAY;
 const color_t cBlack = CD_BLACK;
 const color_t cLtBlue = CD_LTBLUE;
 const color_t cDkYellow = CD_DKYELLOW;
+const color_t cHdkGreen = CD_HALFDK_GREEN;
 
 // Named color palettes
 const namedPalette_t paletteRGB = { (color_e[]) { CE_RED, CE_GREEN, CE_BLUE }, 3 };
@@ -80,6 +81,8 @@ SDL_Renderer *mwRenderer = NULL;
 // Think carefully before changing this.  Alot of math is done on it.
 const int colToPixel[] = {ACOL, BCOL, CCOL, DCOL, ECOL, FCOL, WINDOW_WIDTH, A2COL, A2COLEND, B2COL, B2COLEND, C2COL, C2COLEND, WINDOW_WIDTH};
 #define MAX_COL (sizeof(colToPixel) / sizeof(const int))
+
+void SetBox(SDL_Rect *box, int x, int y, int w, int h);
 
 // Initialization
 bool_t InitGui(void) {
@@ -901,13 +904,13 @@ bool_t IsInsideBox(point_t point, SDL_Rect box){
 // Draw the borders around the preview output.  We can switch between portrait
 // and landscape, so the preview space is a square box that would accomodate
 // either orientation.
-void DrawPreviewBorder(int x, int y, int tw, int th, bool_t active) {
+void DrawPreviewBorder(int x, int y, int tw, int th, highLight_e highLight) {
 
   // Vars
   int w, h;
   int maxDim;
   int i;
-  color_t highlight = {{0, 127, 0, 255}};
+  color_t color; //hl = {{0, 127, 0, 255}};
 
   // Get the outer border dimensions.
   w = (tw * PREVIEW_PIXEL_SIZE) + (PREVIEW_BORDER * 2);
@@ -919,13 +922,26 @@ void DrawPreviewBorder(int x, int y, int tw, int th, bool_t active) {
   // Erase the old preview.
   DrawBox(x, y, maxDim, maxDim, cBlack);
   DrawRectangle(x, y, maxDim, maxDim, cWhite);
-  if (active) {
-    DrawBox(x + 1, y + 1, maxDim - 2, maxDim - 2, highlight);
-  } else {
-    DrawBox(x + 1, y + 1, maxDim - 2, maxDim - 2, cBlack);
+  
+  //fprintf(stdout, "highlight: %i\n", highLight);
+  
+  switch (highLight) {
+    case HL_SELECTED:
+      color = cHdkGreen;
+      break;
+    case HL_HOVER:
+      color = cYellow;
+      break;
+    case HL_NO:
+    default:
+      color = cBlack;
+      break;
   }
-  printf("Preview box: %i, %i, %i, %i\n", x, y, maxDim, maxDim);
-  printf("Preview pixel size: %i\n", PREVIEW_PIXEL_SIZE);
+      
+  DrawBox(x + 1, y + 1, maxDim - 2, maxDim - 2, color);
+
+//  printf("Preview box: %i, %i, %i, %i\n", x, y, maxDim, maxDim);
+//  printf("Preview pixel size: %i\n", PREVIEW_PIXEL_SIZE);
   // Ajust x and y to center the preview.
   x = x + (maxDim - w) / 2;
   y = y + (maxDim - h) / 2;
@@ -951,11 +967,73 @@ void DrawPreviewBorder(int x, int y, int tw, int th, bool_t active) {
   }
 }
 
+// Check if the mouse coordinates fall within a preview border.
+overPreview_e OverPreviewBorder(int lx, int ly, int ax, int ay, int tw, int th, point_t mouse) {
+  // Vars
+  int w, h;
+  int maxDim;
+  SDL_Rect lbox, abox, sbox;
+
+  // Calculate width and height of the outer box.
+  w = (tw * PREVIEW_PIXEL_SIZE) + (PREVIEW_BORDER * 2);
+  h = (th * PREVIEW_PIXEL_SIZE) + (PREVIEW_BORDER * 2);
+  maxDim = max(w, h);
+  
+  // The outer boxes
+  SetBox(&lbox, lx, ly, maxDim, maxDim);
+  SetBox(&abox, ax, ay, maxDim, maxDim);
+
+  // Inner box is centered on the outer box, so adjust the starting points.
+  lx = lx + (maxDim - w) / 2;
+  ly = ly + (maxDim - h) / 2;
+  ax = ax + (maxDim - w) / 2;
+  ay = ay + (maxDim - h) / 2;
+
+  // Calculate the inner box size.
+  w = (tw * PREVIEW_PIXEL_SIZE) + (2 * PREVIEW_BORDER);
+  h = (th * PREVIEW_PIXEL_SIZE) + (2 * PREVIEW_BORDER);
+  
+  // If we are in the live outer box...
+  if (IsInsideBox(mouse, lbox)) {
+    
+    // Then the inner box is this:
+    SetBox(&sbox, lx, ly, w, h);
+    //DrawBox(sbox.x, sbox.y, sbox.w, sbox.h, cRed);
+    
+    // If we are outside the inner box, we good.
+    if (!IsInsideBox(mouse, sbox)) {
+      return OP_LIVE;
+    }
+    
+  // Or if we are in the alternate outer box...
+  } else if (IsInsideBox(mouse, abox)) {
+    
+    // Then the inner box is this:
+    SetBox(&sbox, ax, ay, w, h);
+    //DrawBox(sbox.x, sbox.y, sbox.w, sbox.h, cBlue);
+    
+    // If we are outside the inner box, good.
+    if (!IsInsideBox(mouse, sbox)) {
+      return OP_ALT;
+    }  
+  }
+  
+  return OP_NO;
+}
+
+
 void DrawDisplayTexture(displayText_t dTexture) {
   SDL_RenderCopy(mwRenderer, dTexture.texture, NULL, &(dTexture.targetBox));
 }
 
 void DrawTexture(SDL_Texture *texture, SDL_Rect target) {
   SDL_RenderCopy(mwRenderer, texture, NULL, &(target));
+}
+
+void SetBox(SDL_Rect *box, int x, int y, int w, int h) {
+  box->x = x;
+  box->y = y;
+  box->w = w;
+  box->h = h;
 }
 

@@ -259,6 +259,24 @@
   typedef struct point_t {
     int x, y;
   } point_t;
+  
+  // Return codes for detecting if mouse is over a preview window
+  typedef enum overPreview_e {
+    OP_NO = -1,
+    OP_LIVE = 0,
+    OP_ALT,
+    OP_COUNT // Last
+  } overPreview_e;
+  
+  // 
+  typedef enum highLight_e {
+    HL_INVALID = -1,
+    HL_NO = 0,
+    HL_SELECTED,
+    HL_HOVER,
+    HL_COUNT // Last
+  } highLight_e;
+  
 
   // A video texture and its target location / size.
   typedef struct displayText_t {
@@ -307,9 +325,12 @@
 
   // Complex drawing functions and widgety things
   void DrawDisplayTexts(int selected);
-  void DrawPreviewBorder(int x, int y, int tw, int th, bool_t active);
+  void DrawPreviewBorder(int x, int y, int tw, int th, highLight_e highLight);
   void DrawConfirmationBox(SDL_Rect *yesBox, SDL_Rect *noBox, bool_t selected, char *label);
   void DrawTextEntryBox(int item, char * text);
   void DrawEnumSelectBox(int set, int item, int selected, SDL_Rect ** targets);
   void DrawColorSelectBox(int item, int selected, SDL_Rect ** targets);
+  
+  // 
+  overPreview_e OverPreviewBorder(int lx, int ly, int ax, int ay, int tw, int th, point_t mouse);
 #endif /* ifndef DRAW_H_ */

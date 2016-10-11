@@ -166,7 +166,7 @@ int main(int argc, char *argv[]) {
   SDL_Event event;
   int thisHover = INVALID;
   int lastHover = INVALID;
- SDL_Rect box2 = {0, 0, 0, 0}, boxOld2 = {0, 0, 0, 0};
+  SDL_Rect box2 = {0, 0, 0, 0}, boxOld2 = {0, 0, 0, 0};
   SDL_Rect boxYes, boxNo;
   point_t mouse, tpixel;
   int leftMouseDownOn = INVALID;
@@ -175,6 +175,7 @@ int main(int argc, char *argv[]) {
   bool_t rightMouseDown = NO;
   bool_t refreshAll = NO;
   bool_t refreshGui = NO;
+  bool_t refreshPreviewBorders = NO;
   bool_t confirmed = NO;
   bool_t drawNewFrameA = NO;
   bool_t drawNewFrameB = NO;
@@ -190,6 +191,10 @@ int main(int argc, char *argv[]) {
   patternElement_e element;
   command_e command;
   color_e wheelColorF = 0, wheelColorB = 0;
+  overPreview_e overBorder = OP_NO;
+  overPreview_e overBorderDown = OP_NO;
+  highLight_e liveHighlight = HL_SELECTED;
+  highLight_e altHighlight = HL_NO;
 
   // Unbuffer the console...
   setvbuf(stdout, (char *)NULL, _IONBF, 0);
@@ -200,8 +205,19 @@ int main(int argc, char *argv[]) {
     MAJOR_VERSION, MINOR_VERSION, PATCH_VERSION,
     strlen(PRERELEASE_VERSION) != 0 ? "." : "", PRERELEASE_VERSION);
 
-  // Commandline parameter for limiting the intensity.
+  // Process commandline parameters.
   if (argc == 2) {
+    
+    // Print the help file.
+    if ((strncmp(argv[1], "-h", 2) == 0) || (strncmp(argv[1], "--h", 3) == 0)) {
+      fprintf(stdout, "%s -h|--help   - Print this help file.\n", argv[0]);
+      fprintf(stdout, "%s             - Run the program normally at full output intensity.\n", argv[0]);
+      fprintf(stdout, "%s <intensity> - Run the program with a reduced output intensity.\n", argv[0]);
+      fprintf(stdout, "    Valid range for <intensity> is 0.0 - 1.0.\n");
+      exit(EXIT_SUCCESS);
+    }
+    
+    // Otherwise, we may have an intensity limiter.
     global_intensity_limit = atof(argv[1]);
     if (global_intensity_limit < 0.0 || global_intensity_limit > 1.0) {
       global_intensity_limit = 1.0;
@@ -244,8 +260,8 @@ int main(int argc, char *argv[]) {
   tensor_init(ipmap1, ipmap2, ipmap3);
 
   // Draw a border around the previews
-  DrawPreviewBorder(PREVIEW_LIVE_POS_X, PREVIEW_LIVE_POS_Y, tensorWidth, tensorHeight, YES);
-  DrawPreviewBorder(PREVIEW_ALT_POS_X, PREVIEW_ALT_POS_Y, tensorWidth, tensorHeight, NO);
+  //DrawPreviewBorder(PREVIEW_LIVE_POS_X, PREVIEW_LIVE_POS_Y, tensorWidth, tensorHeight, HL_SELECTED);
+  //DrawPreviewBorder(PREVIEW_ALT_POS_X, PREVIEW_ALT_POS_Y, tensorWidth, tensorHeight, HL_NO);
 
   // Further patterData initializations
   for (i = 0; i < PATTERN_SET_COUNT; i++) {
@@ -311,6 +327,9 @@ int main(int argc, char *argv[]) {
     // Act on queued events.
     while (SDL_PollEvent(&event)) {
 
+      // TODO: Can we process <ctrl>-click and drag events?
+      // TODO: Can we modularize the transformations menus so they can be
+      //       scrolled or paged through?
       // Carry out actions common to all input modes  COMMON ACTIONS
       switch(event.type) {
         case SDL_MOUSEBUTTONUP:
@@ -458,6 +477,38 @@ int main(int argc, char *argv[]) {
             case SDL_MOUSEMOTION:
               // Check if its hovering over a command.
               thisHover = OverCommand(mouse, &lastHover);
+              
+              // Note, we don't do preview drawing here because our pen has to
+              // be capable of drawing to every frame in the animation without
+              // a mouse event occurring.
+              
+              // Check if it is hovering over a preview boarder
+              overBorder = OverPreviewBorder(PREVIEW_LIVE_POS_X, PREVIEW_LIVE_POS_Y, 
+                                                PREVIEW_ALT_POS_X, PREVIEW_ALT_POS_Y,
+                                                tensorWidth, tensorHeight, mouse);
+                                                
+              switch(overBorder) {
+                case OP_ALT:
+                  if (altHighlight != HL_HOVER) {
+                    altHighlight = HL_HOVER;
+                    refreshPreviewBorders = YES;
+                  }
+                  break;
+                case OP_LIVE:
+                  if (liveHighlight != HL_HOVER) {
+                    liveHighlight = HL_HOVER;
+                    refreshPreviewBorders = YES;
+                  }
+                  break;
+                case OP_NO:
+                default:
+                  if ((liveHighlight == HL_HOVER) || (altHighlight == HL_HOVER)) {
+                    liveHighlight = altHighlight = HL_INVALID;
+                    refreshPreviewBorders = YES;
+                  }
+                  break;
+              }
+                                                
               break;  // End case SDL_MOUSEMOTION.
 
             case SDL_MOUSEWHEEL:
@@ -560,6 +611,17 @@ int main(int argc, char *argv[]) {
                   }
                 }
               } else if (event.button.button == SDL_BUTTON_LEFT) {
+                // First check if we are switching preview sets...
+                overBorder = OverPreviewBorder(PREVIEW_LIVE_POS_X, PREVIEW_LIVE_POS_Y,
+                                               PREVIEW_ALT_POS_X, PREVIEW_ALT_POS_Y,
+                                               tensorWidth, tensorHeight, mouse);
+                if ((overBorder != OP_NO) && (overBorder == overBorderDown)) {
+                  displaySet = (overBorder == OP_ALT ? OO_ALTERNATE : OO_CURRENT);
+                  //fprintf(stdout, "Switch preview to %i\n", overBorder);
+                  // TODO: If displaySet changes, maybe we write to the status line.
+                }
+                
+
                 if ((thisHover != INVALID) && (thisHover == leftMouseDownOn)) {
                   // First check if we clicked on a color selector.
                   if (HandleColorSelection(mouse, thisHover, NO, displaySet ? alternateSet : currentSet)) {
@@ -602,6 +664,12 @@ int main(int argc, char *argv[]) {
               } // End mouse button if
               break;  // End SDL_MOUSEBUTTONUP case.
 
+            case SDL_MOUSEBUTTONDOWN:
+              overBorderDown = OverPreviewBorder(PREVIEW_LIVE_POS_X, PREVIEW_LIVE_POS_Y,
+                                                    PREVIEW_ALT_POS_X, PREVIEW_ALT_POS_Y, 
+                                                    tensorWidth, tensorHeight, mouse);
+              break;  // End SDL_MOUSEBUTTONDOWN case.
+              
             default:
               break;
           } // End normal mode events processing switch
@@ -880,12 +948,11 @@ int main(int argc, char *argv[]) {
       refreshAll = NO;
       DrawClearWindow();
       DrawDisplayTexts(thisHover);
-      DrawPreviewBorder(PREVIEW_LIVE_POS_X, PREVIEW_LIVE_POS_Y, tensorWidth, tensorHeight, displaySet == OO_CURRENT);
-      DrawPreviewBorder(PREVIEW_ALT_POS_X, PREVIEW_ALT_POS_Y, tensorWidth, tensorHeight, displaySet == OO_ALTERNATE);
       UpdateInfoDisplay(displaySet ? alternateSet : currentSet);
       UpdateDisplays(currentSet, YES, NO, global_intensity_limit);
       UpdateDisplays(alternateSet, NO, NO, global_intensity_limit);
       refreshGui = YES;
+      refreshPreviewBorders = YES;
     }
 
     // Check for info display refresh.
@@ -893,14 +960,30 @@ int main(int argc, char *argv[]) {
       refreshGui = NO;
       UpdateGUI();
     }
+    
+    // Check for preview border refresh
+    if (refreshPreviewBorders) {
+      refreshPreviewBorders = NO;
+      if (liveHighlight != HL_HOVER) {
+        liveHighlight = (displaySet == OO_CURRENT ? HL_SELECTED : HL_NO);
+      }
+      if (altHighlight != HL_HOVER) {
+        altHighlight = (displaySet == OO_ALTERNATE ? HL_SELECTED : HL_NO);
+      }
+      DrawPreviewBorder(PREVIEW_LIVE_POS_X, PREVIEW_LIVE_POS_Y, tensorWidth, tensorHeight, liveHighlight);
+      DrawPreviewBorder(PREVIEW_ALT_POS_X, PREVIEW_ALT_POS_Y, tensorWidth, tensorHeight, altHighlight);
+    }      
 
     if (exitProgram) break;
 
   } // End FOREVER program loop
 
-  // Backup the pattern sets in case we didnt mean to do this.
+  // Save the pattern sets to make them persistent across restarts.
   for (i = 0; i < PATTERN_SET_COUNT; i++) {
-    SavePatternSet('0' + i, i, YES, "closebak");
+    // Note, we used to save them as backups, but saving them directly makes
+    // them persistent (since they're auto-loaded at startup).
+    // SavePatternSet('0' + i, i, YES, "closebak");
+    SavePatternSet('0' + i, i, YES, "");
   }
 
   // Clean up and exit.
@@ -992,6 +1075,8 @@ void DrawNewFrame(int set, bool_t isPrimary) {
 }
 
 // Time to make a mess of the array.
+// TODO: Time to take these transformations / seeds out of this fixed order
+// and make them into sets of arbitrary length and order of transformations
 void ProcessModes(int set) {
   int currentSet = set; // Overrides global used in D* macros.
   int i;
@@ -1802,8 +1887,8 @@ bool_t HandleCommand(int set, command_e command, int selection) {
     case COM_ORIENTATION:
       tensor_landscape_p = !tensor_landscape_p;
       SetDims();
-      DrawPreviewBorder(PREVIEW_LIVE_POS_X, PREVIEW_LIVE_POS_Y,  tensorWidth, tensorHeight,displaySet == OO_CURRENT);
-      DrawPreviewBorder(PREVIEW_ALT_POS_X, PREVIEW_ALT_POS_Y, tensorWidth, tensorHeight, displaySet == OO_ALTERNATE);
+      DrawPreviewBorder(PREVIEW_LIVE_POS_X, PREVIEW_LIVE_POS_Y,  tensorWidth, tensorHeight, (displaySet == OO_CURRENT ? HL_SELECTED : HL_NO));
+      DrawPreviewBorder(PREVIEW_ALT_POS_X, PREVIEW_ALT_POS_Y, tensorWidth, tensorHeight, (displaySet == OO_ALTERNATE ? HL_SELECTED : HL_NO));
       break;
     case COM_LOADSET0: SwitchToSet(0); break;
     case COM_LOADSET1: SwitchToSet(1); break;
