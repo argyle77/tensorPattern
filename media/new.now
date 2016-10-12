@@ -1,0 +1,14 @@
+# Tensor transformation set file
+# In general, the format is:
+# <functionName> <version> <parameters...>
+# Functions are executed in the order they're found here.
+# Transformation sets are loaded and saved automatically as they are
+# altered in the program.  Where possible, functions are automatically
+# updated so that a new call mimics old behavior. 
+# Comments are ignored.
+Nonsense is ignored.
+
+Fader 0 everyFrame -5 modular
+Suppress 0 oneShotDelay 0 red
+Suppress 0 everyFrame blue
+Multiply 0 everyNframes 3 1.01

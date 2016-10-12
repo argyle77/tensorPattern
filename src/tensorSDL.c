@@ -1,5 +1,5 @@
-// Tensor Pattern
-// For Kevin (FB) McCormick (w/o you, there may be nothing) <3
+// Tensor pattern generator.
+// For Kevin "FrostByte" McCormick (w/o you, there may be nothing) <3
 // Blau
 // tensor@core9.org
 
@@ -26,6 +26,9 @@
 #define PATTERN_SET_COUNT 10
 #define GUIFRAMEDELAY 25
 #define IP_STRING_SIZE 16
+#define GLOBAL_INTENSITY_LIMIT_DEFAULT 1.0
+#define GLOBAL_INTENSITY_LIMIT_MAX 1.0
+#define GLOBAL_INTENSITY_LIMIT_MIN 0.0
 
 // Color plane flags - I'm unsatified with the way the cym color planes worked
 // out.  I should be using a different color space or something.
@@ -65,10 +68,11 @@ operateOn_e displaySet = OO_CURRENT;
 float global_intensity_limit = 1.0;
 int previewFrameCountA = 0, previewFPSA = 0;
 int previewFrameCountB = 0, previewFPSB = 0;
+int updateFrameCount = 0, updateFPS = 0;
 int infoFrameCount = 0, infoFPS = 0;
 float alternateBlend = 0, alternateBlendRate = 0.01;
 bool_t autoBlend = NO;
-Uint32 FPSEventType, DRAWEventTypeA, DRAWEventTypeB, GUIEventType, CONFIRMEventType;
+Uint32 FPSEventType, DRAWEventTypeA, DRAWEventTypeB, GUIEventType, CONFIRMEventType, UPDATEEventType;
 char statusText[100] = "";  // For confirming actions.
 char keySave;
 int setSave;
@@ -80,12 +84,17 @@ const char **ipmap2;
 const char **ipmap3;
 color_t fgOutput[A_COUNT][PATTERN_SET_COUNT];
 color_t bgOutput[A_COUNT][PATTERN_SET_COUNT];
+unsigned char fbLiveBcast[TENSOR_BYTES];
+unsigned char fbAltBcast[TENSOR_BYTES];
+unsigned char fbAltBlend[TENSOR_BYTES];
 
 // Prototypes
 void DrawNewFrame(int set, unsigned char primary);
 void ProcessModes(int set);
+void PostProcessModes(int set, bool_t isPrimary);
 Uint32 TriggerFrameDrawA(Uint32 interval, void *param);
 Uint32 TriggerFrameDrawB(Uint32 interval, void *param);
+Uint32 TriggerFrameUpdate(Uint32 interval, void *param);
 Uint32 TriggerFrameCount(Uint32 interval, void *param);
 Uint32 TriggerGUIUpdate(Uint32 interval, void *param);
 void SetPixelByPlaneA(int x, int y, color_t color, unsigned char plane, unsigned char *buffer);
@@ -106,7 +115,7 @@ void RandomDots(color_t color, unsigned int rFreq, unsigned char *buffer);
 color_t ColorCycle(colorCycleModes_e cycleMode, int *cycleSaver, int cycleInc, color_t a, color_t b);
 void ColorAll(color_t color, unsigned char *fb);
 void SetDims(void);
-void UpdateDisplays(int set, bool_t isPrimary, bool_t sendToTensor, float intensity_limit);
+void UpdateDisplay(bool_t isPrimary, bool_t sendToTensor, float intensity_limit);
 void UpdateTensor(unsigned char *buffer);
 void UpdatePreview(int xOffset, int yOffset, unsigned char *buffer);
 SDL_Surface * FBToSurface(SDL_Surface *surface, unsigned char *FB);
@@ -127,6 +136,7 @@ bool_t HandleEnumSelect(SDL_Keycode key, int set, int item, int *selected);
 void CopyPatternSet(int dst, int src);
 void CopyBuffer(int dst, int set);
 void SwitchToSet(int set);
+
 
 void BlendAlternate(unsigned char *fba, unsigned char *fbb);
 void CenterText(SDL_Rect box, char * text, color_t fg, color_t bg);
@@ -168,7 +178,7 @@ int main(int argc, char *argv[]) {
   int lastHover = INVALID;
   SDL_Rect box2 = {0, 0, 0, 0}, boxOld2 = {0, 0, 0, 0};
   SDL_Rect boxYes, boxNo;
-  point_t mouse, tpixel;
+  point_t mouse;
   int leftMouseDownOn = INVALID;
   bool_t leftMouseDown = NO;
   int rightMouseDownOn = INVALID;
@@ -179,6 +189,7 @@ int main(int argc, char *argv[]) {
   bool_t confirmed = NO;
   bool_t drawNewFrameA = NO;
   bool_t drawNewFrameB = NO;
+  bool_t updateEvent = NO;
   bool_t exitProgram = NO;
   inputMode_e inputMode = IM_NORMAL;
   inputMode_e oldInputMode = IM_INVALID;
@@ -210,10 +221,11 @@ int main(int argc, char *argv[]) {
     
     // Print the help file.
     if ((strncmp(argv[1], "-h", 2) == 0) || (strncmp(argv[1], "--h", 3) == 0)) {
-      fprintf(stdout, "%s -h|--help   - Print this help file.\n", argv[0]);
-      fprintf(stdout, "%s             - Run the program normally at full output intensity.\n", argv[0]);
-      fprintf(stdout, "%s <intensity> - Run the program with a reduced output intensity.\n", argv[0]);
-      fprintf(stdout, "    Valid range for <intensity> is 0.0 - 1.0.\n");
+      fprintf(stdout, "%s -h|--help     - Print this help file.\n", argv[0]);
+      fprintf(stdout, "%s [<intensity>] - Run the pattern generator at the optional output\n", argv[0]);
+      fprintf(stdout, "  intensity specified by <intensity>.  Valid values for <intensity> range from\n");
+      fprintf(stdout, "  %3.1f to %3.1f.  Default is %3.1f.\n", 
+        GLOBAL_INTENSITY_LIMIT_MIN, GLOBAL_INTENSITY_LIMIT_MAX, GLOBAL_INTENSITY_LIMIT_DEFAULT);
       exit(EXIT_SUCCESS);
     }
     
@@ -282,7 +294,7 @@ int main(int argc, char *argv[]) {
   cycleFrameCount = DINT(PE_FRAMECOUNT);
 
   // Bam - Show the (blank) preview.
-  UpdateDisplays(currentSet, YES, YES, global_intensity_limit);
+  UpdateDisplay(YES, YES, global_intensity_limit);
 
   // Add the text to the window
   DrawDisplayTexts(INVALID);
@@ -293,6 +305,7 @@ int main(int argc, char *argv[]) {
   DRAWEventTypeB = SDL_RegisterEvents(1);
   GUIEventType = SDL_RegisterEvents(1);
   CONFIRMEventType = SDL_RegisterEvents(1);
+  UPDATEEventType = SDL_RegisterEvents(1);
 
   // Init the live preview timer.
   if (!SDL_AddTimer(DINT(PE_DELAY), TriggerFrameDrawA, NULL)) {
@@ -303,6 +316,12 @@ int main(int argc, char *argv[]) {
   // Init the alternate preview timer.
   if (!SDL_AddTimer(SINT(alternateSet, PE_DELAY), TriggerFrameDrawB, NULL)) {
     fprintf(stderr, "Can't initialize the alternate preview timer! %s\n", SDL_GetError());
+    exit(EXIT_FAILURE);
+  }
+  
+  // Init the update timer.
+  if (!SDL_AddTimer(60, TriggerFrameUpdate, NULL)) {
+    fprintf(stderr, "Can't initialize the frame update timer! %s\n", SDL_GetError());
     exit(EXIT_FAILURE);
   }
 
@@ -323,6 +342,8 @@ int main(int argc, char *argv[]) {
 
   // Main program loop...
   FOREVER {
+    
+    bool_t okayToSleep = YES;
 
     // Act on queued events.
     while (SDL_PollEvent(&event)) {
@@ -378,15 +399,21 @@ int main(int argc, char *argv[]) {
           } else if (event.type == DRAWEventTypeB) {
             // The alternate frame timer expired.  Set a new frame to draw.
             drawNewFrameB = YES;
+            
+          } else if (event.type == UPDATEEventType) {
+            updateEvent = YES;
 
           } else if (event.type == FPSEventType) {
             // The fps timer expired.  Set fps and reset the frame count.
             previewFPSA = previewFrameCountA;
             previewFPSB = previewFrameCountB;
+            updateFPS = updateFrameCount;
             infoFPS = infoFrameCount;
             infoFrameCount = 0;
             previewFrameCountA = 0;
             previewFrameCountB = 0;
+            updateFrameCount = 0;
+            // fprintf(stdout, "Live: %i, Alt: %i, Update: %i, Gui: %i\n", previewFPSA, previewFPSB, updateFPS, infoFPS);          
 
           } else if (event.type == GUIEventType) {
             // Update the informational display.
@@ -859,39 +886,9 @@ int main(int argc, char *argv[]) {
       } // End input mode specific switch
     } // End event polling while loop.
 
-    // Draw a new frame if the timer expired for the live set.
-    if (drawNewFrameA) {
-      drawNewFrameA = NO;
-      previewFrameCountA++;
-      DrawNewFrame(currentSet, YES);
-
-      // Deal with the pattern set cycle timer
-      if (cyclePatternSets) {
-        cycleFrameCount--;
-        if (cycleFrameCount < 0) {
-          currentSet = (currentSet + 1) % PATTERN_SET_COUNT;
-          cycleFrameCount = DINT(PE_FRAMECOUNT);
-        }
-        if (cycleFrameCount > DINT(PE_FRAMECOUNT)) {
-          cycleFrameCount = DINT(PE_FRAMECOUNT);
-        }
-      }
-
-    // Draw a new frame if the timer expired for the preview set.
-    } else if (drawNewFrameB) {
-      drawNewFrameB = NO;
-      previewFrameCountB++;
-      DrawNewFrame(alternateSet, NO);
-
-    } else {
-      // Large frame delays make the CPU spin because we get stuck in a tight
-      // event polling loop looking for events that never occur.  Best to get
-      // out of the way... Idle the processor for 1 ms.
-      nanosleep((struct timespec[]) {{0,1000000}}, NULL);
-    }
-
     // Are we trying to draw on the previews with the mouse?  We do this here
-    // because we want to continue to draw whether or not there are mouse events.
+    // because we want to draw whether or not there were mouse events.
+    point_t tpixel;
     if (IsInsideBox(mouse, liveBox)) {
       // Mouse hovering over the live preview.  Which display pixel?
       tpixel = GetDisplayPixel(mouse, liveBox);
@@ -932,6 +929,48 @@ int main(int argc, char *argv[]) {
         SetPixelA(tpixel.x, tpixel.y, bgOutput[A_LIGHTPEN][alternateSet], SBUFFER(alternateSet, PE_FRAMEBUFFER));
       }
     }
+    
+    // Draw a new frame if the timer expired for the live set.
+    if (drawNewFrameA) {
+      drawNewFrameA = NO;
+      previewFrameCountA++;
+      DrawNewFrame(currentSet, YES);
+      
+      // This is for if the broadcast clock is to match the frame clock.
+      UpdateDisplay(YES, YES, global_intensity_limit);
+      refreshGui = YES;      
+
+      // Deal with the pattern set cycle timer
+      if (cyclePatternSets) {
+        cycleFrameCount--;
+        if (cycleFrameCount < 0) {
+          currentSet = (currentSet + 1) % PATTERN_SET_COUNT;
+          cycleFrameCount = DINT(PE_FRAMECOUNT);
+        }
+        if (cycleFrameCount > DINT(PE_FRAMECOUNT)) {
+          cycleFrameCount = DINT(PE_FRAMECOUNT);
+        }
+      }    
+    }
+    
+    // Draw a new frame if the timer expired for the preview set.
+    if (drawNewFrameB) {
+      drawNewFrameB = NO;
+      previewFrameCountB++;
+      DrawNewFrame(alternateSet, NO);
+      
+      // If broadcast clock matches frame clock.
+      UpdateDisplay(NO, NO, global_intensity_limit);
+      refreshGui = YES;
+    }    
+    
+    if (updateEvent) {
+      updateEvent = NO;
+      updateFrameCount++;
+      //UpdateDisplay(YES, YES, global_intensity_limit);
+      //UpdateDisplay(NO, NO, global_intensity_limit);
+      //refreshGui = YES;      
+    }
 
     // If the input mode changed, we need to refresh the display
     if (inputMode != oldInputMode) {
@@ -949,18 +988,12 @@ int main(int argc, char *argv[]) {
       DrawClearWindow();
       DrawDisplayTexts(thisHover);
       UpdateInfoDisplay(displaySet ? alternateSet : currentSet);
-      UpdateDisplays(currentSet, YES, NO, global_intensity_limit);
-      UpdateDisplays(alternateSet, NO, NO, global_intensity_limit);
-      refreshGui = YES;
+      UpdateDisplay(YES, NO, global_intensity_limit);
+      UpdateDisplay(NO, NO, global_intensity_limit);
       refreshPreviewBorders = YES;
+      refreshGui = YES;
     }
 
-    // Check for info display refresh.
-    if (refreshGui) {
-      refreshGui = NO;
-      UpdateGUI();
-    }
-    
     // Check for preview border refresh
     if (refreshPreviewBorders) {
       refreshPreviewBorders = NO;
@@ -972,8 +1005,23 @@ int main(int argc, char *argv[]) {
       }
       DrawPreviewBorder(PREVIEW_LIVE_POS_X, PREVIEW_LIVE_POS_Y, tensorWidth, tensorHeight, liveHighlight);
       DrawPreviewBorder(PREVIEW_ALT_POS_X, PREVIEW_ALT_POS_Y, tensorWidth, tensorHeight, altHighlight);
+      refreshGui = YES;
     }      
-
+    
+    // Check for info display refresh.
+    if (refreshGui) {
+      refreshGui = NO;
+      okayToSleep = NO;
+      UpdateGUI();
+    }
+    
+    // Sleep the processor if we've done little.  The CPU can spin if we get 
+    // stuck in a tight loop here.  Best to get out of the way for a bit.
+    if (okayToSleep) {
+      nanosleep((struct timespec[]) {{0,1000000}}, NULL);  // Idle the processor for 1 ms.
+    }
+    
+    // Exit the program loop.
     if (exitProgram) break;
 
   } // End FOREVER program loop
@@ -1023,6 +1071,22 @@ Uint32 TriggerFrameDrawB(Uint32 interval, void *param) {
   return(SINT(alternateSet, PE_DELAY));
 }
 
+// Event that triggers a frame to be updated.
+Uint32 TriggerFrameUpdate(Uint32 interval, void *param) {
+  SDL_Event event;
+
+  // Make a new event for frame drawing and push it to the queue.
+  SDL_zero(event);
+  event.type = UPDATEEventType;
+  event.user.code = 0;
+  event.user.data1 = NULL;
+  event.user.data2 = NULL;
+  SDL_PushEvent(&event);
+
+  // Returning the next delay sets the timer to fire again.
+  return(100);
+}
+
 // Event that triggers the fps to be updated.
 Uint32 TriggerFrameCount(Uint32 interval, void *param) {
   SDL_Event event;
@@ -1057,29 +1121,77 @@ Uint32 TriggerGUIUpdate(Uint32 interval, void *param) {
 
 
 // The thing that happens at every frame.
+// isPrimary = YES if we are working with the Live Preview.
+// isPrimary = NO if we are working with the Alt Preview.
 void DrawNewFrame(int set, bool_t isPrimary) {
 
-  // Cycles through the pattern sets.  Allows you to set up a bunch of pattern
-  // sets and switch between them one at a time at some interval.
-  if (isPrimary) {
-    if (!SBOOL(set, PE_PAUSE)) ProcessModes(set);
-
-    UpdateDisplays(set, YES, YES, global_intensity_limit);
-  } else {
-    if (currentSet != alternateSet) {
-      if (!SBOOL(set, PE_PAUSE)) ProcessModes(set);
+  // If its the primary set, assume we process.  If secondary, only process if not also primary.
+  if (isPrimary || (currentSet != alternateSet)) {
+    if (!SBOOL(set, PE_PAUSE)) {
+      ProcessModes(set);
+      PostProcessModes(set, isPrimary);
     }
-    UpdateDisplays(set, NO, NO, global_intensity_limit);
+  }
+}
+
+// These happen to the buffer after its been processed, but before it broadcast,
+// thereby not effecting future steps of the simulation.
+void PostProcessModes(int set, bool_t isPrimary) {
+  int currentSet = set; // Overrides global used in D* macros.
+  unsigned char *inputBuffer = DBUFFER(PE_FRAMEBUFFER);
+  unsigned char *outputBuffer;
+  int i;
+  
+  // Select the output buffer to write to.
+  if (isPrimary) outputBuffer = fbLiveBcast;
+  else outputBuffer = fbAltBcast;
+  
+  // Post rotation
+  if (DBOOL(PE_POSTRZ)) {
+
+    // Apply the post rotation, so that it doesn't affect the feedback buffer.
+    DFLOAT(PE_POSTRZANGLE) += DFLOAT(PE_POSTRZINC);
+    Rotate(DFLOAT(PE_POSTRZANGLE), DFLOAT(PE_POSTEXP), DBOOL(PE_ALIAS), outputBuffer, inputBuffer, YES);    
+
+  } else {
+
+    // Just copy the buffer, because we aren't rotating it.
+    memcpy(outputBuffer, inputBuffer, patternElements[PE_FRAMEBUFFER].size * sizeof(unsigned char));
   }
 
+  // Set Output intensity
+  for (i = 0; i < TENSOR_BYTES; i++) {
+    outputBuffer[i] = (unsigned char)((float) outputBuffer[i] * DFLOAT(PE_INTENSITY));
+  }
+
+  // Blend, or save aside for blending.
+  if (isPrimary) {
+    BlendAlternate(outputBuffer, fbAltBlend);
+  } else {
+    // For alternate blending with the post, we copy the alternate buffer into
+    // a static cache so that when we are processing the primary 
+    memcpy(fbAltBlend, outputBuffer, patternElements[PE_FRAMEBUFFER].size * sizeof(unsigned char));
+  }
 }
+
 
 // Time to make a mess of the array.
 // TODO: Time to take these transformations / seeds out of this fixed order
 // and make them into sets of arbitrary length and order of transformations
+
+// A "set" as below is a parameter set that includes switches and parameters
+// for all the various transformations of one of the 10 sets in memory.  Not
+// only does the set contain the switches and parameters, but also the frame
+// buffer data itself.
+// In the future, sets will contain a list of pointers to functions to execute
+// (taking place of the old switches), along with their parameters.  The frame
+// buffers will go elsewhere...
 void ProcessModes(int set) {
   int currentSet = set; // Overrides global used in D* macros.
   int i;
+
+  // There are two inputs to this function.  The first is the frame buffer on
+  // which to operate.  The second is the transform set to perform.
 
   // Scroll direction randomizer
   if (DBOOL(PE_SCROLLRANDEN)) {
@@ -1088,7 +1200,7 @@ void ProcessModes(int set) {
     }
   }
 
-  // Colors
+  // Update the colors
   for (i = 0; i < A_COUNT; i++) {
     if (seedPalette[i].fgCycleMode > PE_INVALID && DENUM(seedPalette[i].fgCycleMode)) {
       fgOutput[i][set] = ColorCycle(DENUM(seedPalette[i].fgCycleMode),
@@ -1239,17 +1351,12 @@ void ProcessModes(int set) {
     HorizontalMirror(DBUFFER(PE_FRAMEBUFFER));
   }
 
-  // Post rotation increment.
-  if (DBOOL(PE_POSTRZ)) {
-    DFLOAT(PE_POSTRZANGLE) += DFLOAT(PE_POSTRZINC);
-  }
-
   // Seed the entire array with the foreground color.
   if (DENUM(PE_CAA)) {
     ColorAll(fgOutput[A_COLORALLA][set], DBUFFER(PE_FRAMEBUFFER));
   }
 
-  // Clear screen.
+  // Clear screen to the background color.
   if (DENUM(PE_CAB)) {
     ColorAll(fgOutput[A_COLORALLB][set], DBUFFER(PE_FRAMEBUFFER));
   }
@@ -2259,56 +2366,30 @@ color_t GetPixel(int x, int y, unsigned char *buffer) {
 // Send out the frame buffer to tensor and/or the display window.
 // 11/22/2009 - You know what was uncanny?  Walter looked a lot like FB the
 // other night at the decom, and spent most of his time there running Tensor...
-void UpdateDisplays(int set, bool_t isPrimary, bool_t sendToTensor, float intensity_limit) {
-  unsigned char fba[TENSOR_BYTES];
-  static unsigned char fbb[TENSOR_BYTES];
-  unsigned char *buffer;
+void UpdateDisplay(bool_t isPrimary, bool_t sendToTensor, float intensity_limit) {
   int i;
-  int currentSet = set; // Override global currentSet for D*.
+  unsigned char *outBuffer;
+  unsigned char fbTemp[TENSOR_BYTES];
+  
+  outBuffer = (isPrimary ? fbLiveBcast : fbAltBcast);
 
-  // The preview...
-  buffer = DBUFFER(PE_FRAMEBUFFER);
-
-  // Post rotation
-  if (DBOOL(PE_POSTRZ)) {
-
-    // Apply the post rotation, so that it doesn't affect the feedback buffer.
-    Rotate(DFLOAT(PE_POSTRZANGLE), DFLOAT(PE_POSTEXP), DBOOL(PE_ALIAS), fba, buffer, YES);
-
-  } else {
-
-    // Just copy the buffer, because we aren't rotating it.
-    memcpy(fba, DBUFFER(PE_FRAMEBUFFER), patternElements[PE_FRAMEBUFFER].size * sizeof(unsigned char));
-  }
-
-  // Set Output intensity
-  for (i = 0; i < TENSOR_BYTES; i++) {
-    fba[i] = (unsigned char)((float) fba[i] * DFLOAT(PE_INTENSITY));
-  }
-
-  if (set == alternateSet) {
-    // For alternate blending with the post.
-    memcpy(fbb, fba, patternElements[PE_FRAMEBUFFER].size * sizeof(unsigned char));
-  }
-
-  // Send to the preview and to the wall
+  // Send to the left preview and to the tensor wall
   if (isPrimary) {
 
-    // Alternate blending
-    BlendAlternate(fba, fbb);
+    // Update the right preview
+    UpdatePreview(PREVIEW_LIVE_POS_X, PREVIEW_LIVE_POS_Y, outBuffer);
 
-    UpdatePreview(PREVIEW_LIVE_POS_X, PREVIEW_LIVE_POS_Y, fba);
-
-    // Tensor global output intensity limit.
+    // Apply the global output intensity limit (not seen in the preview).
     for (i = 0 ; i < TENSOR_BYTES; i++) {
-      fba[i] = (unsigned char)((float) fba[i] * intensity_limit);
+      fbTemp[i] = (unsigned char)((float) outBuffer[i] * intensity_limit);
     }
     if (enableTensor && sendToTensor) {
-      UpdateTensor(fba);
+      UpdateTensor(fbTemp);
     }
 
   } else {
-    UpdatePreview(PREVIEW_ALT_POS_X, PREVIEW_ALT_POS_Y, fba);
+    // Update the right preview
+    UpdatePreview(PREVIEW_ALT_POS_X, PREVIEW_ALT_POS_Y, outBuffer);
   }
 
   return;
@@ -2369,6 +2450,7 @@ void Rotate(double angle, double expansion, int aliasmode, unsigned char *fb_dst
   }
 
   // Add the outer blending
+  // What the fuck is going on here?
   if (exclude) {
     SDL_FillRect(s2, NULL, SDL_MapRGBA(s2->format, 0, 0, 0, 255));
   } else {
@@ -2681,7 +2763,7 @@ void UpdateTensor(unsigned char *buffer) {
 
 // Write a slice of text.
 void WriteSlice(int set) {
-  int currentSet = set;
+  int currentSet = set; // Override global for D*
   const unsigned char charColMasks[] = { 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80 };
   int sliceColOrRow;  // The seed target column / row (depending on direction).
   int sliceIndex;     // A pixel of the target slice we are working on.
@@ -4648,7 +4730,7 @@ int OverColorBox(int set, point_t mouse, int item, SDL_Rect ** targets, int *las
   return INVALID;
 }
 
-// Update the values of the text on the display window.
+// Update the values of the text and color swatches on the display window.
 // TODO: Shorten this function.  Lots of repetition.
 #define STATUS_BAR_LENGTH 75
 #define BUFFER_BAR_LENGTH 94

@@ -5,19 +5,26 @@
 add_executable (tensorSDL tensorSDL.c)
 set_target_properties (tensorSDL PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR})
 
+# Define the client executable
+add_executable (tensorClient tensorClient.c)
+set_target_properties (tensorClient PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR})
+
 # Configure the version header - not used yet.
 configure_file("version.h.in" "version.h")
 add_library(drv-tensor drv-tensor.c)
 add_library(draw draw.c)
 add_library(elements elements.c)
 add_library(useful useful.c)
+add_library(transform transform.c)
 
 # Included directories
 include_directories(${PROJECT_BINARY_DIR} ${SDL2_INCLUDE_DIRS} ${SDL2TTF_INCLUDE_DIRS} ${SDL2IMAGE_INCLUDE_DIRS})
 include_directories(${PROJECT_BINARY_DIR}/src)
 
 # Linked Libraries
-target_link_libraries(tensorSDL drv-tensor draw elements useful ${SDL2_LIBRARIES} ${SDL2TTF_LIBRARIES} ${SDL2IMAGE_LIBRARIES} SDL2_gfx)
+target_link_libraries(tensorSDL drv-tensor draw elements useful transform ${SDL2_LIBRARIES} ${SDL2TTF_LIBRARIES} ${SDL2IMAGE_LIBRARIES} SDL2_gfx)
+
+# target_link_libraries(tensorClient drv-tensor draw elements useful transform ${SDL2_LIBRARIES} ${SDL2TTF_LIBRARIES} ${SDL2IMAGE_LIBRARIES} SDL2_gfx)
 
 
 #message(STATUS "sdl includes: ${SDL2_INCLUDE_DIRS}")

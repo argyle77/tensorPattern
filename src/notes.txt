@@ -1,0 +1,20 @@
+TODO:
+
+For the enum values, have two arrays, one for display name (exists), one for save file name.
+Ability to use either enum values from files or their mnemonics.
+
+
+Design notes:
+There are two frame buffers.  One is the broadcast (live) buffer, and the other
+is the background (alt) buffer.
+At each simulation step, the selected transform set is executed on the selected 
+frame buffer.
+
+Transform sets consist of lists of transforms to perform on a frame buffer in
+order.  Each list item consists of a function name, version number, parameters.
+The parameters will include both startup data and internal function state data
+(as necessary) and will be parsed (from files) according to the version number.
+Internal function state data allows us to resume processing of a function across
+program restarts, as well as ?
+
+
