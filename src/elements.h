@@ -9,6 +9,7 @@
 
   #include <SDL.h>     // SDL_Keymod, SDL_Keycode
   #include "draw.h"    // point_t, box_t, color_t
+  #include "guidraw.h"    // point_t, box_t, color_t
   #include "useful.h"  // bool_t
 
   // Some initial Values

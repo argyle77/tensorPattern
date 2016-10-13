@@ -28,6 +28,7 @@
 #include <sys/types.h>
 
 #include "drv-tensor.h"
+#include "tensor.h"
 
 const char *Tensor_Section1_def[] = {
   "10.5.1.15","10.5.1.9","10.5.1.19",
