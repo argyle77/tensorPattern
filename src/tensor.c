@@ -10,8 +10,9 @@
 #include "tensor.h"
 #include "useful.h"
 #include "draw.h"
-#include "transforms.h"
+#include "transforms_old.h"
 #include "machine.h"
+#include "layout.h"
 
 // Defines
 #define IP_STRING_SIZE 16
@@ -54,6 +55,8 @@ int GetTensorHeight(void) { return tensorHeight; }
 int GetTensorWidth(void) { return tensorWidth; }
 int GetTensorEnable(void) { return tensorEnable; }
 float GetTensorLimit(void) { return tensorLimit; }
+SDL_Rect GetLiveBox(void) { return liveBox; }
+SDL_Rect GetAltBox(void) { return altBox; }
 
 // Setters
 void SetTensorEnable(bool_t e) { tensorEnable = e; }

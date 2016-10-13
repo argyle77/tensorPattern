@@ -9,6 +9,7 @@
   #include "useful.h"
   #include "layout.h"
   #include "guiprimitives.h"
+  #include "elements.h"
 
   // For knowing the number of colorTitles outside of here?
   extern const int colorTitlesCount;
@@ -36,6 +37,8 @@
   overPreview_e OverPreviewBorder(point_t mouse);
 
   // Line, text and data display
+  void DrawAndCacheString(int *cachePosition, const char *value, int row, int col, color_t fg, color_t bg);
+  void DrawAndCache(int *cachePosition, elementType_e type, void *value, int row, int col, int width);
   void CreateTextureCommand(displayText_t *target, int index, color_t fg, color_t bg);
   void CreateTextureLine(displayText_t *target, const char * thisText, int line, int col, color_t fg, color_t bg);
 

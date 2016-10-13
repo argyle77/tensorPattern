@@ -1,7 +1,8 @@
 // machine.h
 // Joshua Krueger
 // 2016_10_12
-// Contains the 
+// Contains the infrastructure for generating the frames, and what is, for now,
+// the only pattern of transforms.
 
 // Includes
 #include <stdlib.h> // malloc, NULL
@@ -13,13 +14,13 @@
 #include "layout.h"
 #include "guidraw.h"
 #include "elements.h"
-#include "transforms.h"
+#include "transforms_old.h"
 
 // Internal globals
 int bufferSize = 0;
 point_t livePreview, altPreview;
 int tw, th;
-int *liveSet, *altSet;
+int *liveSetp, *altSetp;
 SDL_Rect liveBox, altBox;
 unsigned char *fbLiveBcast = NULL;
 unsigned char *fbAltBcast = NULL;
@@ -29,7 +30,7 @@ unsigned char *fbAltBlend = NULL;
 void ResetOneShots(int set);
 
 // Setup the machine and its memory.
-void InitMachine(int fbSize, point_t live, point_t alt, int *l, int *a) {
+void InitMachine(int fbSize, point_t live, point_t alt, int *liveSetPtr, int *altSetPtr) {
   bufferSize = fbSize;
   fbLiveBcast = (unsigned char *) malloc(bufferSize * sizeof(unsigned char));
   if (!fbLiveBcast) {
@@ -48,8 +49,8 @@ void InitMachine(int fbSize, point_t live, point_t alt, int *l, int *a) {
   }
   livePreview = live;
   altPreview = alt;
-  liveSet = l;
-  altSet = a;  
+  liveSetp = liveSetPtr;
+  altSetp = altSetPtr;  
 }
 
 void SetMachineWH(int w, int h) {
@@ -60,12 +61,12 @@ void SetMachineWH(int w, int h) {
 // Getters
 point_t GetLiveLoc(void) { return livePreview; }
 point_t GetAltLoc(void ) { return altPreview; }
-int GetLiveSet(void) { return *liveSet; }
-int GetAltSet(void) { return *altSet; }
+int GetLiveSet(void) { return *liveSetp; }
+int GetAltSet(void) { return *altSetp; }
 
 // Setters
-void SetLiveSet(int set) { *liveSet = set; }
-void SetAltSet(int set) { *altSet = set; }
+void SetLiveSet(int set) { *liveSetp = set; }
+void SetAltSet(int set) { *altSetp = set; }
 
 
 // Send out the frame buffer to tensor and/or the display window.
@@ -88,7 +89,7 @@ void UpdateDisplay(bool_t isPrimary, bool_t sendToTensor) {
   } else {
     // If live and alternate are the same set, we are only doing one set of
     // ops, and those are getting sent to fbLiveBcast, not fbAltBcast.
-    if (*liveSet == *altSet) outBuffer = fbLiveBcast;
+    if (*liveSetp == *altSetp) outBuffer = fbLiveBcast;
     
     // Update the right preview
     UpdatePreview(altPreview, outBuffer);
@@ -134,7 +135,7 @@ void UpdatePreview(point_t xyOffset, unsigned char *buffer) {
 void DrawNextFrame(int set, bool_t isPrimary) {
 
   // If its the primary set, assume we process.  If secondary, only process if not also primary.
-  if (isPrimary || (*liveSet != *altSet)) {
+  if (isPrimary || (*liveSetp != *altSetp)) {
     if (!SBOOL(set, PE_PAUSE)) {
       ProcessModes(set);
       PostProcessModes(set, isPrimary);
@@ -154,178 +155,177 @@ void DrawNextFrame(int set, bool_t isPrimary) {
 // (taking place of the old switches), along with their parameters.  The frame
 // buffers will go elsewhere...
 void ProcessModes(int set) {
-  int currentSet = set; // Overrides global used in D* macros.
   int i;
 
   // There are two inputs to this function.  The first is the frame buffer on
   // which to operate.  The second is the transform set to perform.
 
   // Scroll direction randomizer
-  if (DBOOL(PE_SCROLLRANDEN)) {
-    if (!(rand() % DINT(PE_SCROLLRANDOM))) {
-      DENUM(PE_SCROLLDIR) = rand() % DIR_COUNT;
+  if (SBOOL(set, PE_SCROLLRANDEN)) {
+    if (!(rand() % SINT(set, PE_SCROLLRANDOM))) {
+      SENUM(set, PE_SCROLLDIR) = rand() % DIR_COUNT;
     }
   }
 
   // Update the colors
   for (i = 0; i < A_COUNT; i++) {
-    if (seedPalette[i].fgCycleMode > PE_INVALID && DENUM(seedPalette[i].fgCycleMode)) {
-      SetFGColor(i, set, ColorCycle(DENUM(seedPalette[i].fgCycleMode),
-        &DINT(seedPalette[i].fgCyclePos), DINT(seedPalette[i].fgCycleRate),
-        DCOLOR(seedPalette[i].fgColorA), DCOLOR(seedPalette[i].fgColorB)));
+    if (seedPalette[i].fgCycleMode > PE_INVALID && SENUM(set, seedPalette[i].fgCycleMode)) {
+      SetFGColor(i, set, ColorCycle(SENUM(set, seedPalette[i].fgCycleMode),
+        &SINT(set, seedPalette[i].fgCyclePos), SINT(set, seedPalette[i].fgCycleRate),
+        SCOLOR(set, seedPalette[i].fgColorA), SCOLOR(set, seedPalette[i].fgColorB)));
     } else if (seedPalette[i].fgColorA > PE_INVALID) {
-      SetFGColor(i, set, DCOLOR(seedPalette[i].fgColorA));
+      SetFGColor(i, set, SCOLOR(set, seedPalette[i].fgColorA));
     }
 
-    if (seedPalette[i].bgCycleMode > PE_INVALID && DENUM(seedPalette[i].bgCycleMode)) {
-      SetBGColor(i, set, ColorCycle(DENUM(seedPalette[i].bgCycleMode),
-        &DINT(seedPalette[i].bgCyclePos), DINT(seedPalette[i].bgCycleRate),
-        DCOLOR(seedPalette[i].bgColorA), DCOLOR(seedPalette[i].bgColorB)));
+    if (seedPalette[i].bgCycleMode > PE_INVALID && SENUM(set, seedPalette[i].bgCycleMode)) {
+      SetBGColor(i, set, ColorCycle(SENUM(set, seedPalette[i].bgCycleMode),
+        &SINT(set, seedPalette[i].bgCyclePos), SINT(set, seedPalette[i].bgCycleRate),
+        SCOLOR(set, seedPalette[i].bgColorA), SCOLOR(set, seedPalette[i].bgColorB)));
     } else if (seedPalette[i].bgColorA > PE_INVALID) {
-      SetBGColor(i, set, DCOLOR(seedPalette[i].bgColorA));
+      SetBGColor(i, set, SCOLOR(set, seedPalette[i].bgColorA));
     }
 
     // Apply the alphas.
     if (seedPalette[i].fgAlpha > PE_INVALID)
-      SetFGColorA(i, set, (unsigned char) (DFLOAT(seedPalette[i].fgAlpha) * 255.0));
+      SetFGColorA(i, set, (unsigned char) (SFLOAT(set, seedPalette[i].fgAlpha) * 255.0));
     if (seedPalette[i].bgAlpha > PE_INVALID)
-      SetBGColorA(i, set, (unsigned char) (DFLOAT(seedPalette[i].bgAlpha) * 255.0));
+      SetBGColorA(i, set, (unsigned char) (SFLOAT(set, seedPalette[i].bgAlpha) * 255.0));
   }
 
   // Slap an image down on the display.
-  if (DENUM(PE_POSTIMAGE)) {
-    DrawImage(currentSet, DFLOAT(PE_IMAGEANGLE), DFLOAT(PE_IMAGEXOFFSET), DFLOAT(PE_IMAGEYOFFSET),
-      DFLOAT(PE_IMAGEEXP), DENUM(PE_IMAGEALIAS) != OS_NO, DBUFFER(PE_FRAMEBUFFER), DFLOAT(PE_IMAGEALPHA));
-    DFLOAT(PE_IMAGEANGLE) += DFLOAT(PE_IMAGEINC);
+  if (SENUM(set, PE_POSTIMAGE)) {
+    DrawImage(set, SFLOAT(set, PE_IMAGEANGLE), SFLOAT(set, PE_IMAGEXOFFSET), SFLOAT(set, PE_IMAGEYOFFSET),
+      SFLOAT(set, PE_IMAGEEXP), SENUM(set, PE_IMAGEALIAS) != OS_NO, SBUFFER(set, PE_FRAMEBUFFER), SFLOAT(set, PE_IMAGEALPHA));
+    SFLOAT(set, PE_IMAGEANGLE) += SFLOAT(set, PE_IMAGEINC);
   }
 
   // Scroller.
-  if (DENUM(PE_SCROLL)) {
-    Scroll(set, DENUM(PE_SCROLLDIR), DBOOL(PE_ROLLOVER), DBUFFER(PE_FRAMEBUFFER), PLANE_ALL);
+  if (SENUM(set, PE_SCROLL)) {
+    Scroll(set, SENUM(set, PE_SCROLLDIR), SBOOL(set, PE_ROLLOVER), SBUFFER(set, PE_FRAMEBUFFER), PLANE_ALL);
   }
 
   // Planar scrollers.  The enables are built into the enumerations.  Scroll()
   // will ignore them if they are SM_HOLD.
-  Scroll(set, DENUM(PE_SHIFTRED), DBOOL(PE_ROLLOVER), DBUFFER(PE_FRAMEBUFFER), PLANE_RED);
-  Scroll(set, DENUM(PE_SHIFTGREEN), DBOOL(PE_ROLLOVER), DBUFFER(PE_FRAMEBUFFER), PLANE_GREEN);
-  Scroll(set, DENUM(PE_SHIFTBLUE), DBOOL(PE_ROLLOVER), DBUFFER(PE_FRAMEBUFFER), PLANE_BLUE);
-  Scroll(set, DENUM(PE_SHIFTCYAN), DBOOL(PE_ROLLOVER), DBUFFER(PE_FRAMEBUFFER), PLANE_CYAN);
-  Scroll(set, DENUM(PE_SHIFTMAGENTA), DBOOL(PE_ROLLOVER), DBUFFER(PE_FRAMEBUFFER), PLANE_MAGENTA);
-  Scroll(set, DENUM(PE_SHIFTYELLOW), DBOOL(PE_ROLLOVER), DBUFFER(PE_FRAMEBUFFER), PLANE_YELLOW);
+  Scroll(set, SENUM(set, PE_SHIFTRED), SBOOL(set, PE_ROLLOVER), SBUFFER(set, PE_FRAMEBUFFER), PLANE_RED);
+  Scroll(set, SENUM(set, PE_SHIFTGREEN), SBOOL(set, PE_ROLLOVER), SBUFFER(set, PE_FRAMEBUFFER), PLANE_GREEN);
+  Scroll(set, SENUM(set, PE_SHIFTBLUE), SBOOL(set, PE_ROLLOVER), SBUFFER(set, PE_FRAMEBUFFER), PLANE_BLUE);
+  Scroll(set, SENUM(set, PE_SHIFTCYAN), SBOOL(set, PE_ROLLOVER), SBUFFER(set, PE_FRAMEBUFFER), PLANE_CYAN);
+  Scroll(set, SENUM(set, PE_SHIFTMAGENTA), SBOOL(set, PE_ROLLOVER), SBUFFER(set, PE_FRAMEBUFFER), PLANE_MAGENTA);
+  Scroll(set, SENUM(set, PE_SHIFTYELLOW), SBOOL(set, PE_ROLLOVER), SBUFFER(set, PE_FRAMEBUFFER), PLANE_YELLOW);
 
   // Draw a solid bar up the side we are scrolling from.
-  if (DENUM(PE_BARSEED)) {
-    DrawSideBar(currentSet);
+  if (SENUM(set, PE_BARSEED)) {
+    DrawSideBar(set);
   }
 
   // Draw a pulse up the side we are scrolling from.
-  if (DENUM(PE_SIDEPULSE)) {
-    DrawSidePulse(currentSet);
+  if (SENUM(set, PE_SIDEPULSE)) {
+    DrawSidePulse(set);
   }
 
   // Write a column of text on the side opposite of the scroll direction.
-  if (DBOOL(PE_TEXTSEED)) {
+  if (SBOOL(set, PE_TEXTSEED)) {
     // Scroll provided by scroller if its on.
-    WriteSlice(currentSet);
+    WriteSlice(set);
   }
 
   // Cellular automata manips?  Not actually cellular auto.  Never finished this.
-  if (DENUM(PE_CELLFUN)) {
+  if (SENUM(set, PE_CELLFUN)) {
     // Give each pixel a color value.
-    CellFun(currentSet);
+    CellFun(set);
   }
 
   // Bouncy bouncy (ick).
-  if (DINT(PE_BOUNCER)) {
-    ScrollCycle(currentSet);
+  if (SINT(set, PE_BOUNCER)) {
+    ScrollCycle(set);
   }
 
   // Bam!  Draw some horizontal bars.
-  if (DENUM(PE_HBARS)) {
-    HorizontalBars(GetFGColor(A_HBARS, set), GetBGColor(A_HBARS, set), DBUFFER(PE_FRAMEBUFFER));
+  if (SENUM(set, PE_HBARS)) {
+    HorizontalBars(GetFGColor(A_HBARS, set), GetBGColor(A_HBARS, set), SBUFFER(set, PE_FRAMEBUFFER));
   }
 
   // Bam! Vertical bars.
-  if (DENUM(PE_VBARS)) {
-    VerticalBars(GetFGColor(A_VBARS, set), GetBGColor(A_VBARS, set), DBUFFER(PE_FRAMEBUFFER));
+  if (SENUM(set, PE_VBARS)) {
+    VerticalBars(GetFGColor(A_VBARS, set), GetBGColor(A_VBARS, set), SBUFFER(set, PE_FRAMEBUFFER));
   }
 
   // Crossbar seeds
-  if (DENUM(PE_CROSSBAR)) {
-    CrossBars(currentSet);
+  if (SENUM(set, PE_CROSSBAR)) {
+    CrossBars(set);
   }
 
   // Random dots.  Most useful seed ever.
-  if (DENUM(PE_RDOT)) {
-    RandomDots(GetFGColor(A_RDOT, set), DINT(PE_RDOTCOEF), DBUFFER(PE_FRAMEBUFFER));
+  if (SENUM(set, PE_RDOT)) {
+    RandomDots(GetFGColor(A_RDOT, set), SINT(set, PE_RDOTCOEF), SBUFFER(set, PE_FRAMEBUFFER));
   }
 
   // Snail seed.
-  if (DENUM(PE_SNAIL)) {
-    SnailSeed(currentSet);
+  if (SENUM(set, PE_SNAIL)) {
+    SnailSeed(set);
   } else {
-    DINT(PE_SNAIL_POS) = 0;
+    SINT(set, PE_SNAIL_POS) = 0;
   }
 
   // Fast snail seed.
-  if (DENUM(PE_FSNAIL)) {
-    FastSnailSeed(currentSet);
+  if (SENUM(set, PE_FSNAIL)) {
+    FastSnailSeed(set);
   } else {
-    DINT(PE_FSNAILP) = 0;
+    SINT(set, PE_FSNAILP) = 0;
   }
 
   // Fader
-  if (DENUM(PE_FADE)) {
-    FadeAll(DINT(PE_FADEINC), DENUM(PE_FADEMODE), DBUFFER(PE_FRAMEBUFFER));
+  if (SENUM(set, PE_FADE)) {
+    FadeAll(SINT(set, PE_FADEINC), SENUM(set, PE_FADEMODE), SBUFFER(set, PE_FRAMEBUFFER));
   }
 
   // Averager
-  if (DENUM(PE_DIFFUSE)) {
-    Diffuse(DFLOAT(PE_DIFFUSECOEF), DBOOL(PE_ROLLOVER), DBUFFER(PE_FRAMEBUFFER));
+  if (SENUM(set, PE_DIFFUSE)) {
+    Diffuse(SFLOAT(set, PE_DIFFUSECOEF), SBOOL(set, PE_ROLLOVER), SBUFFER(set, PE_FRAMEBUFFER));
   }
 
   // Multiplier
-  if (DENUM(PE_MULTIPLY)) {
-    Multiply(DFLOAT(PE_MULTIPLYBY), DBUFFER(PE_FRAMEBUFFER));
+  if (SENUM(set, PE_MULTIPLY)) {
+    Multiply(SFLOAT(set, PE_MULTIPLYBY), SBUFFER(set, PE_FRAMEBUFFER));
   }
 
   // Rotozoomer
-  if (DENUM(PE_PRERZ)) {
-    Rotate(DFLOAT(PE_PRERZANGLE), DFLOAT(PE_PRERZEXPAND), DENUM(PE_PRERZALIAS) != OS_NO, DBUFFER(PE_FRAMEBUFFER), DBUFFER(PE_FRAMEBUFFER), NO);
-    DFLOAT(PE_PRERZANGLE) += DFLOAT(PE_PRERZINC);
+  if (SENUM(set, PE_PRERZ)) {
+    Rotate(SFLOAT(set, PE_PRERZANGLE), SFLOAT(set, PE_PRERZEXPAND), SENUM(set, PE_PRERZALIAS) != OS_NO, SBUFFER(set, PE_FRAMEBUFFER), SBUFFER(set, PE_FRAMEBUFFER), NO);
+    SFLOAT(set, PE_PRERZANGLE) += SFLOAT(set, PE_PRERZINC);
   }
 
   // Zero the red.
-  if (DENUM(PE_NORED)) {
-    ClearRed(currentSet);
+  if (SENUM(set, PE_NORED)) {
+    ClearRed(set);
   }
 
   // Zero the blue.
-  if (DENUM(PE_NOBLUE)) {
-    ClearBlue(currentSet);
+  if (SENUM(set, PE_NOBLUE)) {
+    ClearBlue(set);
   }
 
   // Zero the green.
-  if (DENUM(PE_NOGREEN)) {
-    ClearGreen(currentSet);
+  if (SENUM(set, PE_NOGREEN)) {
+    ClearGreen(set);
   }
 
   // Mirrors
-  if (DENUM(PE_MIRROR_V)) {
-    VerticalMirror(DBUFFER(PE_FRAMEBUFFER));
+  if (SENUM(set, PE_MIRROR_V)) {
+    VerticalMirror(SBUFFER(set, PE_FRAMEBUFFER));
   }
-  if (DENUM(PE_MIRROR_H)) {
-    HorizontalMirror(DBUFFER(PE_FRAMEBUFFER));
+  if (SENUM(set, PE_MIRROR_H)) {
+    HorizontalMirror(SBUFFER(set, PE_FRAMEBUFFER));
   }
 
   // Seed the entire array with the foreground color.
-  if (DENUM(PE_CAA)) {
-    ColorAll(GetFGColor(A_COLORALLA, set), DBUFFER(PE_FRAMEBUFFER));
+  if (SENUM(set, PE_CAA)) {
+    ColorAll(GetFGColor(A_COLORALLA, set), SBUFFER(set, PE_FRAMEBUFFER));
   }
 
   // Clear screen to the background color.
-  if (DENUM(PE_CAB)) {
-    ColorAll(GetFGColor(A_COLORALLB, set), DBUFFER(PE_FRAMEBUFFER));
+  if (SENUM(set, PE_CAB)) {
+    ColorAll(GetFGColor(A_COLORALLB, set), SBUFFER(set, PE_FRAMEBUFFER));
   }
 
   // Reset the one shots.
@@ -333,7 +333,6 @@ void ProcessModes(int set) {
 }
 
 void ResetOneShots(int set) {
-  int currentSet = set; // Override
   int i;
 
   for (i = 0; i < patternElementCount; i++) {
@@ -344,17 +343,17 @@ void ResetOneShots(int set) {
         case PE_BARSEED: case PE_SIDEPULSE:
           break;
         case PE_PRERZ:
-          if ((DENUM(i) == OS_YES) && (DENUM(PE_PRERZALIAS) == OS_ONESHOT))
-            DENUM(PE_PRERZALIAS) = OS_NO;
-          if (DENUM(i) == OS_ONESHOT) DENUM(i) = OS_NO;
+          if ((SENUM(set, i) == OS_YES) && (SENUM(set, PE_PRERZALIAS) == OS_ONESHOT))
+            SENUM(set, PE_PRERZALIAS) = OS_NO;
+          if (SENUM(set, i) == OS_ONESHOT) SENUM(set, i) = OS_NO;
           break;
         case PE_POSTIMAGE:
-          if ((DENUM(i) == OS_YES) && (DENUM(PE_IMAGEALIAS) == OS_ONESHOT))
-            DENUM(PE_IMAGEALIAS) = OS_NO;
-          if (DENUM(i) == OS_ONESHOT) DENUM(i) = OS_NO;
+          if ((SENUM(set, i) == OS_YES) && (SENUM(set, PE_IMAGEALIAS) == OS_ONESHOT))
+            SENUM(set, PE_IMAGEALIAS) = OS_NO;
+          if (SENUM(set, i) == OS_ONESHOT) SENUM(set, i) = OS_NO;
           break;
         default:
-          if (DENUM(i) == OS_ONESHOT) DENUM(i) = OS_NO;
+          if (SENUM(set, i) == OS_ONESHOT) SENUM(set, i) = OS_NO;
           break;
       }
     }
@@ -364,8 +363,7 @@ void ResetOneShots(int set) {
 // These happen to the buffer after its been processed, but before it broadcast,
 // thereby not effecting future steps of the simulation.
 void PostProcessModes(int set, bool_t isPrimary) {
-  int currentSet = set; // Overrides global used in D* macros.
-  unsigned char *inputBuffer = DBUFFER(PE_FRAMEBUFFER);
+  unsigned char *inputBuffer = SBUFFER(set, PE_FRAMEBUFFER);
   unsigned char *outputBuffer = NULL;
   int i;
   
@@ -373,11 +371,11 @@ void PostProcessModes(int set, bool_t isPrimary) {
   outputBuffer = isPrimary ? fbLiveBcast : fbAltBcast;
   
   // Post rotation
-  if (DBOOL(PE_POSTRZ)) {
+  if (SBOOL(set, PE_POSTRZ)) {
 
     // Apply the post rotation, so that it doesn't affect the feedback buffer.
-    DFLOAT(PE_POSTRZANGLE) += DFLOAT(PE_POSTRZINC);
-    Rotate(DFLOAT(PE_POSTRZANGLE), DFLOAT(PE_POSTEXP), DBOOL(PE_ALIAS), outputBuffer, inputBuffer, YES);    
+    SFLOAT(set, PE_POSTRZANGLE) += SFLOAT(set, PE_POSTRZINC);
+    Rotate(SFLOAT(set, PE_POSTRZANGLE), SFLOAT(set, PE_POSTEXP), SBOOL(set, PE_ALIAS), outputBuffer, inputBuffer, YES);    
 
   } else {
 
@@ -387,7 +385,7 @@ void PostProcessModes(int set, bool_t isPrimary) {
 
   // Set Output intensity
   for (i = 0; i < TENSOR_BYTES; i++) {
-    outputBuffer[i] = (unsigned char)((float) outputBuffer[i] * DFLOAT(PE_INTENSITY));
+    outputBuffer[i] = (unsigned char)((float) outputBuffer[i] * SFLOAT(set, PE_INTENSITY));
   }
 
   // Blend, or save aside for blending.

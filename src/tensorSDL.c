@@ -3,35 +3,33 @@
 // Blau
 // tensor@core9.org
 
+// This define is especially for my_font.h, which uses it to conditionally
+// declare a constant.
 #define main_c_
 
 // Includes
-#include <stdio.h>   // File io, setvbuf
+#include <stdio.h>   // File io, setvbuf, stderr
 #include <stdlib.h>  // exit conditions, string conversions, malloc
-#include <unistd.h>  // Don't know what I used from here?  Maybe stderr?
+#include <unistd.h>  // Don't know what I used from here?  Maybe NULL?
 #include <string.h>  // memcpy, strtok
 #include <time.h>    // nanosleep
 #include <errno.h>   // errno for string conversions.
-#include <limits.h>  // INT_MIN
-#include <SDL.h>
-#include <SDL2_rotozoom.h>
-
+#include <SDL.h>     // SDL_stuff everywhere.
 
 #include "useful.h"
 #include "badOldDefines.h"
 #include "gui.h"
+#include "guidraw.h"
 #include "version.h"
 #include "draw.h"
 #include "elements.h"
 #include "layout.h"
 #include "machine.h"
-#include "transforms.h"
+#include "transforms_old.h"
 #include "my_font.h"
 
-
 // Definitions
-#define GUIFRAMEDELAY 25
-
+#define GUIREFRESH_MS 25
 
 // Gui input modes
 typedef enum inputMode_e {
@@ -47,36 +45,27 @@ typedef enum textEntry_e {
   TE_COUNT // Last
 } textEntry_e;
 
+
 // Globals - We do love our globals.  My guess is their proliferation is the
 // sign of a weakly structured program.
-
-
 bool_t cyclePatternSets = NO;  // cyclePatternSets mode is a global (for now).
 int cycleFrameCount = INITIAL_FRAMECYCLECOUNT;    // Frame Count for cycling.
-
-
 operateOn_e displaySet = OO_CURRENT;
-
 int previewFrameCountA = 0, previewFPSA = 0;
 int previewFrameCountB = 0, previewFPSB = 0;
 int updateFrameCount = 0, updateFPS = 0;
 int infoFrameCount = 0, infoFPS = 0;
-
-
-Uint32 FPSEventType, DRAWEventTypeA, DRAWEventTypeB, GUIEventType, CONFIRMEventType, UPDATEEventType;
+Uint32 UE_FPSTimer, UE_DrawLive, UE_DrawAlt, UE_GuiUpdate, UE_ConfirmBox, UE_BroadcastClk;
 char statusText[100] = "";  // For confirming actions.
 char keySave;
 int setSave;
-SDL_Rect liveBox, altBox;
-
-
-int currentSet = 0;
-int alternateSet = 1;
-
+int liveSet = 0;
+int altSet = 1;
 
 
 // Externs
 extern int tensor_landscape_p;
+
 
 // Prototypes
 Uint32 TriggerFrameDrawA(Uint32 interval, void *param);
@@ -84,11 +73,8 @@ Uint32 TriggerFrameDrawB(Uint32 interval, void *param);
 Uint32 TriggerFrameUpdate(Uint32 interval, void *param);
 Uint32 TriggerFrameCount(Uint32 interval, void *param);
 Uint32 TriggerGUIUpdate(Uint32 interval, void *param);
-
-
 void SavePatternSet(char key, int set, bool_t overWrite, const char *backupName);
 void LoadPatternSet(char key, int set, bool_t backup);
-
 bool_t HandleCommand(int set, command_e command, int selection);
 bool_t HandleKey(int set, SDL_Keycode key, SDL_Keymod mod);
 bool_t HandleConfirmation(SDL_Keycode key, bool_t *selected);
@@ -98,22 +84,17 @@ bool_t HandleEnumSelect(SDL_Keycode key, int set, int item, int *selected);
 void CopyPatternSet(int dst, int src);
 void CopyBuffer(int dst, int set);
 void SwitchToSet(int set);
-
 point_t GetDisplayPixel(point_t mouse, SDL_Rect box);
-
 bool_t SetValueInt(int set, patternElement_e element, int value);
 void SetValueFloat(int set, patternElement_e element, float value);
 int OverCommand(point_t mouse, int *lastHover);
 int OverBox(int set, point_t mouse, int item, SDL_Rect ** targets, int *lastHover);
 SDL_Rect GetBoxofCommand(int command);
-
 int HandleColorSelection(point_t mouse, int thisHover, bool_t resetEvent, int set);
 void UpdateInfoDisplay(int set);
 int OverColorBox(int set, point_t mouse, int item, SDL_Rect ** targets, int *lastHover);
 bool_t HandleColorSelect(SDL_Keycode key, int set, int item, int *selected);
 
-void DrawAndCache(int *cachePosition, elementType_e type, void *value, int row, int col, int width);
-void DrawAndCacheString(int *cachePosition, const char *value, int row, int col, color_t fg, color_t bg);
 
 // Main
 int main(int argc, char *argv[]) {
@@ -155,7 +136,7 @@ int main(int argc, char *argv[]) {
   overPreview_e overBorderDown = OP_NO;
   highLight_e liveHighlight = HL_SELECTED;
   highLight_e altHighlight = HL_NO;
-  
+
 
   // Unbuffer the console...
   setvbuf(stdout, (char *)NULL, _IONBF, 0);
@@ -209,7 +190,7 @@ int main(int argc, char *argv[]) {
   point_t live, alt;
   SetPoint(&live, PREVIEW_LIVE_POS_X, PREVIEW_LIVE_POS_Y);
   SetPoint(&alt, PREVIEW_ALT_POS_X, PREVIEW_ALT_POS_Y);
-  InitMachine(TENSOR_BYTES, live, alt, &currentSet, &alternateSet);
+  InitMachine(TENSOR_BYTES, live, alt, &liveSet, &altSet);
 
   // Further patterData initializations
   for (i = 0; i < PATTERN_SET_COUNT; i++) {
@@ -235,12 +216,12 @@ int main(int argc, char *argv[]) {
   DrawDisplayTexts(INVALID);
 
   // Initialize the user events
-  FPSEventType = SDL_RegisterEvents(1);
-  DRAWEventTypeA = SDL_RegisterEvents(1);
-  DRAWEventTypeB = SDL_RegisterEvents(1);
-  GUIEventType = SDL_RegisterEvents(1);
-  CONFIRMEventType = SDL_RegisterEvents(1);
-  UPDATEEventType = SDL_RegisterEvents(1);
+  UE_FPSTimer = SDL_RegisterEvents(1);
+  UE_DrawLive = SDL_RegisterEvents(1);
+  UE_DrawAlt = SDL_RegisterEvents(1);
+  UE_GuiUpdate = SDL_RegisterEvents(1);
+  UE_ConfirmBox = SDL_RegisterEvents(1);
+  UE_BroadcastClk = SDL_RegisterEvents(1);
 
   // Init the live preview timer.
   if (!SDL_AddTimer(DINT(PE_DELAY), TriggerFrameDrawA, NULL)) {
@@ -249,7 +230,7 @@ int main(int argc, char *argv[]) {
   }
 
   // Init the alternate preview timer.
-  if (!SDL_AddTimer(SINT(alternateSet, PE_DELAY), TriggerFrameDrawB, NULL)) {
+  if (!SDL_AddTimer(SINT(altSet, PE_DELAY), TriggerFrameDrawB, NULL)) {
     fprintf(stderr, "Can't initialize the alternate preview timer! %s\n", SDL_GetError());
     exit(EXIT_FAILURE);
   }
@@ -268,9 +249,9 @@ int main(int argc, char *argv[]) {
 
   // GUI update timer. The gui is updated when the preview frames update, but
   // frame update speeds are adjustable. To ensure that the gui stays responsive
-  // between frames, there is a timer for this purpose.  Current setting places
-  // this timer at 40Hz.
-  if (!SDL_AddTimer(GUIFRAMEDELAY, TriggerGUIUpdate, NULL)) {
+  // between frames, there is a timer for this purpose.  Current settings
+  // (GUIREFRESH_MS = 25ms) places this timer at 40Hz.
+  if (!SDL_AddTimer(GUIREFRESH_MS, TriggerGUIUpdate, NULL)) {
     fprintf(stderr, "Can't initialize the gui update timer! %s\n", SDL_GetError());
     exit(EXIT_FAILURE);
   }
@@ -327,18 +308,18 @@ int main(int argc, char *argv[]) {
           // There are five registered user events to check for here. They can't
           // be tested in the case statement because they are not compile-time
           // integer constants.
-          if (event.type == DRAWEventTypeA) {
+          if (event.type == UE_DrawLive) {
             // The frame timer expired.  Set a new frame to draw.
             drawNewFrameA = YES;
 
-          } else if (event.type == DRAWEventTypeB) {
+          } else if (event.type == UE_DrawAlt) {
             // The alternate frame timer expired.  Set a new frame to draw.
             drawNewFrameB = YES;
             
-          } else if (event.type == UPDATEEventType) {
+          } else if (event.type == UE_BroadcastClk) {
             updateEvent = YES;
 
-          } else if (event.type == FPSEventType) {
+          } else if (event.type == UE_FPSTimer) {
             // The fps timer expired.  Set fps and reset the frame count.
             previewFPSA = previewFrameCountA;
             previewFPSB = previewFrameCountB;
@@ -350,9 +331,9 @@ int main(int argc, char *argv[]) {
             updateFrameCount = 0;
             // fprintf(stdout, "Live: %i, Alt: %i, Update: %i, Gui: %i\n", previewFPSA, previewFPSB, updateFPS, infoFPS);          
 
-          } else if (event.type == GUIEventType) {
+          } else if (event.type == UE_GuiUpdate) {
             // Update the informational display.
-            UpdateInfoDisplay(displaySet ? alternateSet : currentSet);
+            UpdateInfoDisplay(displaySet ? altSet : liveSet);
             infoFrameCount++;
             refreshGui = YES;
             //~ refreshAll = YES;  // EMERGENCY
@@ -361,7 +342,7 @@ int main(int argc, char *argv[]) {
               refreshAll = YES;
             }
 
-          } else if (event.type == CONFIRMEventType) {
+          } else if (event.type == UE_ConfirmBox) {
 
             inputMode = IM_CONFIRM;
           } else {
@@ -423,7 +404,8 @@ int main(int argc, char *argv[]) {
               break;
 
             default:
-              if (event.type == GUIEventType) {
+              // Redraw the confirmation box, but only on GUI updates.
+              if (event.type == UE_GuiUpdate) {
                 DrawConfirmationBox(&boxYes, &boxNo, confirmed, statusText);
               }
               break;
@@ -434,7 +416,7 @@ int main(int argc, char *argv[]) {
         case IM_NORMAL:
           switch(event.type) {
             case SDL_KEYDOWN:
-              exitProgram = HandleKey(displaySet ? alternateSet : currentSet, event.key.keysym.sym, event.key.keysym.mod);
+              exitProgram = HandleKey(displaySet ? altSet : liveSet, event.key.keysym.sym, event.key.keysym.mod);
               break;
             case SDL_MOUSEMOTION:
               // Check if its hovering over a command.
@@ -494,7 +476,7 @@ int main(int argc, char *argv[]) {
                   if (command == COM_NONE) {
                     command = displayCommand[thisHover].commands[MOUSE_EDIT].command;
                   }
-                  HandleCommand(displaySet ? alternateSet : currentSet, command, thisHover);
+                  HandleCommand(displaySet ? altSet : liveSet, command, thisHover);
 
                 // Wheel up.
                 } else {
@@ -502,21 +484,21 @@ int main(int argc, char *argv[]) {
                   if (command == COM_NONE) {
                     command = displayCommand[thisHover].commands[MOUSE_EDIT].command;
                   }
-                  HandleCommand(displaySet ? alternateSet : currentSet, command, thisHover);
+                  HandleCommand(displaySet ? altSet : liveSet, command, thisHover);
                 }
 
               // Mouse wheel action over the live preview lets us change colors
               // without having to go to the command.
-              } else if (IsInsideBox(mouse, liveBox)) {
+              } else if (IsInsideBox(mouse, GetLiveBox())) {
                 if (!rightMouseDown) {
                   if (event.wheel.y < 0) { // Wheel down
                     wheelColorF--;
                     if (wheelColorF < 0) wheelColorF = CE_COUNT - 1;
-                    SCOLOR(currentSet, PE_LP_COLA) = namedColors[wheelColorF].color;
+                    SCOLOR(liveSet, PE_LP_COLA) = namedColors[wheelColorF].color;
                   } else { // Wheel up
                     wheelColorF++;
                     if (wheelColorF >= CE_COUNT) wheelColorF = 0;
-                    SCOLOR(currentSet, PE_LP_COLA) = namedColors[wheelColorF].color;
+                    SCOLOR(liveSet, PE_LP_COLA) = namedColors[wheelColorF].color;
                   }
                 } else {
                   // Holding down the right mouse button while wheeling changes the
@@ -524,25 +506,25 @@ int main(int argc, char *argv[]) {
                   if (event.wheel.y < 0) { // Wheel down
                     wheelColorB--;
                     if (wheelColorB < 0) wheelColorB = CE_COUNT - 1;
-                    SCOLOR(currentSet, PE_LP_BGCOLA) = namedColors[wheelColorB].color;
+                    SCOLOR(liveSet, PE_LP_BGCOLA) = namedColors[wheelColorB].color;
                   } else { // Wheel up
                     wheelColorB++;
                     if (wheelColorB >= CE_COUNT) wheelColorB = 0;
-                    SCOLOR(currentSet, PE_LP_BGCOLA) = namedColors[wheelColorB].color;
+                    SCOLOR(liveSet, PE_LP_BGCOLA) = namedColors[wheelColorB].color;
                   }
                 }
               // Same for the alternate preview, except we change the alternate
               // set values.
-              } else if (IsInsideBox(mouse, altBox)) {
+              } else if (IsInsideBox(mouse, GetAltBox())) {
                 if (!rightMouseDown) {
                    if (event.wheel.y < 0) { // Wheel down
                     wheelColorF--;
                     if (wheelColorF < 0) wheelColorF = CE_COUNT - 1;
-                    SCOLOR(alternateSet, PE_LP_COLA) = namedColors[wheelColorF].color;
+                    SCOLOR(altSet, PE_LP_COLA) = namedColors[wheelColorF].color;
                   } else { // Wheel up
                     wheelColorF++;
                     if (wheelColorF >= CE_COUNT) wheelColorF = 0;
-                    SCOLOR(alternateSet, PE_LP_COLA) = namedColors[wheelColorF].color;
+                    SCOLOR(altSet, PE_LP_COLA) = namedColors[wheelColorF].color;
                   }
                 } else {
                   // Holding down the right mouse button while wheeling changes the
@@ -550,11 +532,11 @@ int main(int argc, char *argv[]) {
                   if (event.wheel.y < 0) { // Wheel down
                     wheelColorB--;
                     if (wheelColorB < 0) wheelColorB = CE_COUNT - 1;
-                    SCOLOR(alternateSet, PE_LP_BGCOLA) = namedColors[wheelColorB].color;
+                    SCOLOR(altSet, PE_LP_BGCOLA) = namedColors[wheelColorB].color;
                   } else { // Wheel up
                     wheelColorB++;
                     if (wheelColorB >= CE_COUNT) wheelColorB = 0;
-                    SCOLOR(alternateSet, PE_LP_BGCOLA) = namedColors[wheelColorB].color;
+                    SCOLOR(altSet, PE_LP_BGCOLA) = namedColors[wheelColorB].color;
                   }
                 }
               }
@@ -569,8 +551,8 @@ int main(int argc, char *argv[]) {
               // selector to edit this item.
               if (event.button.button == SDL_BUTTON_RIGHT) {
                 if ((thisHover != INVALID) && (thisHover == rightMouseDownOn)) {
-                  if (!HandleColorSelection(mouse, thisHover, YES, displaySet ? alternateSet : currentSet)) {
-                    exitProgram = HandleCommand(displaySet ? alternateSet : currentSet,
+                  if (!HandleColorSelection(mouse, thisHover, YES, displaySet ? altSet : liveSet)) {
+                    exitProgram = HandleCommand(displaySet ? altSet : liveSet,
                       displayCommand[thisHover].commands[MOUSE_RST].command, thisHover);
                   }
                 }
@@ -588,21 +570,21 @@ int main(int argc, char *argv[]) {
 
                 if ((thisHover != INVALID) && (thisHover == leftMouseDownOn)) {
                   // First check if we clicked on a color selector.
-                  if (HandleColorSelection(mouse, thisHover, NO, displaySet ? alternateSet : currentSet)) {
+                  if (HandleColorSelection(mouse, thisHover, NO, displaySet ? altSet : liveSet)) {
                     // For edit clicks on the color boxes, we set the color
                     // selector to the appropriate color source.
-                    SENUM(displaySet ? alternateSet : currentSet, PE_PALETTEALTER) =
+                    SENUM(displaySet ? altSet : liveSet, PE_PALETTEALTER) =
                       displayCommand[thisHover].colorSource;
                   } else {
                     // Otherwise, not on a color box, we execute the edit
                     // command (which may be nothing), and possibly change the
                     // input mode.
-                    exitProgram = HandleCommand(displaySet ? alternateSet : currentSet,
+                    exitProgram = HandleCommand(displaySet ? altSet : liveSet,
                         displayCommand[thisHover].commands[MOUSE_EDIT].command,
                         thisHover);
 
                     // Change input mode?
-                    inputMode = EditValue(currentSet, thisHover);
+                    inputMode = EditValue(liveSet, thisHover);
                   }
                   switch(inputMode) {
                     case IM_INT:
@@ -649,8 +631,8 @@ int main(int argc, char *argv[]) {
                     value = strtol(textEntry, &testptr, 0);
                     if ((errno == 0) && (testptr - strlen(textEntry) == textEntry)) {
                       element = displayCommand[thisHover].dataSource;
-                      if (element < PE_INVALID) element = GetSelectElement(displaySet ? alternateSet : currentSet, element);
-                      if (SetValueInt(displaySet ? alternateSet : currentSet, element, value)) {
+                      if (element < PE_INVALID) element = GetSelectElement(displaySet ? altSet : liveSet, element);
+                      if (SetValueInt(displaySet ? altSet : liveSet, element, value)) {
                         snprintf(statusText, sizeof(statusText), "New value accepted.");
                       } else {
                         snprintf(statusText, sizeof(statusText), "New value rejected.");
@@ -677,7 +659,7 @@ int main(int argc, char *argv[]) {
               inputMode = IM_NORMAL;
               break;
             default:
-              if (event.type == GUIEventType) {
+              if (event.type == UE_GuiUpdate) {
                 DrawTextEntryBox(thisHover, textEntry);
               }
               break;
@@ -698,8 +680,8 @@ int main(int argc, char *argv[]) {
                         snprintf(statusText, sizeof(statusText), "That's not a number.");
                       } else {
                         element = displayCommand[thisHover].dataSource;
-                        if (element < PE_INVALID) element = GetSelectElement(displaySet ? alternateSet : currentSet, element);
-                        SetValueFloat(displaySet ? alternateSet : currentSet, element,  valuef);
+                        if (element < PE_INVALID) element = GetSelectElement(displaySet ? altSet : liveSet, element);
+                        SetValueFloat(displaySet ? altSet : liveSet, element,  valuef);
                       }
                     } else {
                       snprintf(statusText, sizeof(statusText), "New value rejected.");
@@ -723,7 +705,7 @@ int main(int argc, char *argv[]) {
               inputMode = IM_NORMAL;
               break;
             default:
-              if (event.type == GUIEventType) {
+              if (event.type == UE_GuiUpdate) {
                 DrawTextEntryBox(thisHover, textEntry);
               }
               break;
@@ -735,12 +717,12 @@ int main(int argc, char *argv[]) {
             case SDL_KEYDOWN:
               // Put some stuff here.
               if (HandleEnumSelect(event.key.keysym.sym,
-                displaySet ? alternateSet : currentSet, thisHover, &enumHover))
+                displaySet ? altSet : liveSet, thisHover, &enumHover))
                 inputMode = IM_NORMAL;
               break;
             case SDL_MOUSEMOTION:
               // Check if its hovering over a command.
-              enumHover = OverBox(displaySet ? alternateSet : currentSet, mouse, thisHover, &targets, &lastHover);
+              enumHover = OverBox(displaySet ? altSet : liveSet, mouse, thisHover, &targets, &lastHover);
               break;  // End case SDL_MOUSEMOTION.
             case SDL_MOUSEBUTTONDOWN:
               // Correct the error made by the common code.
@@ -752,8 +734,8 @@ int main(int argc, char *argv[]) {
               if (event.button.button == SDL_BUTTON_LEFT) {
                 if ((enumHover != INVALID) && (enumHover == leftMouseDownOn)) {
                   element = displayCommand[thisHover].dataSource;
-                  if (element < PE_INVALID) element = GetSelectElement(displaySet ? alternateSet : currentSet, element);
-                  SENUM(displaySet ? alternateSet : currentSet, element) = enumHover;
+                  if (element < PE_INVALID) element = GetSelectElement(displaySet ? altSet : liveSet, element);
+                  SENUM(displaySet ? altSet : liveSet, element) = enumHover;
                   snprintf(statusText, sizeof(statusText), "Item %s set to %s",
                     displayCommand[thisHover].text,
                     enumerations[patternElements[element].etype].texts[enumHover]);
@@ -765,9 +747,9 @@ int main(int argc, char *argv[]) {
               }
               break;  // End SDL_MOUSEBUTTONUP case.
             default:
-              if (event.type == GUIEventType) {
+              if (event.type == UE_GuiUpdate) {
                 // Handle drawing the input selection boxes.
-                DrawEnumSelectBox(displaySet ? alternateSet : currentSet, thisHover, enumHover, &targets);
+                DrawEnumSelectBox(displaySet ? altSet : liveSet, thisHover, enumHover, &targets);
               }
               break;
           } // End event processing switch for ENUM selection
@@ -779,12 +761,12 @@ int main(int argc, char *argv[]) {
             case SDL_KEYDOWN:
               // Put some stuff here.
               if (HandleColorSelect(event.key.keysym.sym,
-                displaySet ? alternateSet : currentSet, thisHover, &enumHover))
+                displaySet ? altSet : liveSet, thisHover, &enumHover))
                 inputMode = IM_NORMAL;
               break;
             case SDL_MOUSEMOTION:
               // Check if its hovering over a command.
-              enumHover = OverColorBox(displaySet ? alternateSet : currentSet, mouse, thisHover, &targets, &lastHover);
+              enumHover = OverColorBox(displaySet ? altSet : liveSet, mouse, thisHover, &targets, &lastHover);
               break;  // End case SDL_MOUSEMOTION.
             case SDL_MOUSEBUTTONDOWN:
               // Correct the error made by the common code.
@@ -797,8 +779,8 @@ int main(int argc, char *argv[]) {
                 inputMode = IM_NORMAL;
               } else if (event.button.button == SDL_BUTTON_LEFT) {
                 if ((enumHover != INVALID) && (enumHover == leftMouseDownOn)) {
-                  element = GetSelectElement(displaySet ? alternateSet : currentSet, displayCommand[thisHover].dataSource);
-                  SCOLOR(displaySet ? alternateSet : currentSet, element) = namedColors[enumHover].color;
+                  element = GetSelectElement(displaySet ? altSet : liveSet, displayCommand[thisHover].dataSource);
+                  SCOLOR(displaySet ? altSet : liveSet, element) = namedColors[enumHover].color;
                   snprintf(statusText, sizeof(statusText), "Item %s set.",
                     patternElements[element].name);
                   inputMode = IM_NORMAL;
@@ -806,7 +788,7 @@ int main(int argc, char *argv[]) {
               }
               break;
             default:
-              if (event.type == GUIEventType) {
+              if (event.type == UE_GuiUpdate) {
                 // Handle drawing the input selection boxes.
                 DrawColorSelectBox(thisHover, enumHover, &targets);
               }
@@ -822,34 +804,35 @@ int main(int argc, char *argv[]) {
     } // End event polling while loop.
 
     // Are we trying to draw on the previews with the mouse?  We do this here
-    // because we want to draw whether or not there were mouse events.
+    // because we want to be able to draw multiple pixels on any frame.
     point_t tpixel;
-    if (IsInsideBox(mouse, liveBox)) {
+    if (IsInsideBox(mouse, GetLiveBox())) {
+
       // Mouse hovering over the live preview.  Which display pixel?
-      tpixel = GetDisplayPixel(mouse, liveBox);
+      tpixel = GetDisplayPixel(mouse, GetLiveBox());
 
       // Is one of the mouse buttons down?
       if (leftMouseDown) {
-        LightPen(tpixel, currentSet, FBS_FG, SBUFFER(currentSet, PE_FRAMEBUFFER));
+        LightPen(tpixel, liveSet, FBS_FG, SBUFFER(liveSet, PE_FRAMEBUFFER));
       } else if (rightMouseDown) {
-        LightPen(tpixel, currentSet, FBS_BG, SBUFFER(currentSet, PE_FRAMEBUFFER));
+        LightPen(tpixel, liveSet, FBS_BG, SBUFFER(liveSet, PE_FRAMEBUFFER));
       }
-    } else if (IsInsideBox(mouse, altBox)) {
+    } else if (IsInsideBox(mouse, GetAltBox())) {
       // The alternate display.
-      tpixel = GetDisplayPixel(mouse, altBox);
+      tpixel = GetDisplayPixel(mouse, GetAltBox());
 
       if (leftMouseDown) {
-        LightPen(tpixel, alternateSet, FBS_FG, SBUFFER(alternateSet, PE_FRAMEBUFFER));
+        LightPen(tpixel, altSet, FBS_FG, SBUFFER(altSet, PE_FRAMEBUFFER));
       } else if (rightMouseDown) {
-        LightPen(tpixel, alternateSet, FBS_BG, SBUFFER(alternateSet, PE_FRAMEBUFFER));
+        LightPen(tpixel, altSet, FBS_BG, SBUFFER(altSet, PE_FRAMEBUFFER));
       }
     }
-    
+
     // Draw a new frame if the timer expired for the live set.
     if (drawNewFrameA) {
       drawNewFrameA = NO;
       previewFrameCountA++;
-      DrawNextFrame(currentSet, YES);
+      DrawNextFrame(liveSet, YES);
       
       // This is for if the broadcast clock is to match the frame clock.
       UpdateDisplay(YES, YES);
@@ -859,7 +842,7 @@ int main(int argc, char *argv[]) {
       if (cyclePatternSets) {
         cycleFrameCount--;
         if (cycleFrameCount < 0) {
-          currentSet = (currentSet + 1) % PATTERN_SET_COUNT;
+          liveSet = (liveSet + 1) % PATTERN_SET_COUNT;
           cycleFrameCount = DINT(PE_FRAMECOUNT);
         }
         if (cycleFrameCount > DINT(PE_FRAMECOUNT)) {
@@ -872,7 +855,7 @@ int main(int argc, char *argv[]) {
     if (drawNewFrameB) {
       drawNewFrameB = NO;
       previewFrameCountB++;
-      DrawNextFrame(alternateSet, NO);
+      DrawNextFrame(altSet, NO);
       
       // If broadcast clock matches frame clock.
       UpdateDisplay(NO, NO);
@@ -902,7 +885,7 @@ int main(int argc, char *argv[]) {
       refreshAll = NO;
       DrawClearWindow();
       DrawDisplayTexts(thisHover);
-      UpdateInfoDisplay(displaySet ? alternateSet : currentSet);
+      UpdateInfoDisplay(displaySet ? altSet : liveSet);
       refreshPreviewBorders = YES;
       refreshGui = YES;
     }
@@ -968,14 +951,14 @@ Uint32 TriggerFrameDrawA(Uint32 interval, void *param) {
 
   // Make a new event for frame drawing and push it to the queue.
   SDL_zero(event);
-  event.type = DRAWEventTypeA;
+  event.type = UE_DrawLive;
   event.user.code = 0;
   event.user.data1 = NULL;
   event.user.data2 = NULL;
   SDL_PushEvent(&event);
 
   // Returning the next delay sets the timer to fire again.
-  return(SINT(currentSet, PE_DELAY));
+  return(SINT(liveSet, PE_DELAY));
 }
 
 // Event that triggers a frame to be drawn.
@@ -984,14 +967,14 @@ Uint32 TriggerFrameDrawB(Uint32 interval, void *param) {
 
   // Make a new event for frame drawing and push it to the queue.
   SDL_zero(event);
-  event.type = DRAWEventTypeB;
+  event.type = UE_DrawAlt;
   event.user.code = 0;
   event.user.data1 = NULL;
   event.user.data2 = NULL;
   SDL_PushEvent(&event);
 
   // Returning the next delay sets the timer to fire again.
-  return(SINT(alternateSet, PE_DELAY));
+  return(SINT(altSet, PE_DELAY));
 }
 
 // Event that triggers a frame to be updated.
@@ -1000,14 +983,14 @@ Uint32 TriggerFrameUpdate(Uint32 interval, void *param) {
 
   // Make a new event for frame drawing and push it to the queue.
   SDL_zero(event);
-  event.type = UPDATEEventType;
+  event.type = UE_BroadcastClk;
   event.user.code = 0;
   event.user.data1 = NULL;
   event.user.data2 = NULL;
   SDL_PushEvent(&event);
 
   // Returning the next delay sets the timer to fire again.
-  return(100);
+  return(interval);
 }
 
 // Event that triggers the fps to be updated.
@@ -1016,7 +999,7 @@ Uint32 TriggerFrameCount(Uint32 interval, void *param) {
 
   // Make a new event for fps measurement, and push it to the queue.
   SDL_zero(event);
-  event.type = FPSEventType;
+  event.type = UE_FPSTimer;
   event.user.code = 0;
   event.user.data1 = NULL;
   event.user.data2 = NULL;
@@ -1032,7 +1015,7 @@ Uint32 TriggerGUIUpdate(Uint32 interval, void *param) {
 
   // Make a new event for fps measurement, and push it to the queue.
   SDL_zero(event);
-  event.type = GUIEventType;
+  event.type = UE_GuiUpdate;
   event.user.code = 0;
   event.user.data1 = NULL;
   event.user.data2 = NULL;
@@ -1333,13 +1316,13 @@ bool_t HandleCommand(int set, command_e command, int selection) {
       break;
     case COM_BLENDSWITCH: SetAutoBlend(!GetAutoBlend()); break;
     case COM_BLENDSWITCH_RST: SetAutoBlend(NO); break;
-    case COM_EXCHANGE: i = currentSet; currentSet = alternateSet; alternateSet = i; break;
+    case COM_EXCHANGE: i = liveSet; liveSet = altSet; altSet = i; break;
     case COM_OPERATE: displaySet = (displaySet + 1) % OO_COUNT; break;
     case COM_OPERATE_RST: displaySet = OO_CURRENT; break;
-    case COM_ALTERNATE_INC: alternateSet = (alternateSet + 1) % PATTERN_SET_COUNT; break;
-    case COM_ALTERNATE_DEC: alternateSet--; if (alternateSet < 0) alternateSet = PATTERN_SET_COUNT - 1; break;
-    case COM_LIVE_INC: currentSet = (currentSet + 1) % PATTERN_SET_COUNT; break;
-    case COM_LIVE_DEC: currentSet--; if (currentSet < 0) currentSet = PATTERN_SET_COUNT - 1; break;
+    case COM_ALTERNATE_INC: altSet = (altSet + 1) % PATTERN_SET_COUNT; break;
+    case COM_ALTERNATE_DEC: altSet--; if (altSet < 0) altSet = PATTERN_SET_COUNT - 1; break;
+    case COM_LIVE_INC: liveSet = (liveSet + 1) % PATTERN_SET_COUNT; break;
+    case COM_LIVE_DEC: liveSet--; if (liveSet < 0) liveSet = PATTERN_SET_COUNT - 1; break;
     case COM_CYCLESET:
       cyclePatternSets = !cyclePatternSets;
       cycleFrameCount = SINT(set, PE_FRAMECOUNT);
@@ -1521,7 +1504,7 @@ void SavePatternSet(char key, int set, bool_t overWrite, const char *backupName)
       keySave = key;
       SDL_Event event;
       SDL_zero(event);
-      event.type = CONFIRMEventType;
+      event.type = UE_ConfirmBox;
       event.user.code = 0;
       event.user.data1 = 0;
       event.user.data2 = 0;
@@ -1586,7 +1569,7 @@ void SavePatternSet(char key, int set, bool_t overWrite, const char *backupName)
 
 // Loads a pattern set from a file.
 void LoadPatternSet(char key, int set, bool_t backup) {
-  int currentSet = set; // Override global for D*.
+  int liveSet = set; // Override global for D*.
   char filename[8] = "";
   FILE *fp;
   char *ikey = NULL;
@@ -1614,7 +1597,7 @@ void LoadPatternSet(char key, int set, bool_t backup) {
 
   // Filename
   snprintf(filename, sizeof(filename), "%c.now", key);
-  fprintf(stdout, "Load filename: %s into set %i\n", filename, currentSet);
+  fprintf(stdout, "Load filename: %s into set %i\n", filename, liveSet);
 
   // Open file.
   fp = fopen(filename, "r");
@@ -1852,7 +1835,7 @@ void LoadPatternSet(char key, int set, bool_t backup) {
   if (!LoadImage(set)) {
     fprintf(stderr, "Unable to load image: \"%s\"\n", DSTRING(PE_IMAGENAME));
   }
-  snprintf(statusText, sizeof(statusText), "Loaded filename \"%s\" into set %i", filename, currentSet);
+  snprintf(statusText, sizeof(statusText), "Loaded filename \"%s\" into set %i", filename, liveSet);
 }
 
 
@@ -2272,8 +2255,8 @@ void UpdateInfoDisplay(int set) {
   DrawAndCache(&cachePosition, cyclePatternSets ? ET_INT : ET_BOOL,
     cyclePatternSets ? (void *) &cycleFrameCount : (void *) &cyclePatternSets,
     ROW_PA + 1, COL_PA + 1, PARAMETER_WIDTH);
-  DrawAndCache(&cachePosition, ET_INT, &alternateSet, ROW_PA + 9, COL_PA + 1, PARAMETER_WIDTH);
-  DrawAndCache(&cachePosition, ET_INT, &currentSet, ROW_PA + 8, COL_PA + 1, PARAMETER_WIDTH);
+  DrawAndCache(&cachePosition, ET_INT, &altSet, ROW_PA + 9, COL_PA + 1, PARAMETER_WIDTH);
+  DrawAndCache(&cachePosition, ET_INT, &liveSet, ROW_PA + 8, COL_PA + 1, PARAMETER_WIDTH);
 
   // Control set operates on (an enum type)
   strncpy(enumString, enumerations[E_OPERATE].texts[displaySet], sizeof(enumString));
@@ -2328,9 +2311,9 @@ void CopyBuffer(int dst, int src) {
 
 void SwitchToSet(int set) {
   if (displaySet == OO_ALTERNATE) {
-    alternateSet = set;
+    altSet = set;
   } else {
-    currentSet = set;
+    liveSet = set;
   }
   snprintf(statusText, sizeof(statusText), "Switched %s set to #%i",
     displaySet == OO_ALTERNATE ? "alternate" : "live", set);
@@ -2338,7 +2321,7 @@ void SwitchToSet(int set) {
 
 // This seems excessive.
 int HandleColorSelection(point_t mouse, int thisHover, bool_t resetEvent, int set) {
-  int currentSet = set; // Override
+  int liveSet = set; // Override
   patternElement_e cSource;
 
   if (displayCommand[thisHover].colorSource != A_INVALID) {
@@ -2435,94 +2418,4 @@ bool_t HandleColorSelect(SDL_Keycode key, int set, int item, int *selected) {
       break;
   }
   return selectionDismissed;
-}
-
-// Initialize the texture cache.  All this crap actually lowers my CPU usage
-// from 25% to 12%.  Half of CPU time was dedicated to regenerating the text
-// textures 40x per second.
-void DrawAndCache(int *cachePosition, elementType_e type, void *value, int row, int col, int width) {
-  static int cacheCount = 0;
-  static infoCache_t *cache = NULL;
-
-  // Increase the cache position
-  (*cachePosition)++;
-
-  // Make a new slot if there isn't one already.
-  if (*cachePosition > cacheCount) {
-    cacheCount++;
-    cache = realloc(cache, cacheCount * sizeof(infoCache_t));
-    cache[*cachePosition - 1].infoText.texture = NULL;
-  }
-
-  // Compare new value with cached value.
-  switch(type) {
-    case ET_BOOL:
-      if ((cache[*cachePosition - 1].cacheValue.b != *((bool_t *)value)) ||
-          (!cache[*cachePosition - 1].infoText.texture)) {
-        cache[*cachePosition - 1].cacheValue.b = *((bool_t *)value);
-        SDL_DestroyTexture(cache[*cachePosition - 1].infoText.texture);
-        CreateTextureBoolean(&(cache[*cachePosition - 1].infoText), *((bool_t *)value), row, col, width);
-      }
-      break;
-    case ET_INT:
-      if ((cache[*cachePosition - 1].cacheValue.i != *((int *)value)) ||
-          (!cache[*cachePosition - 1].infoText.texture)) {
-        cache[*cachePosition - 1].cacheValue.i = *((int *)value);
-        SDL_DestroyTexture(cache[*cachePosition - 1].infoText.texture);
-        CreateTextureInt(&(cache[*cachePosition - 1].infoText), *((int *)value), row, col, width);
-      }
-      break;
-    case ET_FLOAT:
-      if ((cache[*cachePosition - 1].cacheValue.f != *((float *)value)) ||
-          (!cache[*cachePosition - 1].infoText.texture)) {
-        cache[*cachePosition - 1].cacheValue.f = *((float *)value);
-        SDL_DestroyTexture(cache[*cachePosition - 1].infoText.texture);
-        CreateTextureFloat(&(cache[*cachePosition - 1].infoText), *((float *)value), row, col, width, width / 2);
-      }
-      break;
-    case ET_ENUM:
-      if ((cache[*cachePosition - 1].cacheValue.e != *((int *)value)) ||
-          (!cache[*cachePosition - 1].infoText.texture)) {
-        cache[*cachePosition - 1].cacheValue.e = *((int *)value);
-        SDL_DestroyTexture(cache[*cachePosition - 1].infoText.texture);
-        CreateTextureString(&(cache[*cachePosition - 1].infoText),
-          (char *)value, row, col, width);
-      }
-      break;
-    default:
-      return;
-  }
-
-  DrawDisplayTexture(cache[*cachePosition - 1].infoText);
-}
-
-void DrawAndCacheString(int *cachePosition, const char *value, int row, int col, color_t fg, color_t bg) {
-  static int cacheCount = 0;
-  static infoCache_t *cache = NULL;
-  static char **oldValue = NULL;
-  int length = strlen(value);
-
-  // Increase the cache position
-  (*cachePosition)++;
-
-  // Make a new slot if there isn't one already.
-  if (*cachePosition > cacheCount) {
-    cacheCount++;
-    cache = realloc(cache, cacheCount * sizeof(infoCache_t));
-    cache[*cachePosition - 1].infoText.texture = NULL;
-    oldValue = realloc(oldValue, cacheCount * sizeof(char *));
-    oldValue[*cachePosition - 1] = NULL;
-  }
-
-  // Regenerate the texture if the string changed.
-  if ((!cache[*cachePosition - 1].infoText.texture) ||
-      (strcmp(oldValue[*cachePosition - 1], value) != 0)) {
-    oldValue[*cachePosition - 1] = realloc(oldValue[*cachePosition - 1], (length + 1) * sizeof(char));
-    strncpy(oldValue[*cachePosition - 1], value, length + 1);
-    SDL_DestroyTexture(cache[*cachePosition - 1].infoText.texture);
-    CreateTextureLine(&(cache[*cachePosition - 1].infoText), value,
-      row, col, fg, bg);
-  }
-
-  DrawDisplayTexture(cache[*cachePosition - 1].infoText);
 }

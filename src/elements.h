@@ -9,7 +9,9 @@
 
   #include <SDL.h>     // SDL_Keymod, SDL_Keycode
   #include "draw.h"    // point_t, box_t, color_t
-  #include "guidraw.h"    // point_t, box_t, color_t
+  #include "colors.h"
+  #include "guiprimitives.h"
+  //~ #include "guidraw.h"    // point_t, box_t, color_t
   #include "useful.h"  // bool_t
 
   // Some initial Values
@@ -350,15 +352,15 @@
   #define SSTRING(varSet, varElement) ( ASTRING(GLOBAL_PATTERN_ELEMENT_ARRAY, varSet, varElement) )
   #define SBUFFER(varSet, varElement) ( ABUFFER(GLOBAL_PATTERN_ELEMENT_ARRAY, varSet, varElement) )
 
-  // Data element access macros - using the global patternElement array and the currentSet, with element selection.
-  #define DBOOL(varElement) ( SBOOL(currentSet, varElement) )
-  #define DINT(varElement) ( SINT(currentSet, varElement) )
-  #define DFLOAT(varElement) ( SFLOAT(currentSet, varElement) )
-  #define DCOLOR(varElement) ( SCOLOR(currentSet, varElement) )
-  #define DENUM(varElement) ( SENUM(currentSet, varElement) )
-  #define DSENUM(varElement, varType) ( SSENUM(currentSet, varElement, varType) )
-  #define DSTRING(varElement) ( SSTRING(currentSet, varElement) )
-  #define DBUFFER(varElement) ( SBUFFER(currentSet, varElement) )
+  // Data element access macros - using the global patternElement array and the liveSet, with element selection.
+  #define DBOOL(varElement) ( SBOOL(liveSet, varElement) )
+  #define DINT(varElement) ( SINT(liveSet, varElement) )
+  #define DFLOAT(varElement) ( SFLOAT(liveSet, varElement) )
+  #define DCOLOR(varElement) ( SCOLOR(liveSet, varElement) )
+  #define DENUM(varElement) ( SENUM(liveSet, varElement) )
+  #define DSENUM(varElement, varType) ( SSENUM(liveSet, varElement, varType) )
+  #define DSTRING(varElement) ( SSTRING(liveSet, varElement) )
+  #define DBUFFER(varElement) ( SBUFFER(liveSet, varElement) )
 
   // And maybe even a function.
   bool_t VerifyStructuralIntegrity(void);

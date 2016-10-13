@@ -8,6 +8,7 @@
   
   #include "colors.h"
   #include "useful.h"
+  #include <SDL.h>
   
   #define PANELS_WIDE 3
   #define PANELS_HIGH 1
@@ -43,5 +44,7 @@
   void SetTensorEnable(bool_t e);
   void SetTensorLimit(float l);
   float GetTensorLimit(void);
+  SDL_Rect GetLiveBox(void);
+  SDL_Rect GetAltBox(void);
   
 #endif /* TENSOR_H_ */

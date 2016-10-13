@@ -11,6 +11,7 @@
 #include "draw.h"
 #include "elements.h"
 #include "gui.h"
+#include "guidraw.h"
 #include "colors.h"
 #include "layout.h"
 #include "machine.h"
@@ -675,4 +676,94 @@ overPreview_e OverPreviewBorder(point_t mouse) {
   }
   
   return OP_NO;
+}
+
+// Initialize the texture cache.  All this crap actually lowers my CPU usage
+// from 25% to 12%.  Half of CPU time was dedicated to regenerating the text
+// textures 40x per second.
+void DrawAndCache(int *cachePosition, elementType_e type, void *value, int row, int col, int width) {
+  static int cacheCount = 0;
+  static infoCache_t *cache = NULL;
+
+  // Increase the cache position
+  (*cachePosition)++;
+
+  // Make a new slot if there isn't one already.
+  if (*cachePosition > cacheCount) {
+    cacheCount++;
+    cache = realloc(cache, cacheCount * sizeof(infoCache_t));
+    cache[*cachePosition - 1].infoText.texture = NULL;
+  }
+
+  // Compare new value with cached value.
+  switch(type) {
+    case ET_BOOL:
+      if ((cache[*cachePosition - 1].cacheValue.b != *((bool_t *)value)) ||
+          (!cache[*cachePosition - 1].infoText.texture)) {
+        cache[*cachePosition - 1].cacheValue.b = *((bool_t *)value);
+        SDL_DestroyTexture(cache[*cachePosition - 1].infoText.texture);
+        CreateTextureBoolean(&(cache[*cachePosition - 1].infoText), *((bool_t *)value), row, col, width);
+      }
+      break;
+    case ET_INT:
+      if ((cache[*cachePosition - 1].cacheValue.i != *((int *)value)) ||
+          (!cache[*cachePosition - 1].infoText.texture)) {
+        cache[*cachePosition - 1].cacheValue.i = *((int *)value);
+        SDL_DestroyTexture(cache[*cachePosition - 1].infoText.texture);
+        CreateTextureInt(&(cache[*cachePosition - 1].infoText), *((int *)value), row, col, width);
+      }
+      break;
+    case ET_FLOAT:
+      if ((cache[*cachePosition - 1].cacheValue.f != *((float *)value)) ||
+          (!cache[*cachePosition - 1].infoText.texture)) {
+        cache[*cachePosition - 1].cacheValue.f = *((float *)value);
+        SDL_DestroyTexture(cache[*cachePosition - 1].infoText.texture);
+        CreateTextureFloat(&(cache[*cachePosition - 1].infoText), *((float *)value), row, col, width, width / 2);
+      }
+      break;
+    case ET_ENUM:
+      if ((cache[*cachePosition - 1].cacheValue.e != *((int *)value)) ||
+          (!cache[*cachePosition - 1].infoText.texture)) {
+        cache[*cachePosition - 1].cacheValue.e = *((int *)value);
+        SDL_DestroyTexture(cache[*cachePosition - 1].infoText.texture);
+        CreateTextureString(&(cache[*cachePosition - 1].infoText),
+          (char *)value, row, col, width);
+      }
+      break;
+    default:
+      return;
+  }
+
+  DrawDisplayTexture(cache[*cachePosition - 1].infoText);
+}
+
+void DrawAndCacheString(int *cachePosition, const char *value, int row, int col, color_t fg, color_t bg) {
+  static int cacheCount = 0;
+  static infoCache_t *cache = NULL;
+  static char **oldValue = NULL;
+  int length = strlen(value);
+
+  // Increase the cache position
+  (*cachePosition)++;
+
+  // Make a new slot if there isn't one already.
+  if (*cachePosition > cacheCount) {
+    cacheCount++;
+    cache = realloc(cache, cacheCount * sizeof(infoCache_t));
+    cache[*cachePosition - 1].infoText.texture = NULL;
+    oldValue = realloc(oldValue, cacheCount * sizeof(char *));
+    oldValue[*cachePosition - 1] = NULL;
+  }
+
+  // Regenerate the texture if the string changed.
+  if ((!cache[*cachePosition - 1].infoText.texture) ||
+      (strcmp(oldValue[*cachePosition - 1], value) != 0)) {
+    oldValue[*cachePosition - 1] = realloc(oldValue[*cachePosition - 1], (length + 1) * sizeof(char));
+    strncpy(oldValue[*cachePosition - 1], value, length + 1);
+    SDL_DestroyTexture(cache[*cachePosition - 1].infoText.texture);
+    CreateTextureLine(&(cache[*cachePosition - 1].infoText), value,
+      row, col, fg, bg);
+  }
+
+  DrawDisplayTexture(cache[*cachePosition - 1].infoText);
 }

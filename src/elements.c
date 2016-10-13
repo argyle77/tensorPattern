@@ -10,6 +10,8 @@
 #include "elements.h"
 #include "draw.h"
 #include "drv-tensor.h"
+#include "tensor.h"
+#include "layout.h"
 
 // Fade modes
 const char *fadeModeText[] = { "Limited", "Modular", "NonZero Limited", "NonZero Modular" };
@@ -823,19 +825,19 @@ bool_t AllocatePatternData(int setCount) {
   return YES;
 }
 
+// Map between seedPalette and the pattern set elements.
 patternElement_e GetSelectElement(int set, patternElement_e selector) {
-  int currentSet = set;
   switch(selector) {
-    case PE_FGCOLORA: return seedPalette[DENUM(PE_PALETTEALTER)].fgColorA;
-    case PE_FGCOLORB: return seedPalette[DENUM(PE_PALETTEALTER)].fgColorB;
-    case PE_FGCYCLE:  return seedPalette[DENUM(PE_PALETTEALTER)].fgCycleMode;
-    case PE_FGCYCLERATE: return seedPalette[DENUM(PE_PALETTEALTER)].fgCycleRate;
-    case PE_FGALPHA: return seedPalette[DENUM(PE_PALETTEALTER)].fgAlpha;
-    case PE_BGCOLORA: return seedPalette[DENUM(PE_PALETTEALTER)].bgColorA;
-    case PE_BGCOLORB: return seedPalette[DENUM(PE_PALETTEALTER)].bgColorB;
-    case PE_BGCYCLE:  return seedPalette[DENUM(PE_PALETTEALTER)].bgCycleMode;
-    case PE_BGCYCLERATE: return seedPalette[DENUM(PE_PALETTEALTER)].bgCycleRate;
-    case PE_BGALPHA: return seedPalette[DENUM(PE_PALETTEALTER)].bgAlpha;
+    case PE_FGCOLORA: return seedPalette[SENUM(set, PE_PALETTEALTER)].fgColorA;
+    case PE_FGCOLORB: return seedPalette[SENUM(set, PE_PALETTEALTER)].fgColorB;
+    case PE_FGCYCLE:  return seedPalette[SENUM(set, PE_PALETTEALTER)].fgCycleMode;
+    case PE_FGCYCLERATE: return seedPalette[SENUM(set, PE_PALETTEALTER)].fgCycleRate;
+    case PE_FGALPHA: return seedPalette[SENUM(set, PE_PALETTEALTER)].fgAlpha;
+    case PE_BGCOLORA: return seedPalette[SENUM(set, PE_PALETTEALTER)].bgColorA;
+    case PE_BGCOLORB: return seedPalette[SENUM(set, PE_PALETTEALTER)].bgColorB;
+    case PE_BGCYCLE:  return seedPalette[SENUM(set, PE_PALETTEALTER)].bgCycleMode;
+    case PE_BGCYCLERATE: return seedPalette[SENUM(set, PE_PALETTEALTER)].bgCycleRate;
+    case PE_BGALPHA: return seedPalette[SENUM(set, PE_PALETTEALTER)].bgAlpha;
     default: return PE_INVALID;
   }
 }

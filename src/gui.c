@@ -1,5 +1,6 @@
 // Gui.c
-// Contains the functions for handling the gui.
+// Contains the functions for handling the creation, destruction, and update
+// of the gui.
 // Johua Krueger
 // 2016_10_12
 
