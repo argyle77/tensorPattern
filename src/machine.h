@@ -15,7 +15,7 @@
   void DrawNextFrame(int set, bool_t isPrimary);
   void ProcessModes(int set);
   void PostProcessModes(int set, bool_t isPrimary);
-  void UpdateDisplay(bool_t isPrimary, bool_t sendToTensor, float intensity_limit);
+  void UpdateDisplay(bool_t isPrimary, bool_t sendToTensor);
   void UpdatePreview(point_t xyOffset, unsigned char *buffer);
   point_t GetAltLoc(void );
   point_t GetLiveLoc(void);

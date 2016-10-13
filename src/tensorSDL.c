@@ -32,12 +32,6 @@
 // Definitions
 #define GUIFRAMEDELAY 25
 
-#define GLOBAL_INTENSITY_LIMIT_DEFAULT 1.0
-#define GLOBAL_INTENSITY_LIMIT_MAX 1.0
-#define GLOBAL_INTENSITY_LIMIT_MIN 0.0
-
-
-
 
 // Gui input modes
 typedef enum inputMode_e {
@@ -62,7 +56,7 @@ int cycleFrameCount = INITIAL_FRAMECYCLECOUNT;    // Frame Count for cycling.
 
 
 operateOn_e displaySet = OO_CURRENT;
-float global_intensity_limit = 1.0;
+
 int previewFrameCountA = 0, previewFPSA = 0;
 int previewFrameCountB = 0, previewFPSB = 0;
 int updateFrameCount = 0, updateFPS = 0;
@@ -95,8 +89,6 @@ Uint32 TriggerGUIUpdate(Uint32 interval, void *param);
 void SavePatternSet(char key, int set, bool_t overWrite, const char *backupName);
 void LoadPatternSet(char key, int set, bool_t backup);
 
-color_t ColorCycle(colorCycleModes_e cycleMode, int *cycleSaver, int cycleInc, color_t a, color_t b);
-
 bool_t HandleCommand(int set, command_e command, int selection);
 bool_t HandleKey(int set, SDL_Keycode key, SDL_Keymod mod);
 bool_t HandleConfirmation(SDL_Keycode key, bool_t *selected);
@@ -106,8 +98,6 @@ bool_t HandleEnumSelect(SDL_Keycode key, int set, int item, int *selected);
 void CopyPatternSet(int dst, int src);
 void CopyBuffer(int dst, int set);
 void SwitchToSet(int set);
-
-void CenterText(SDL_Rect box, char * text, color_t fg, color_t bg);
 
 point_t GetDisplayPixel(point_t mouse, SDL_Rect box);
 
@@ -121,8 +111,6 @@ int HandleColorSelection(point_t mouse, int thisHover, bool_t resetEvent, int se
 void UpdateInfoDisplay(int set);
 int OverColorBox(int set, point_t mouse, int item, SDL_Rect ** targets, int *lastHover);
 bool_t HandleColorSelect(SDL_Keycode key, int set, int item, int *selected);
-color_t ColorCyclePalette(namedPalette_t palette, int *position, int wavelength);
-color_t ColorCyclePaletteSmooth(namedPalette_t palette, int *position, int wavelength);
 
 void DrawAndCache(int *cachePosition, elementType_e type, void *value, int row, int col, int width);
 void DrawAndCacheString(int *cachePosition, const char *value, int row, int col, color_t fg, color_t bg);
@@ -192,10 +180,7 @@ int main(int argc, char *argv[]) {
     }
     
     // Otherwise, we may have an intensity limiter.
-    global_intensity_limit = atof(argv[1]);
-    if (global_intensity_limit < 0.0 || global_intensity_limit > 1.0) {
-      global_intensity_limit = 1.0;
-    }
+    SetTensorLimit(atof(argv[1]));
   }
 
   // Verify the integrity of some of the data structures. Enforces consistency
@@ -212,7 +197,7 @@ int main(int argc, char *argv[]) {
   }
 
   // Set the window title
-  snprintf(textEntry, sizeof(textEntry), "Tensor Control - Output: %i%%", (int) (global_intensity_limit * 100));
+  snprintf(textEntry, sizeof(textEntry), "Tensor Control - Output: %i%%", (int) (GetTensorLimit() * 100));
   SetWindowTitle(textEntry);
 
   
@@ -244,7 +229,7 @@ int main(int argc, char *argv[]) {
 
 
   // Bam - Show the (blank) preview.
-  UpdateDisplay(YES, YES, global_intensity_limit);
+  UpdateDisplay(YES, YES);
 
   // Add the text to the window
   DrawDisplayTexts(INVALID);
@@ -867,7 +852,7 @@ int main(int argc, char *argv[]) {
       DrawNextFrame(currentSet, YES);
       
       // This is for if the broadcast clock is to match the frame clock.
-      UpdateDisplay(YES, YES, global_intensity_limit);
+      UpdateDisplay(YES, YES);
       refreshGui = YES;      
 
       // Deal with the pattern set cycle timer
@@ -890,7 +875,7 @@ int main(int argc, char *argv[]) {
       DrawNextFrame(alternateSet, NO);
       
       // If broadcast clock matches frame clock.
-      UpdateDisplay(NO, NO, global_intensity_limit);
+      UpdateDisplay(NO, NO);
       refreshGui = YES;
     }    
     
@@ -941,8 +926,8 @@ int main(int argc, char *argv[]) {
     // Check for display update.
     if (updateDisplays) {
       updateDisplays = NO;
-      UpdateDisplay(YES, NO, global_intensity_limit);
-      UpdateDisplay(NO, NO, global_intensity_limit);
+      UpdateDisplay(YES, NO);
+      UpdateDisplay(NO, NO);
       refreshGui = YES;
     }
       

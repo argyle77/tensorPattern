@@ -25,6 +25,7 @@ const char **ipmap2;
 const char **ipmap3;
 SDL_Rect liveBox, altBox;
 bool_t tensorEnable = NO;
+float tensorLimit = GLOBAL_INTENSITY_LIMIT_DEFAULT;
 
 // Internal Prototypes
 void SetDims(void);
@@ -52,9 +53,18 @@ void InitTensor(void) {
 int GetTensorHeight(void) { return tensorHeight; } 
 int GetTensorWidth(void) { return tensorWidth; }
 int GetTensorEnable(void) { return tensorEnable; }
+float GetTensorLimit(void) { return tensorLimit; }
 
 // Setters
 void SetTensorEnable(bool_t e) { tensorEnable = e; }
+void SetTensorLimit(float l) { 
+  // Verify the range.
+  if (l < GLOBAL_INTENSITY_LIMIT_MIN ||
+      l > GLOBAL_INTENSITY_LIMIT_MAX) {
+    l = GLOBAL_INTENSITY_LIMIT_DEFAULT;
+  } 
+  tensorLimit = l;
+}
 
 // Set some dimensions according to orientation
 void SetDims(void) {
@@ -100,21 +110,27 @@ void SetDims(void) {
   GenerateDefaultPixelMap();
 }
 
-// Send an update to tensor, applying the pixel map.
+// Send an update to tensor, applying the pixel map and output limiter.
 void UpdateTensor(unsigned char *buffer) {
-  unsigned char sendBuf [TENSOR_BYTES];
+  unsigned char bufA [TENSOR_BYTES];
+  unsigned char bufB [TENSOR_BYTES];
   int x, y;
   color_t temp;
-
+  
+  // Apply the global output intensity limit (not seen in the preview).
+  for (x = 0 ; x < TENSOR_BYTES; x++) {
+    bufA[x] = (unsigned char)((float) buffer[x] * tensorLimit);
+  }
+    
   // Apply the pixel map
   for (y = 0; y < tensorHeight; y++) {
     for (x = 0; x < tensorWidth; x++) {
-      temp = GetPixel(x, y, buffer);
-      SetPixel(tensorPixelMap[x + (y * tensorWidth)].x, tensorPixelMap[x + (y * tensorWidth)].y, temp, sendBuf);
+      temp = GetPixel(x, y, bufA);
+      SetPixel(tensorPixelMap[x + (y * tensorWidth)].x, tensorPixelMap[x + (y * tensorWidth)].y, temp, bufB);
     }
   }
 
-  if (tensorEnable) tensor_send(sendBuf);
+  if (tensorEnable) tensor_send(bufB);
 }
 
 // Get the color of a particular pixel from a framebuffer.

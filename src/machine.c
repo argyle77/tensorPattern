@@ -49,8 +49,7 @@ void InitMachine(int fbSize, point_t live, point_t alt, int *l, int *a) {
   livePreview = live;
   altPreview = alt;
   liveSet = l;
-  altSet = a;
-  
+  altSet = a;  
 }
 
 void SetMachineWH(int w, int h) {
@@ -72,13 +71,10 @@ void SetAltSet(int set) { *altSet = set; }
 // Send out the frame buffer to tensor and/or the display window.
 // 11/22/2009 - You know what was uncanny?  Walter looked a lot like FB the
 // other night at the decom, and spent most of his time there running Tensor...
-void UpdateDisplay(bool_t isPrimary, bool_t sendToTensor, float intensity_limit) {
-  int i;
+void UpdateDisplay(bool_t isPrimary, bool_t sendToTensor) {
   unsigned char *outBuffer;
-  unsigned char fbTemp[bufferSize];
   
   outBuffer = (isPrimary ? fbLiveBcast : fbAltBcast);
-  
 
   // Send to the left preview and to the tensor wall
   if (isPrimary) {
@@ -86,12 +82,8 @@ void UpdateDisplay(bool_t isPrimary, bool_t sendToTensor, float intensity_limit)
     // Update the left preview
     UpdatePreview(livePreview, outBuffer);
 
-    // Apply the global output intensity limit (not seen in the preview).
-    for (i = 0 ; i < bufferSize; i++) {
-      fbTemp[i] = (unsigned char)((float) outBuffer[i] * intensity_limit);
-    }
-    
-    if (sendToTensor) UpdateTensor(fbTemp);
+    // And Tensor
+    if (sendToTensor) UpdateTensor(outBuffer);
 
   } else {
     // If live and alternate are the same set, we are only doing one set of
@@ -101,8 +93,6 @@ void UpdateDisplay(bool_t isPrimary, bool_t sendToTensor, float intensity_limit)
     // Update the right preview
     UpdatePreview(altPreview, outBuffer);
   }
-
-  return;
 }
 
 // Send frame buffer to preview area.  The preview area is a square

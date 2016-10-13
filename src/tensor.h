@@ -22,7 +22,13 @@
   
   #define TENSOR_ADDR_PER_PANEL 6
   #define TENSOR_PANEL_COUNT (PANELS_WIDE * PANELS_HIGH)
-
+  
+  // Intensity limit
+  #define GLOBAL_INTENSITY_LIMIT_DEFAULT 1.0
+  #define GLOBAL_INTENSITY_LIMIT_MAX 1.0
+  #define GLOBAL_INTENSITY_LIMIT_MIN 0.0
+  
+  // Public Functions
   void InitTensor(void);
   void UpdateTensor(unsigned char *buffer);
   color_t GetPixel(int x, int y, unsigned char *buffer);
@@ -35,5 +41,7 @@
   int GetTensorHeight(void);
   int GetTensorEnable(void);
   void SetTensorEnable(bool_t e);
+  void SetTensorLimit(float l);
+  float GetTensorLimit(void);
   
 #endif /* TENSOR_H_ */
