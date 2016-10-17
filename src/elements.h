@@ -8,7 +8,7 @@
   #define ELEMENTS_H_
 
   #include <SDL.h>     // SDL_Keymod, SDL_Keycode
-  #include "draw.h"    // point_t, box_t, color_t
+  #include "drawSupport.h"    // point_t, box_t, color_t
   #include "colors.h"
   #include "guiprimitives.h"
   //~ #include "guidraw.h"    // point_t, box_t, color_t

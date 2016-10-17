@@ -9,7 +9,7 @@
 #include "drv-tensor.h"
 #include "tensor.h"
 #include "useful.h"
-#include "draw.h"
+//~ #include "draw.h"
 #include "transforms_old.h"
 #include "machine.h"
 #include "layout.h"
@@ -114,7 +114,7 @@ void SetDims(void) {
 }
 
 // Send an update to tensor, applying the pixel map and output limiter.
-void UpdateTensor(unsigned char *buffer) {
+void SendTensor(unsigned char *buffer) {
   unsigned char bufA [TENSOR_BYTES];
   unsigned char bufB [TENSOR_BYTES];
   int x, y;

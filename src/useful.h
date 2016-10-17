@@ -12,6 +12,8 @@
   #define ON 1
   #define FALSE 0
   #define TRUE 1
+  #define FAIL 0
+  #define PASS 1
   #define INVALID (-1)
   #define BACKWARDS 1
   #define FORWARDS 0

@@ -18,9 +18,10 @@
 
 // Internal globals
 int bufferSize = 0;
-point_t livePreview, altPreview;
+point_t livePreviewLoc, altPreviewLoc;
 int tw, th;
 int *liveSetp, *altSetp;
+int *liveRefresh, *altRefresh;
 SDL_Rect liveBox, altBox;
 unsigned char *fbLiveBcast = NULL;
 unsigned char *fbAltBcast = NULL;
@@ -28,29 +29,35 @@ unsigned char *fbAltBlend = NULL;
 
 // Internal prototypes
 void ResetOneShots(int set);
+void UpdatePreview(bool_t isLive);
 
 // Setup the machine and its memory.
-void InitMachine(int fbSize, point_t live, point_t alt, int *liveSetPtr, int *altSetPtr) {
+bool_t InitMachine(int fbSize, point_t liveLoc, point_t altLoc, int *liveSetPtr, int *altSetPtr) {
   bufferSize = fbSize;
+  
   fbLiveBcast = (unsigned char *) malloc(bufferSize * sizeof(unsigned char));
   if (!fbLiveBcast) {
     fprintf(stderr, "Unable to allocate memory to read ip address strings from ip map file!\n");
-    exit(EXIT_FAILURE);
+    return FAIL;
   }
   fbAltBcast = (unsigned char *) malloc(bufferSize * sizeof(unsigned char));
   if (!fbAltBcast) {
     fprintf(stderr, "Unable to allocate memory to read ip address strings from ip map file!\n");
-    exit(EXIT_FAILURE);
+    return FAIL;
   }
   fbAltBlend = (unsigned char *) malloc(bufferSize * sizeof(unsigned char));
   if (!fbAltBlend) {
     fprintf(stderr, "Unable to allocate memory to read ip address strings from ip map file!\n");
-    exit(EXIT_FAILURE);
+    return FAIL;
   }
-  livePreview = live;
-  altPreview = alt;
+  
+  livePreviewLoc = liveLoc;
+  altPreviewLoc = altLoc;
   liveSetp = liveSetPtr;
   altSetp = altSetPtr;  
+  SetLiveSet(*liveSetp);
+  SetAltSet(*altSetp);
+  return PASS;
 }
 
 void SetMachineWH(int w, int h) {
@@ -59,81 +66,65 @@ void SetMachineWH(int w, int h) {
 }
 
 // Getters
-point_t GetLiveLoc(void) { return livePreview; }
-point_t GetAltLoc(void ) { return altPreview; }
+point_t GetLiveLoc(void) { return livePreviewLoc; }
+point_t GetAltLoc(void ) { return altPreviewLoc; }
 int GetLiveSet(void) { return *liveSetp; }
 int GetAltSet(void) { return *altSetp; }
+int *GetLiveRefresh(void) { return liveRefresh; }
+int *GetAltRefresh(void) { return altRefresh; }
+
 
 // Setters
-void SetLiveSet(int set) { *liveSetp = set; }
-void SetAltSet(int set) { *altSetp = set; }
-
-
-// Send out the frame buffer to tensor and/or the display window.
-// 11/22/2009 - You know what was uncanny?  Walter looked a lot like FB the
-// other night at the decom, and spent most of his time there running Tensor...
-void UpdateDisplay(bool_t isPrimary, bool_t sendToTensor) {
-  unsigned char *outBuffer;
-  
-  outBuffer = (isPrimary ? fbLiveBcast : fbAltBcast);
-
-  // Send to the left preview and to the tensor wall
-  if (isPrimary) {
-
-    // Update the left preview
-    UpdatePreview(livePreview, outBuffer);
-
-    // And Tensor
-    if (sendToTensor) UpdateTensor(outBuffer);
-
-  } else {
-    // If live and alternate are the same set, we are only doing one set of
-    // ops, and those are getting sent to fbLiveBcast, not fbAltBcast.
-    if (*liveSetp == *altSetp) outBuffer = fbLiveBcast;
-    
-    // Update the right preview
-    UpdatePreview(altPreview, outBuffer);
-  }
+void SetLiveSet(int set) {
+  // TODO: Check set before using it like this.
+  *liveSetp = set; 
+  liveRefresh = &SINT(set, PE_DELAY);
+}
+void SetAltSet(int set) {
+  // TODO: Check set before using it like this.
+  *altSetp = set;
+  altRefresh = &SINT(set, PE_DELAY);
 }
 
+// 11/22/2009 - You know what was uncanny?  Walter looked a lot like FB the
+// other night at the decom, and spent most of his time there running Tensor...
+// Send out the frame buffer to tensor
+void UpdateTensor(void) {
+  SendTensor(fbLiveBcast);
+}
+
+// Send out the frame the display window.
 // Send frame buffer to preview area.  The preview area is a square
 // encompassing the actual preview, so we should center the buffer within it.
-void UpdatePreview(point_t xyOffset, unsigned char *buffer) {
-  color_t pixel;
-  int x, y;
-  int maxDim;
-
-  // Get the outer border dimensions.
-  x = (tw * PREVIEW_PIXEL_SIZE);
-  y = (th * PREVIEW_PIXEL_SIZE);
-
-  // Get the preview area square dimension.
-  maxDim = max(x, y);
-
-  // Adjust our offsets to fit inside it.
-  xyOffset.x = xyOffset.x + PREVIEW_BORDER + (maxDim - x) / 2;
-  xyOffset.y = xyOffset.y + PREVIEW_BORDER + (maxDim - y) / 2;
-
-  // Draw out the pixels.
-  for (x = 0; x < tw; x++) {
-    for (y = 0; y < th; y++) {
-
-      // Get pixel color from the buffer.
-      pixel = GetPixel(x, y, buffer);
-
-      // Draw the output pixel as a square of dimension PREVIEW_PIXEL_SIZE - 1.
-      // This leaves us with a border around our pixels.
-      DrawBox(xyOffset.x + (x * PREVIEW_PIXEL_SIZE), xyOffset.y + (y * PREVIEW_PIXEL_SIZE),
-              PREVIEW_PIXEL_SIZE - 1, PREVIEW_PIXEL_SIZE - 1, pixel);
-    }
+void UpdatePreview(bool_t isLive) {
+  point_t xyOffset;
+  unsigned char *buffer;
+  
+  // Send live broadbast to the left (live) preview window
+  if (isLive) {
+    xyOffset = livePreviewLoc;
+    buffer = fbLiveBcast;
+    
+  // Otherwise, send alt broadcast to the right (alt) preview window
+  } else {
+    xyOffset = altPreviewLoc;
+    // If live and alternate happen to be the same set, ProcessNextStep doesn't
+    // give us an alt buffer to avoid double time execution with both alt and
+    // live timers contuing to fire, but in this case, live buffer and alt 
+    // buffer would be identical anyway, so grab the one that exists.
+    buffer = (*altSetp != *liveSetp) ? fbAltBcast : fbLiveBcast;
   }
+  
+  DrawPreview(xyOffset, buffer);
 }
 
 // The thing that happens at every frame.
 // isPrimary = YES if we are working with the Live Preview.
 // isPrimary = NO if we are working with the Alt Preview.
-void DrawNextFrame(int set, bool_t isPrimary) {
+void ProcessNextStep(int set, bool_t isPrimary) {
 
+  // TODO Fix how ProcessModes and PostProcessModes treats the 
+  //      liveSet == altStep skip.  Buffers still need to be filled.
   // If its the primary set, assume we process.  If secondary, only process if not also primary.
   if (isPrimary || (*liveSetp != *altSetp)) {
     if (!SBOOL(set, PE_PAUSE)) {
@@ -393,7 +384,8 @@ void PostProcessModes(int set, bool_t isPrimary) {
     BlendAlternate(outputBuffer, fbAltBlend);
   } else {
     // For alternate blending with the post, we copy the alternate buffer into
-    // a static cache so that when we are processing the primary 
+    // a static cache so that when we are processing the primary, we can use
+    // the data from the secondary
     memcpy(fbAltBlend, outputBuffer, patternElements[PE_FRAMEBUFFER].size * sizeof(unsigned char));
   }
 }

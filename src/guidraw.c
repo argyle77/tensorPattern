@@ -8,7 +8,7 @@
 #include <SDL_ttf.h>
 #include <SDL2_gfxPrimitives.h>
 #include "useful.h"
-#include "draw.h"
+//~ #include "draw.h"
 #include "elements.h"
 #include "gui.h"
 #include "guidraw.h"
@@ -556,7 +556,7 @@ void DrawPreviewBorder(point_t location, highLight_e highLight) {
   int tw, th;
   int maxDim;
   int i;
-  color_t color; //hl = {{0, 127, 0, 255}};
+  color_t hl_color; //hl = {{0, 127, 0, 255}};
   
   // Get the current widths and heights to construct the preview border from.
   tw = GetTensorWidth();
@@ -577,18 +577,18 @@ void DrawPreviewBorder(point_t location, highLight_e highLight) {
   
   switch (highLight) {
     case HL_SELECTED:
-      color = cHdkGreen;
+      hl_color = cHdkGreen;
       break;
     case HL_HOVER:
-      color = cYellow;
+      hl_color = cYellow;
       break;
     case HL_NO:
     default:
-      color = cBlack;
+      hl_color = cBlack;
       break;
   }
       
-  DrawBox(location.x + 1, location.y + 1, maxDim - 2, maxDim - 2, color);
+  DrawBox(location.x + 1, location.y + 1, maxDim - 2, maxDim - 2, hl_color);
 
 //  printf("Preview box: %i, %i, %i, %i\n", x, y, maxDim, maxDim);
 //  printf("Preview pixel size: %i\n", PREVIEW_PIXEL_SIZE);
@@ -766,4 +766,40 @@ void DrawAndCacheString(int *cachePosition, const char *value, int row, int col,
   }
 
   DrawDisplayTexture(cache[*cachePosition - 1].infoText);
+}
+
+
+// Draw the buffer on the gui with the pixels all scaled up.
+void DrawPreview(point_t xyOffset, unsigned char *buffer) {
+  color_t pixel;
+  int x, y;
+  int tw, th;
+  int maxDim;
+  
+  // Get the outer border dimensions.
+  tw = GetTensorWidth();
+  th = GetTensorHeight();
+  x = (tw * PREVIEW_PIXEL_SIZE);
+  y = (th * PREVIEW_PIXEL_SIZE);
+
+  // Get the preview area square dimension.
+  maxDim = max(x, y);
+
+  // Adjust our offsets to fit inside it.
+  xyOffset.x = xyOffset.x + PREVIEW_BORDER + (maxDim - x) / 2;
+  xyOffset.y = xyOffset.y + PREVIEW_BORDER + (maxDim - y) / 2;
+
+  // Draw out the pixels.
+  for (x = 0; x < tw; x++) {
+    for (y = 0; y < th; y++) {
+
+      // Get pixel color from the buffer.
+      pixel = GetPixel(x, y, buffer);
+
+      // Draw the output pixel as a square of dimension PREVIEW_PIXEL_SIZE - 1.
+      // This leaves us with a border around our pixels.
+      DrawBox(xyOffset.x + (x * PREVIEW_PIXEL_SIZE), xyOffset.y + (y * PREVIEW_PIXEL_SIZE),
+              PREVIEW_PIXEL_SIZE - 1, PREVIEW_PIXEL_SIZE - 1, pixel);
+    }
+  }
 }

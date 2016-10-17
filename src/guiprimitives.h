@@ -10,7 +10,7 @@
   #include <SDL.h>
   #include "useful.h"
   #include "colors.h"
-  #include "draw.h"
+  #include "drawSupport.h"
   
   // Typedefs
   
@@ -43,8 +43,6 @@
   bool_t IsInsideBox(point_t point, SDL_Rect box);
   
   // Utilities
-  void SetBox(SDL_Rect *box, int x, int y, int w, int h);
-  void SetPoint(point_t *point, int x, int y);
   void DrawTexture(SDL_Texture *texture, SDL_Rect target);
   void DrawCenteredTexture(SDL_Rect box, SDL_Texture *t);
   void DrawDisplayTexture(displayText_t dTexture);

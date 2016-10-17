@@ -52,5 +52,6 @@
   void DrawTextEntryBox(int item, char * text);
   void DrawEnumSelectBox(int set, int item, int selected, SDL_Rect ** targets);
   void DrawColorSelectBox(int item, int selected, SDL_Rect ** targets);
+  void DrawPreview(point_t xyOffset, unsigned char *buffer);
   
 #endif /* ifndef GUIDRAW_H_ */

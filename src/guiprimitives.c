@@ -260,14 +260,3 @@ void DrawCenteredTexture(SDL_Rect box, SDL_Texture *t) {
   SDL_RenderCopy(mwRenderer, t, NULL, &rect);
 }
 
-void SetBox(SDL_Rect *box, int x, int y, int w, int h) {
-  box->x = x;
-  box->y = y;
-  box->w = w;
-  box->h = h;
-}
-
-void SetPoint(point_t *point, int x, int y) {
-  point->x = x;
-  point->y = y;
-}

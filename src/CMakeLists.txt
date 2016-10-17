@@ -23,13 +23,17 @@ add_library(layout layout.c)
 add_library(machine machine.c)
 add_library(tensor tensor.c)
 add_library(transforms transforms.c)
+add_library(timers timers.c)
+add_library(log log.c)
+add_library(modal modal.c)
+add_library(drawSupport drawSupport.c)
 
 # Included directories
 include_directories(${PROJECT_BINARY_DIR} ${SDL2_INCLUDE_DIRS} ${SDL2TTF_INCLUDE_DIRS} ${SDL2IMAGE_INCLUDE_DIRS})
 include_directories(${PROJECT_BINARY_DIR}/src)
 
 # Linked Libraries
-target_link_libraries(tensorSDL drv-tensor guidraw elements useful transforms transformsold gui guiprimitives colors layout machine tensor  ${SDL2_LIBRARIES} ${SDL2TTF_LIBRARIES} ${SDL2IMAGE_LIBRARIES} SDL2_gfx)
+target_link_libraries(tensorSDL drv-tensor drawSupport modal log timers guidraw elements useful transforms transformsold gui guiprimitives colors layout machine tensor  ${SDL2_LIBRARIES} ${SDL2TTF_LIBRARIES} ${SDL2IMAGE_LIBRARIES} SDL2_gfx)
 
 # target_link_libraries(tensorClient drv-tensor draw elements useful transform ${SDL2_LIBRARIES} ${SDL2TTF_LIBRARIES} ${SDL2IMAGE_LIBRARIES} SDL2_gfx)
 

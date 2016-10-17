@@ -118,3 +118,10 @@ int GetFontSize(void) {
   return fSize;
 }
 
+void HideMouse(void) {
+  SDL_ShowCursor(SDL_DISABLE);
+}
+
+void ShowMouse(void) {
+  SDL_ShowCursor(SDL_ENABLE);
+}

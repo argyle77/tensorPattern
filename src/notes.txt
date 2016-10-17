@@ -3,6 +3,10 @@ TODO:
 For the enum values, have two arrays, one for display name (exists), one for save file name.
 Ability to use either enum values from files or their mnemonics.
 
+Fix mouse pointer for multiple edits on an entry without having to move the mouse to reset it.
+Fix second enter after an entry allows re-edit.
+
+
 
 Design notes:
 There are two frame buffers.  One is the broadcast (live) buffer, and the other

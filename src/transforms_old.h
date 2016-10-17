@@ -2,11 +2,11 @@
 // Joshua Krueger
 // 2016_10_11
 
-#ifndef TRANSFORM_H_
-#define TRANSFORM_H_
+#ifndef TRANSFORMSOLD_H_
+#define TRANSFORMSOLD_H_
 
   // Includes
-  #include "draw.h"
+  //~ #include "draw.h"
   #include "useful.h"
   #include "colors.h"
   #include "elements.h"

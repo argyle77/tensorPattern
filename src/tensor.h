@@ -31,7 +31,7 @@
   
   // Public Functions
   void InitTensor(void);
-  void UpdateTensor(unsigned char *buffer);
+  void SendTensor(unsigned char *buffer);
   color_t GetPixel(int x, int y, unsigned char *buffer);
   void SetPixel(int x, int y, color_t color, unsigned char *buffer);
   void SetPixelA(int x, int y, color_t color, unsigned char *buffer);

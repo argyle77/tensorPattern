@@ -15,6 +15,8 @@
   void SetWindowTitle(const char * text);
   void UpdateGUI(void);
   void QuitGui(void);
+  void ShowMouse(void);
+  void HideMouse(void);
   
   // Getters
   int GetWindowWidth(void);

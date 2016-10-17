@@ -8,7 +8,7 @@
 #include <SDL.h>
 
 #include "elements.h"
-#include "draw.h"
+//~ #include "draw.h"
 #include "drv-tensor.h"
 #include "tensor.h"
 #include "layout.h"
